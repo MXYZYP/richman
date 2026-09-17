@@ -1,0 +1,36 @@
+# 推送到 main 后，自动 SSH 到服务器执行部署（git pull -> 构建前端 -> pm2 重启）。
+#
+# 使用前需在 仓库 Settings → Secrets and variables → Actions 添加三个 Secret：
+#   SERVER_HOST     服务器 IP 或域名（不含用户名），例如 101.200.189.252
+#   SERVER_USER     登录用户，例如 root
+#   SERVER_SSH_KEY  部署用 SSH 私钥（整段，含 -----BEGIN/END----- 行）
+#
+# 前提：服务器已把对应公钥加入 authorized_keys，且 /root/richman-main 已是 git 检出
+#       （若仓库为 Private，服务器还需能拉取：用只读 Deploy Key，或把仓库设为 Public）。
+name: Deploy to Server
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-server-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 10m
+          script: |
+            cd /root/richman-main
+            bash deploy.sh
