@@ -68,7 +68,8 @@ const STEP_DURATIONS_MS: Record<string, number> = {
   game_started: 800,
   turn_started: 600,
   dice_rolled: 600,
-  token_moved: 150,
+  // 逐格推进的停留时长：150ms 过快（棋子几乎瞬移），放慢到 260ms 让移动看得清。
+  token_moved: 260,
   salary_collected: 700,
   property_bought: 700,
   buy_declined: 400,

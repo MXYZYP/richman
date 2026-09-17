@@ -167,7 +167,12 @@ const currentCellDetail = computed(() => {
   const current = state.value;
   const actor = activeActor.value;
   if (current === null || !actor) return null;
-  const position = displayPositions.value[actor.id] ?? actor.position;
+  // 棋子动画期间 displayPositions 逐格变化。若位置卡跟着每格重算，下部区域会一格一换内容
+  // → 视觉上来回切换、闪烁。动画期间改用权威位置（起点）把卡片冻结住；
+  // 动画结束后 state 与 displayPositions 同步到终点，整段只切换一次。
+  const position = props.session.isAnimating.value
+    ? actor.position
+    : (displayPositions.value[actor.id] ?? actor.position);
   return getCellDetail(current, position);
 });
 const locationRent = computed(() => {
@@ -185,8 +190,14 @@ const actionPanelEventMessage = computed(() => {
   const playerId = activeActorId.value;
   // Dice and destination already have dedicated visible regions; keep other events intact.
   if (dice.value && message === formatRecentLogEvent(current, { type: 'dice_rolled', playerId, dice: dice.value })) return '';
-  const destination = currentCellDetail.value?.cellId;
-  if (destination !== undefined && message === formatRecentLogEvent(current, { type: 'token_moved', playerId, path: [destination] })) return '';
+  // 逐格推进时 presenter 会把提示语改写成「移动到 X」。按“正在走的那一格”比对后隐藏，
+  // 否则下部文字会随每格刷新而一格一跳（闪烁）；落定后仍由终点继续隐藏（原逻辑）。
+  const movingCellId = displayPositions.value[playerId] ?? activeActor.value?.position;
+  const settledCellId = currentCellDetail.value?.cellId;
+  for (const cellId of [movingCellId, settledCellId]) {
+    if (cellId === undefined || cellId === null) continue;
+    if (message === formatRecentLogEvent(current, { type: 'token_moved', playerId, path: [cellId] })) return '';
+  }
   return message;
 });
 const activeActorCash = computed(() => displayPlayers.value.find((player) => player.id === activeActorId.value)?.cash ?? null);
@@ -844,17 +855,29 @@ function inspectFinalBoard() {
   font-variant-numeric: tabular-nums;
 }
 
+/* 位置卡高度恒定：不同格子的文案长短不一时，wrap 会换行把下方区域顶高又缩回
+   （高度跳动 = 闪动感来源之一）。改为单行 + 省略号，配合 min-height 保证盒子尺寸不变。 */
 .location-details {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
   justify-content: space-between;
-  gap: 2px 8px;
+  gap: 8px;
+  min-width: 0;
   font-size: 10px;
   line-height: 16px;
   color: var(--color-muted);
 }
 
+.location-details > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .location-details b {
+  flex-shrink: 0;
   color: var(--color-text);
   font-weight: 500;
 }

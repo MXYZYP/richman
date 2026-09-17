@@ -259,15 +259,17 @@ const playerTokens = computed(() => {
 
 .center-image { object-fit: contain; }
 
-/* 棋子层：每玩家一个稳定元素，left/top 过渡跟随逐格推进（标准 150ms/格 → 120ms 过渡）。 */
+/* 棋子层：每玩家一个稳定元素，left/top 过渡跟随逐格推进。
+   过渡时长贴近 gamePresenter 的 token_moved 步进（260ms/格）并改用 linear：
+   逐格连续推进时相邻两格的动画首尾相接，整段移动更平滑自然（原为 120ms + ease-out，观感过急）。 */
 .token-layer {
   position: absolute;
   pointer-events: none;
   z-index: 8 !important;
   transition:
-    left calc(120ms * var(--game-motion-pace, 1)) ease-out,
-    top calc(120ms * var(--game-motion-pace, 1)) ease-out,
-    transform calc(120ms * var(--game-motion-pace, 1)) ease-out;
+    left calc(220ms * var(--game-motion-pace, 1)) linear,
+    top calc(220ms * var(--game-motion-pace, 1)) linear,
+    transform calc(220ms * var(--game-motion-pace, 1)) linear;
 }
 
 @media (prefers-reduced-motion: reduce) {
