@@ -9,6 +9,19 @@
 #    因此用 fetch + reset --hard 强制与 GitHub 的 main 完全一致。
 set -euo pipefail
 
+# 非交互式 SSH（例如 GitHub Actions 的 appleboy/ssh-action）不会加载登录 profile，
+# PATH 里可能找不到 pnpm/pm2/node。这里补齐常见安装位置；若你的 node 装在别处
+# （nvm/fnm/独立目录），把对应的 bin 目录也加到下面即可。
+export PATH="$PATH:/root/.local/share/pnpm:/usr/local/bin:/usr/local/sbin:/usr/bin"
+if [ -d "$HOME/.nvm/versions/node" ]; then
+  for _node_bin in "$HOME"/.nvm/versions/node/*/bin; do
+    [ -d "$_node_bin" ] && export PATH="$PATH:$_node_bin"
+  done
+fi
+
+command -v pnpm >/dev/null 2>&1 || { echo "[ERROR] 找不到 pnpm，请把 node/pnpm 的 bin 目录加入 PATH（当前 PATH=$PATH）"; exit 1; }
+command -v pm2  >/dev/null 2>&1 || { echo "[ERROR] 找不到 pm2，请把 pm2 的 bin 目录加入 PATH（当前 PATH=$PATH）"; exit 1; }
+
 APP_DIR="/root/richman-main"
 BRANCH="main"
 PM2_NAME="richman"
