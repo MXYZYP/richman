@@ -138,12 +138,17 @@ button:focus-visible {
   outline-offset: 2px;
 }
 body { overflow-x: hidden; }
-/* 页面背景：暖纸底 + 顶部一抹柔光，与游戏主题一致。
-   纯背景绘制，不参与布局、也不额外触发重排。 */
+/* 页面背景（首页 / 大厅等）：暖纸底 + 顶部柔光 + 淡绿台面晕 + 细点阵，
+   与大富翁“纸面棋盘 + 骰子”的质感一致。纯背景绘制，不参与布局、不触发重排。 */
 #app {
   min-height: 100vh;
-  background-image: radial-gradient(1000px 520px at 50% 0%, rgb(255 253 246 / 92%), transparent 68%);
-  background-repeat: no-repeat;
+  background-color: var(--color-bg);
+  background-image:
+    radial-gradient(circle, rgb(122 136 109 / 7%) 1.1px, transparent 1.3px),
+    radial-gradient(1000px 520px at 50% 0%, rgb(255 253 246 / 92%), transparent 68%),
+    radial-gradient(900px 620px at 50% 28%, rgb(198 222 178 / 24%), transparent 72%);
+  background-size: 26px 26px, auto, auto;
+  background-repeat: repeat, no-repeat, no-repeat;
 }
 
 /* 只在对局页锁死文档滚动（game-view-active 由 GameView 挂载时加到 body），

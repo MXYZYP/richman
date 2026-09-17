@@ -205,13 +205,21 @@ const playerTokens = computed(() => {
   box-sizing: border-box;
   width: 100%;
   height: 100%;
-  border: 1px solid var(--center-border, #b7c2aa);
+  /* 边框调成偏棕的木框色，像实体棋盘的外框。 */
+  border: 1px solid color-mix(in srgb, var(--color-primary, #88551f) 24%, var(--center-border, #b7c2aa));
   border-radius: 7px;
-  /* 盘面加一层极淡的居中高光，做出纸面受光的层次（纯背景层，不参与布局）。 */
+  /* 经典大富翁盘面：浅绿台面 + 中央受光 + 边缘微暗角 + 极淡斜纹纸感。
+     整块只是背景层，不参与布局；棋格照旧压在上面。 */
   background:
-    radial-gradient(115% 105% at 50% 34%, rgb(255 255 255 / 58%), transparent 62%),
+    radial-gradient(115% 105% at 50% 34%, rgb(255 255 255 / 52%), transparent 62%),
+    radial-gradient(122% 108% at 50% 48%, transparent 56%, rgb(64 88 48 / 15%)),
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 5%) 0 3px, rgb(74 96 58 / 3%) 3px 6px),
+    linear-gradient(158deg, rgb(206 226 184 / 74%), rgb(176 205 152 / 60%)),
     var(--game-board-base, var(--board-surface));
-  box-shadow: inset 0 2px 6px rgb(122 136 109 / 15%);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 34%),
+    inset 0 2px 6px rgb(122 136 109 / 15%),
+    0 2px 10px rgb(53 39 20 / 13%);
   overflow: hidden;
 }
 
@@ -247,7 +255,11 @@ const playerTokens = computed(() => {
    加一点层次：淡内阴影收边 + 柔和外投影浮起，留白更通透但不抢棋格。 */
 .center-panel {
   border-radius: 2.4cqw;
-  background: color-mix(in srgb, var(--color-cell, var(--map-cell-color)) 42%, transparent);
+  /* 中心区做成实体棋盘中央的“画片区”：奶白纸面透出一点台面绿，中央高光收边。 */
+  background-color: color-mix(in srgb, var(--color-cell, var(--map-cell-color)) 46%, transparent);
+  background-image:
+    radial-gradient(78% 66% at 50% 38%, rgb(255 255 255 / 58%), transparent 72%),
+    linear-gradient(155deg, rgb(214 232 194 / 42%), rgb(255 255 255 / 18%));
   box-shadow:
     inset 0 0 1.4cqw rgb(122 136 109 / 16%),
     0 0.22cqw 0.5cqw rgb(53 39 20 / 9%);

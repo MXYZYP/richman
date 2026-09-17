@@ -763,7 +763,16 @@ function inspectFinalBoard() {
   flex-direction: column;
   overflow: hidden;
   overscroll-behavior: none;
-  background: var(--game-page);
+  /* 大富翁氛围底：牌桌暖绿 + 顶部柔光 + 细点阵（骰子点/地契纸感）+ 边缘微暗角。
+     四层全是背景绘制，不参与布局、不触发重排，也不额外增加绘制层。 */
+  background-color: var(--game-page);
+  background-image:
+    radial-gradient(circle, rgb(87 107 71 / 9%) 1.1px, transparent 1.3px),
+    radial-gradient(105% 68% at 50% 0%, rgb(255 255 255 / 72%), transparent 58%),
+    radial-gradient(78% 58% at 50% 38%, rgb(193 219 170 / 32%), transparent 72%),
+    linear-gradient(180deg, rgb(255 255 255 / 22%), rgb(94 114 76 / 10%));
+  background-size: 26px 26px, auto, auto, auto;
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
 }
 
 .sr-only {
