@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { ClientAction, DisplayCard, PendingCardChoiceDisplay, PendingPurchaseOffer } from '../game/clientGame';
 import { formatMoney } from '../ui/format';
+import { paceMultiplier } from '../session/playbackPace';
 
 const props = withDefaults(defineProps<{
   actions: ClientAction[];
@@ -30,8 +31,131 @@ const diceTotal = computed(() => (
 
 /** 每次真实掷骰（数组引用变化）重放一次落定动画；其余重渲染不重放，也不用计时器。*/
 const diceRevision = ref(0);
+
+/* ---- 真实感掷骰 ----
+   视觉与逻辑严格分离：点数由引擎决定，动画只负责“看起来在滚”。
+   · 每颗骰子随机初始角度（±620°）与横向抛出距离（±13px），逐颗错开落地；
+   · 飞行途中高速换面（纯装饰的随机点数），各自落定时刻切换成引擎给的真实点数；
+   · 落定前 diceRolling 为真，按钮禁用，杜绝动画期间重复点击。 */
+const DICE_ROLL_MS = 780;     // 单颗飞行时长（含弹跳衰减）
+const DICE_STAGGER_MS = 150;  // 多颗之间的落地错开
+const DICE_TUMBLE_MS = 85;    // 换面间隔
+
+interface DiceThrow {
+  spin: number;   // 初始旋转角（deg）
+  drift: number;  // 横向抛出距离（px）
+}
+
+const diceRolling = ref(false);
+/** 当前显示的点数：滚动中是随机面，落定后锁成引擎给的真值。 */
+const diceFaces = ref<number[]>([]);
+const diceSettled = ref<boolean[]>([]);
+const diceThrows = ref<DiceThrow[]>([]);
+let tumbleTimer: ReturnType<typeof setInterval> | null = null;
+let settleTimers: Array<ReturnType<typeof setTimeout>> = [];
+
+function randomFace(): number {
+  return 1 + Math.floor(Math.random() * 6);
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function clearRoll(): void {
+  if (tumbleTimer !== null) {
+    clearInterval(tumbleTimer);
+    tumbleTimer = null;
+  }
+  settleTimers.forEach((timer) => clearTimeout(timer));
+  settleTimers = [];
+}
+
+function rollDice(values: number[]): void {
+  clearRoll();
+  if (values.length === 0 || prefersReducedMotion()) {
+    // 无骰子或系统要求减弱动效：直接显示真值，不做滚动。
+    diceRolling.value = false;
+    diceFaces.value = [...values];
+    diceSettled.value = values.map(() => true);
+    diceThrows.value = values.map(() => ({ spin: 0, drift: 0 }));
+    return;
+  }
+
+  const pace = paceMultiplier();
+  diceThrows.value = values.map(() => ({
+    spin: Math.round((Math.random() * 2 - 1) * 620),
+    drift: Math.round((Math.random() * 2 - 1) * 13),
+  }));
+  diceFaces.value = values.map(() => randomFace());
+  diceSettled.value = values.map(() => false);
+  diceRolling.value = true;
+
+  // 飞行途中不断换面；已落定的那颗不再变。
+  tumbleTimer = setInterval(() => {
+    diceFaces.value = diceFaces.value.map((face, index) => (
+      diceSettled.value[index] ? face : randomFace()
+    ));
+  }, Math.max(40, Math.round(DICE_TUMBLE_MS * pace)));
+
+  values.forEach((value, index) => {
+    const settleAt = Math.round((DICE_ROLL_MS + index * DICE_STAGGER_MS) * pace);
+    settleTimers.push(setTimeout(() => {
+      // 落定：把这一颗锁成引擎给的真实点数（朝上的面永远等于逻辑结果）。
+      diceFaces.value = diceFaces.value.map((face, i) => (i === index ? value : face));
+      diceSettled.value = diceSettled.value.map((done, i) => (i === index ? true : done));
+    }, settleAt));
+  });
+
+  const finishAt = Math.round((DICE_ROLL_MS + (values.length - 1) * DICE_STAGGER_MS + 40) * pace);
+  settleTimers.push(setTimeout(() => {
+    clearRoll();
+    diceRolling.value = false;
+  }, finishAt));
+}
+
 watch(() => props.dice, (next, previous) => {
-  if (next !== previous) diceRevision.value += 1;
+  if (next === previous) return;
+  diceRevision.value += 1;
+  if (next === null) {
+    clearRoll();
+    diceRolling.value = false;
+    diceFaces.value = [];
+    diceSettled.value = [];
+    diceThrows.value = [];
+    return;
+  }
+  rollDice(next);
+}, { immediate: true });
+
+onBeforeUnmount(clearRoll);
+
+/** 渲染用点数：滚动中取随机面，落定后取真值；两者长度不一致时一律退回真值。 */
+function displayFace(index: number, real: number): number {
+  return diceFaces.value[index] ?? real;
+}
+
+/** 每颗骰子的随机抛出参数与错开延迟，交给 CSS 关键帧驱动。 */
+function dieStyle(index: number) {
+  const thrown = diceThrows.value[index];
+  if (thrown === undefined) return undefined;
+  const pace = paceMultiplier();
+  return {
+    '--die-spin': `${thrown.spin}deg`,
+    '--die-drift': `${thrown.drift}px`,
+    animationDuration: `${Math.round(DICE_ROLL_MS * pace)}ms`,
+    animationDelay: `${Math.round(index * DICE_STAGGER_MS * pace)}ms`,
+  };
+}
+
+const rackLabel = computed(() => {
+  if (diceRolling.value) return '骰子：掷骰中';
+  if (props.dice !== null && diceTotal.value !== null) {
+    return `骰子结果 ${props.dice.join(' 与 ')}，总和 ${diceTotal.value}`;
+  }
+  return '骰子：等待掷骰';
 });
 
 /**
@@ -67,7 +191,8 @@ const showFeedback = computed(() => (
 ));
 
 function handleAction(action: ClientAction) {
-  if (props.isAnimating || props.isSpectator) return;
+  // 骰子还在滚的时候不接受任何操作：动画期间的重复点击一律吞掉。
+  if (props.isAnimating || props.isSpectator || diceRolling.value) return;
   emit('action', action);
 }
 
@@ -79,18 +204,19 @@ function diePips(value: number): number[] {
 <template>
   <section class="action-panel" aria-label="操作面板">
     <!-- 独立骰子台：真实点数与总和；未掷骰时是空白骰面与等待文字，绝不画假点数。-->
-    <div
-      class="rack"
-      role="group"
-      :aria-label="dice && diceTotal !== null
-        ? `骰子结果 ${dice.join(' 与 ')}，总和 ${diceTotal}`
-        : '骰子：等待掷骰'"
-    >
+    <div class="rack" role="group" :aria-label="rackLabel">
       <div class="rack-stage" :key="diceRevision">
         <div class="dice">
           <template v-if="dice">
-            <span v-for="(value, index) in dice" :key="index" class="die" :class="`die-${value}`" aria-hidden="true">
-              <i v-for="pip in diePips(value)" :key="pip"></i>
+            <span
+              v-for="(value, index) in dice"
+              :key="index"
+              class="die"
+              :class="[`die-${displayFace(index, value)}`, { tumbling: !diceSettled[index] }]"
+              :style="dieStyle(index)"
+              aria-hidden="true"
+            >
+              <i v-for="pip in diePips(displayFace(index, value))" :key="pip"></i>
             </span>
           </template>
           <template v-else>
@@ -119,7 +245,7 @@ function diePips(value: number): number[] {
           :key="action.label"
           type="button"
           :class="action.primary ? 'btn-enabled' : 'btn-secondary'"
-          :disabled="isAnimating"
+          :disabled="isAnimating || diceRolling"
           @click="handleAction(action)"
         >
           <span class="btn-label">{{ action.label }}<template v-if="compactPurchase && action.intent.type === 'buy_property' && purchaseOffer"> · ¥{{ formatMoney(purchaseOffer.price) }}</template></span>
@@ -263,12 +389,19 @@ function diePips(value: number): number[] {
     0 3px 0 var(--game-line-soft),
     0 4px 5px color-mix(in srgb, var(--color-muted) 26%, transparent);
   transform: rotate(var(--die-tilt));
-  animation: die-land calc(450ms * var(--game-motion-pace, 1)) cubic-bezier(.22, 1, .36, 1) both;
+  /* 真实感掷骰：随机初始角度抛出 → 落地弹跳（逐级衰减）→ 减速停稳。
+     --die-spin / --die-drift 由脚本按骰子逐颗随机生成，时长与延迟也逐颗下发。 */
+  animation: die-roll 780ms cubic-bezier(.32, .74, .36, 1) both;
+  will-change: transform;
 }
 
 .dice .die:last-child {
   --die-tilt: 5deg;
-  animation-delay: calc(60ms * var(--game-motion-pace, 1));
+}
+
+/* 滚动中：轻微模糊 + 抬高投影，强化“在翻滚”的观感（落定后自动消失）。 */
+.die.tumbling {
+  filter: blur(0.2px);
 }
 
 .die i {
@@ -339,10 +472,44 @@ function diePips(value: number): number[] {
   letter-spacing: 0.1em;
 }
 
-@keyframes die-land {
-  0% { transform: rotate(calc(var(--die-tilt) - 14deg)) translateY(-4px); }
-  55% { transform: rotate(calc(var(--die-tilt) + 3deg)) translateY(0); }
-  100% { transform: rotate(var(--die-tilt)); }
+/* 抛出 → 一次落地 → 二次小弹 → 三次微弹 → 停稳。
+   每次弹跳的高度与挤压幅度依次衰减（7px → -8px → 4px → -2.5px → 1px → 0），
+   旋转从随机初始角收敛到最终倾角，读感是“逐渐减速后定住”。 */
+@keyframes die-roll {
+  0% {
+    transform: translate(var(--die-drift, 0px), -16px)
+               rotate(var(--die-spin, -180deg))
+               scale(1.08, 0.98);
+  }
+  26% {
+    transform: translate(calc(var(--die-drift, 0px) * 0.55), 7px)
+               rotate(calc(var(--die-spin, 0deg) * 0.52))
+               scale(1.06, 0.8);
+  }
+  44% {
+    transform: translate(calc(var(--die-drift, 0px) * 0.3), -8px)
+               rotate(calc(var(--die-spin, 0deg) * 0.3))
+               scale(0.96, 1.06);
+  }
+  62% {
+    transform: translate(calc(var(--die-drift, 0px) * 0.14), 4px)
+               rotate(calc(var(--die-spin, 0deg) * 0.14))
+               scale(1.04, 0.92);
+  }
+  78% {
+    transform: translate(0, -2.5px)
+               rotate(calc(var(--die-tilt) + 4deg))
+               scale(1, 1.02);
+  }
+  90% {
+    transform: translate(0, 1px)
+               rotate(calc(var(--die-tilt) - 2deg))
+               scale(1, 0.99);
+  }
+  100% {
+    transform: translate(0, 0)
+               rotate(var(--die-tilt));
+  }
 }
 
 @keyframes total-settle {

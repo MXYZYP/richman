@@ -57,6 +57,12 @@ function ownerColorKey(cellId: number) {
   return props.state.players.find((player) => player.id === ownerId)?.color;
 }
 
+/** 归属玩家昵称：用于棋格的悬停/读屏提示，点开详情面板能看到完整信息。 */
+function ownerName(cellId: number): string | null {
+  const ownerId = props.state.properties[cellId]?.ownerId;
+  return props.state.players.find((player) => player.id === ownerId)?.name ?? null;
+}
+
 function tokenOffset(cellId: number, index: number, stackCount: number) {
   const placement = props.state.presentation.cells[cellId];
   if (placement === undefined) return {};
@@ -170,6 +176,8 @@ const playerTokens = computed(() => {
           :presentation="cellModel(cell.id)"
           :property="propertyFor(cell.id)"
           :owner-color-key="ownerColorKey(cell.id)"
+          :owner-name="ownerName(cell.id)"
+          :max-house-level="state.config.maxHouseLevel"
           :selected="selectedCellId === cell.id"
           @select="emit('selectCell', cell.id)"
         />
