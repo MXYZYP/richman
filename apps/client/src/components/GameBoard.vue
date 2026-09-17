@@ -60,7 +60,7 @@ function ownerColorKey(cellId: number) {
 /** 归属玩家昵称：用于棋格的悬停/读屏提示，点开详情面板能看到完整信息。 */
 function ownerName(cellId: number): string | null {
   const ownerId = props.state.properties[cellId]?.ownerId;
-  return props.state.players.find((player) => player.id === ownerId)?.name ?? null;
+  return props.state.players.find((player) => player.id === ownerId)?.nickname ?? null;
 }
 
 function tokenOffset(cellId: number, index: number, stackCount: number) {
