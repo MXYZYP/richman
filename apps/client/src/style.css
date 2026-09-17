@@ -102,7 +102,13 @@ button:focus-visible {
   outline-offset: 2px;
 }
 body { overflow-x: hidden; }
-#app { min-height: 100vh; }
+/* 页面背景：暖纸底 + 顶部一抹柔光，与游戏主题一致。
+   纯背景绘制，不参与布局、也不额外触发重排。 */
+#app {
+  min-height: 100vh;
+  background-image: radial-gradient(1000px 520px at 50% 0%, rgb(255 253 246 / 92%), transparent 68%);
+  background-repeat: no-repeat;
+}
 
 /* 只在对局页锁死文档滚动（game-view-active 由 GameView 挂载时加到 body），
    与 .game-view{position:fixed;overflow:hidden} 双保险，杜绝地址栏显隐引发的整页缩放抖动。

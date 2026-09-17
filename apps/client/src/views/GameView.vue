@@ -406,14 +406,30 @@ watch(isConfirmingLeave, (confirming) => {
   }
 });
 
+// ---- 折叠屏 / 旋转屏的视口重算 ----
+// 折叠屏展开↔折叠、或旋转屏幕时，部分 WebView 不会及时重算视口尺寸，
+// 棋盘可能停留在折叠前的旧尺寸（极端情况高度被算成 0 → 地图不显示）。
+// 监听 resize / orientationchange / visualViewport 三类变化，触发一次重渲染 + 强制重排。
+const layoutEpoch = ref(0);
+function bumpLayout(): void {
+  layoutEpoch.value += 1;
+  void document.body?.offsetHeight; // 读一次布局属性，强制同步重排
+}
+
 // 对局期间给 body 打标记：移动端据此只锁对局页的文档滚动（见 style.css），
 // 首页/大厅等页面不受影响、可正常滚动；离开对局时移除标记。
 onMounted(() => {
   document.body.classList.add('game-view-active');
+  window.addEventListener('resize', bumpLayout);
+  window.addEventListener('orientationchange', bumpLayout);
+  window.visualViewport?.addEventListener('resize', bumpLayout);
 });
 
 onBeforeUnmount(() => {
   document.body.classList.remove('game-view-active');
+  window.removeEventListener('resize', bumpLayout);
+  window.removeEventListener('orientationchange', bumpLayout);
+  window.visualViewport?.removeEventListener('resize', bumpLayout);
   document.removeEventListener('keydown', onModalKeydown, true);
   mobileLayoutQuery?.removeEventListener('change', handleLayoutChange);
   selectedPlayerId.value = null;
@@ -466,7 +482,7 @@ function inspectFinalBoard() {
       aria-atomic="true"
     >{{ cashAnnouncement }}</div>
 
-    <main v-if="state" class="game-shell" :inert="isConfirmingLeave">
+    <main v-if="state" class="game-shell" :data-layout-epoch="layoutEpoch" :inert="isConfirmingLeave">
       <header class="players">
         <div class="game-meta">
           <span>{{ state.board.boardName }} / {{ state.players.length }} 人对局</span>
@@ -812,6 +828,15 @@ function inspectFinalBoard() {
   display: grid;
   align-content: start;
   gap: 14px;
+  /* 底部信息区高度约束：抽到命运牌/事件卡时内容会变多，若任其撑高，整页会被顶高再缩回
+     → 视觉“抽搐跳动”。这里把区域锁定在可用高度内、超出改为区域内滚动，页面尺寸恒定。
+     min-height:0 是 grid/flex 子项能收缩到容器高度的前提。*/
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scroll-behavior: smooth;
 }
 
 .location-card {
@@ -1087,6 +1112,64 @@ function inspectFinalBoard() {
   color: var(--button-enabled-text);
 }
 
+/* ---- 交互反馈 ----
+   统一 140ms 过渡：悬停微亮、按压下沉。只动 transform / 背景 / 阴影这类合成层属性，
+   不触发重排重绘，动效灵动但几乎不影响性能。 */
+.dock-entry,
+.pace-option,
+.log-toggle,
+.restart-button,
+.takeover-button,
+.location-card,
+.banner-retry,
+.banner-home {
+  transition:
+    transform 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease;
+}
+
+.dock-entry:hover,
+.pace-option:hover,
+.log-toggle:hover {
+  background: rgb(255 255 255 / 62%);
+}
+
+.dock-entry:active,
+.pace-option:active {
+  transform: scale(0.96);
+}
+
+.restart-button:hover,
+.takeover-button:hover {
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--center-border) 55%, transparent);
+}
+
+.restart-button:active,
+.takeover-button:active,
+.log-toggle:active {
+  transform: translateY(1px);
+}
+
+.location-card:hover {
+  background: color-mix(in srgb, var(--board-surface) 90%, #fff);
+}
+
+/* 尊重系统的“减弱动态效果”设置。 */
+@media (prefers-reduced-motion: reduce) {
+  .dock-entry,
+  .pace-option,
+  .log-toggle,
+  .restart-button,
+  .takeover-button,
+  .location-card,
+  .banner-retry,
+  .banner-home {
+    transition: none;
+  }
+}
+
 @media (max-width: 767px) {
   /* 关键修复：把整页钉死在视口、禁止文档滚动，掐断“投掷骰子时整页大小大小闪”的根因。
      此前 .game-view 用 100dvh 但内容可撑高整页 → 地址栏随之显隐 → dvh 跳动 → 页面来回缩放。
@@ -1292,6 +1375,27 @@ function inspectFinalBoard() {
      导航条改用自己的 auto 外边距留在侧栏底部。*/
   .mobile-dock-bar {
     margin-top: auto;
+  }
+}
+
+/* 矮视口（折叠屏内屏横屏、平板横屏、分屏多窗口）：压缩留白与头部，把高度让给棋盘。 */
+@media (max-height: 620px) {
+  .game-shell {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .players {
+    padding: 0 4px;
+  }
+
+  .game-meta {
+    min-height: 14px;
+    font-size: 10px;
+  }
+
+  .side-panel {
+    gap: 10px;
   }
 }
 </style>

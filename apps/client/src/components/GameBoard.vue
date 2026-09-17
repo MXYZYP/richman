@@ -189,7 +189,12 @@ const playerTokens = computed(() => {
 
 <style scoped>
 .board-wrap {
+  /* 兜底：不支持 svh 的旧 WebView 仍走 vh。 */
   width: min(100%, 84vh);
+  /* 优先：按“地址栏可见”的稳定视口高度(svh)取约束。
+     折叠屏内屏/平板这类接近正方形或偏矮的视口，若棋盘只按宽度取满，
+     正方形就会比可视高度还高而被裁掉（表现为“地图不显示/只露一角”）。 */
+  width: min(100%, 84svh);
   aspect-ratio: 1;
   margin: 0 auto;
 }
@@ -202,7 +207,10 @@ const playerTokens = computed(() => {
   height: 100%;
   border: 1px solid var(--center-border, #b7c2aa);
   border-radius: 7px;
-  background: var(--game-board-base, var(--board-surface));
+  /* 盘面加一层极淡的居中高光，做出纸面受光的层次（纯背景层，不参与布局）。 */
+  background:
+    radial-gradient(115% 105% at 50% 34%, rgb(255 255 255 / 58%), transparent 62%),
+    var(--game-board-base, var(--board-surface));
   box-shadow: inset 0 2px 6px rgb(122 136 109 / 15%);
   overflow: hidden;
 }
@@ -235,10 +243,14 @@ const playerTokens = computed(() => {
   box-sizing: border-box;
 }
 
-/* 中心纯色面：原型是一块浅色棋盘底，没有描边。 */
+/* 中心纯色面：原型是一块浅色棋盘底，没有描边。
+   加一点层次：淡内阴影收边 + 柔和外投影浮起，留白更通透但不抢棋格。 */
 .center-panel {
-  border-radius: 2cqw;
-  background: color-mix(in srgb, var(--color-cell, var(--map-cell-color)) 50%, transparent);
+  border-radius: 2.4cqw;
+  background: color-mix(in srgb, var(--color-cell, var(--map-cell-color)) 42%, transparent);
+  box-shadow:
+    inset 0 0 1.4cqw rgb(122 136 109 / 16%),
+    0 0.22cqw 0.5cqw rgb(53 39 20 / 9%);
 }
 
 /* 棋盘题字：黑绿书法体、轻微倾斜（角度来自地图数据），去掉签条与暖底卡。
@@ -303,7 +315,12 @@ const playerTokens = computed(() => {
 @media (max-width: 767px) {
   /* 用 dvh 而非 vh：容器已按 100dvh 固定，棋盘若用 vh 会在地址栏显隐时与容器错位、偶发底部被裁切；
      dvh 与容器同尺度，地址栏伸缩时棋盘等比跟随。*/
-  .board-wrap { width: 100%; }
+  /* 竖屏手机：84svh 通常大于屏宽，min() 会取 100%（铺满屏宽、无两侧留白，与之前一致）；
+     方形/矮视口（折叠屏内屏、平板）时 84svh 才生效，避免棋盘高于可视区被裁切。 */
+  .board-wrap {
+    width: min(100%, 84vh);
+    width: min(100%, 84svh);
+  }
 
   .map-cell,
   .token-layer,
