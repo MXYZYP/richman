@@ -1,0 +1,656 @@
+{
+  "ref": {
+    "id": "world-tour",
+    "version": 1,
+    "contentHash": "2cbdece9d304d5586eb0fb9d7c93637a8cfb047bf63225be7279a8e6a3bd4049"
+  },
+  "metadata": {
+    "title": "世界之旅",
+    "description": "沿五十二格世界主环旅行，并从曼谷机场进入太平洋支线。"
+  },
+  "requiredRuleModules": [
+    {
+      "id": "core",
+      "version": 1
+    },
+    {
+      "id": "world-tour",
+      "version": 1
+    }
+  ],
+  "presentation": {
+    "canvas": {
+      "size": 100
+    },
+    "cells": {
+      "0": {
+        "x": 90,
+        "y": 90,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "起点",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "start"
+        }
+      },
+      "10": {
+        "x": 0,
+        "y": 90,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "曼谷机场",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "airport"
+        }
+      },
+      "20": {
+        "x": 0,
+        "y": 0,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "文化节",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        }
+      },
+      "30": {
+        "x": 90,
+        "y": 0,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "航班延误",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "1": {
+        "x": 83.33333333333333,
+        "y": 90,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "日本",
+        "propertyBand": "band:world-4f8a10"
+      },
+      "2": {
+        "x": 76.66666666666667,
+        "y": 90,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "韩国",
+        "propertyBand": "band:world-4f8a10"
+      },
+      "3": {
+        "x": 70,
+        "y": 90,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "4": {
+        "x": 63.333333333333336,
+        "y": 90,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "中国",
+        "propertyBand": "band:world-5b2c83"
+      },
+      "5": {
+        "x": 56.666666666666664,
+        "y": 90,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "北冰洋",
+        "propertyBand": "band:ocean"
+      },
+      "6": {
+        "x": 50,
+        "y": 90,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "7": {
+        "x": 43.333333333333336,
+        "y": 90,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "俄罗斯",
+        "propertyBand": "band:world-5b2c83"
+      },
+      "8": {
+        "x": 36.666666666666664,
+        "y": 90,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "学外语",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        }
+      },
+      "9": {
+        "x": 30,
+        "y": 90,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "越南",
+        "propertyBand": "band:world-5b2c83"
+      },
+      "48": {
+        "x": 23.333333333333332,
+        "y": 90,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "泰国",
+        "propertyBand": "band:world-5b2c83"
+      },
+      "49": {
+        "x": 16.666666666666668,
+        "y": 90,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "马来西亚",
+        "propertyBand": "band:world-5b2c83"
+      },
+      "11": {
+        "x": 10,
+        "y": 90,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "新加坡",
+        "propertyBand": "band:world-5b2c83"
+      },
+      "12": {
+        "x": 0,
+        "y": 83.33333333333333,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "印尼",
+        "propertyBand": "band:world-225f2b"
+      },
+      "13": {
+        "x": 0,
+        "y": 76.66666666666667,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "14": {
+        "x": 0,
+        "y": 70,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "印度",
+        "propertyBand": "band:world-225f2b"
+      },
+      "15": {
+        "x": 0,
+        "y": 63.333333333333336,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "巴基斯坦",
+        "propertyBand": "band:world-225f2b"
+      },
+      "16": {
+        "x": 0,
+        "y": 56.666666666666664,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "无线上网",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "17": {
+        "x": 0,
+        "y": 50,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "土耳其",
+        "propertyBand": "band:world-225f2b"
+      },
+      "57": {
+        "x": 0,
+        "y": 43.333333333333336,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "阿联酋",
+        "propertyBand": "band:world-225f2b"
+      },
+      "18": {
+        "x": 0,
+        "y": 36.666666666666664,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "伊拉克",
+        "propertyBand": "band:world-c5840a"
+      },
+      "60": {
+        "x": 0,
+        "y": 30,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "摩洛哥",
+        "propertyBand": "band:world-c5840a"
+      },
+      "19": {
+        "x": 0,
+        "y": 23.333333333333332,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "埃及",
+        "propertyBand": "band:world-c5840a"
+      },
+      "50": {
+        "x": 0,
+        "y": 16.666666666666668,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "苏伊士运河",
+        "propertyBand": "band:utility"
+      },
+      "51": {
+        "x": 0,
+        "y": 10,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "南非",
+        "propertyBand": "band:world-c5840a"
+      },
+      "21": {
+        "x": 10,
+        "y": 0,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "尼日利亚",
+        "propertyBand": "band:world-c5840a"
+      },
+      "22": {
+        "x": 16.666666666666668,
+        "y": 0,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "23": {
+        "x": 23.333333333333332,
+        "y": 0,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "肯尼亚",
+        "propertyBand": "band:world-c5840a"
+      },
+      "24": {
+        "x": 30,
+        "y": 0,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "印度洋",
+        "propertyBand": "band:ocean"
+      },
+      "25": {
+        "x": 36.666666666666664,
+        "y": 0,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "法国",
+        "propertyBand": "band:world-5a3025"
+      },
+      "26": {
+        "x": 43.333333333333336,
+        "y": 0,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "德国",
+        "propertyBand": "band:world-5a3025"
+      },
+      "27": {
+        "x": 50,
+        "y": 0,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "28": {
+        "x": 56.666666666666664,
+        "y": 0,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "意大利",
+        "propertyBand": "band:world-5a3025"
+      },
+      "52": {
+        "x": 63.333333333333336,
+        "y": 0,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "西班牙",
+        "propertyBand": "band:world-7a3e1f"
+      },
+      "53": {
+        "x": 70,
+        "y": 0,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "荷兰",
+        "propertyBand": "band:world-7a3e1f"
+      },
+      "54": {
+        "x": 76.66666666666667,
+        "y": 0,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "瑞士",
+        "propertyBand": "band:world-7a3e1f"
+      },
+      "55": {
+        "x": 83.33333333333333,
+        "y": 0,
+        "width": 6.666666666666667,
+        "height": 10,
+        "shortLabel": "瑞典",
+        "propertyBand": "band:world-7a3e1f"
+      },
+      "31": {
+        "x": 90,
+        "y": 10.0,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "挪威",
+        "propertyBand": "band:world-5a3025"
+      },
+      "32": {
+        "x": 90,
+        "y": 16.666666666666668,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "加拿大",
+        "propertyBand": "band:world-5a3025"
+      },
+      "33": {
+        "x": 90,
+        "y": 23.333333333333332,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "美国",
+        "propertyBand": "band:world-5a3025"
+      },
+      "34": {
+        "x": 90,
+        "y": 30.0,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "35": {
+        "x": 90,
+        "y": 36.666666666666664,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "墨西哥",
+        "propertyBand": "band:world-5a3025"
+      },
+      "56": {
+        "x": 90,
+        "y": 43.333333333333336,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "巴拿马运河",
+        "propertyBand": "band:utility"
+      },
+      "36": {
+        "x": 90,
+        "y": 50.0,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "危地马拉",
+        "propertyBand": "band:world-0878b8"
+      },
+      "37": {
+        "x": 90,
+        "y": 56.666666666666664,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "大西洋",
+        "propertyBand": "band:ocean"
+      },
+      "38": {
+        "x": 90,
+        "y": 63.333333333333336,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "巴西",
+        "propertyBand": "band:world-0878b8"
+      },
+      "58": {
+        "x": 90,
+        "y": 70.0,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "阿根廷",
+        "propertyBand": "band:world-0878b8"
+      },
+      "59": {
+        "x": 90,
+        "y": 76.66666666666667,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "智利",
+        "propertyBand": "band:world-0878b8"
+      },
+      "39": {
+        "x": 90,
+        "y": 83.33333333333333,
+        "width": 10,
+        "height": 6.666666666666667,
+        "shortLabel": "秘鲁",
+        "propertyBand": "band:world-0878b8"
+      },
+      "40": {
+        "x": 12,
+        "y": 78,
+        "width": 8,
+        "height": 6,
+        "shortLabel": "太平洋",
+        "propertyBand": "band:ocean",
+        "rotation": -38
+      },
+      "41": {
+        "x": 22,
+        "y": 69,
+        "width": 8,
+        "height": 6,
+        "shortLabel": "延误",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        },
+        "rotation": -38
+      },
+      "42": {
+        "x": 32,
+        "y": 60,
+        "width": 8,
+        "height": 6,
+        "shortLabel": "澳大利亚",
+        "propertyBand": "band:world-b83222",
+        "rotation": -38
+      },
+      "43": {
+        "x": 42,
+        "y": 51,
+        "width": 8,
+        "height": 6,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        },
+        "rotation": -38
+      },
+      "44": {
+        "x": 52,
+        "y": 42,
+        "width": 8,
+        "height": 6,
+        "shortLabel": "新西兰",
+        "propertyBand": "band:world-b83222",
+        "rotation": -38
+      },
+      "45": {
+        "x": 62,
+        "y": 33,
+        "width": 8,
+        "height": 6,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        },
+        "rotation": -38
+      },
+      "46": {
+        "x": 72,
+        "y": 24,
+        "width": 8,
+        "height": 6,
+        "shortLabel": "南极洲",
+        "propertyBand": "band:world-b83222",
+        "rotation": -38
+      },
+      "47": {
+        "x": 82,
+        "y": 15,
+        "width": 8,
+        "height": 6,
+        "shortLabel": "奖金",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        },
+        "rotation": -38
+      }
+    },
+    "routes": [
+      {
+        "type": "polyline",
+        "role": "route",
+        "strokeWidth": 0.9,
+        "dashPattern": [
+          1.8,
+          1.2
+        ],
+        "lineCap": "round",
+        "opacity": 0.8,
+        "zIndex": 0,
+        "points": [
+          {
+            "x": 5,
+            "y": 95
+          },
+          {
+            "x": 16,
+            "y": 81
+          },
+          {
+            "x": 26,
+            "y": 72
+          },
+          {
+            "x": 36,
+            "y": 63
+          },
+          {
+            "x": 46,
+            "y": 54
+          },
+          {
+            "x": 56,
+            "y": 45
+          },
+          {
+            "x": 66,
+            "y": 36
+          },
+          {
+            "x": 76,
+            "y": 27
+          },
+          {
+            "x": 86,
+            "y": 18
+          },
+          {
+            "x": 95,
+            "y": 14
+          }
+        ]
+      }
+    ],
+    "center": [
+      {
+        "type": "text",
+        "x": 30,
+        "y": 43,
+        "width": 40,
+        "height": 14,
+        "role": "center",
+        "text": "世界之旅",
+        "fitContent": true,
+        "zIndex": -1
+      }
+    ],
+    "theme": {
+      "colors": {
+        "board": "#E9DDC6",
+        "cell": "#FFF7E8",
+        "border": "#6E5B45",
+        "route": "#A86F3D",
+        "title": "#5B3A29",
+        "decoration": "#C59A6D",
+        "center": "#F3E7D3"
+      },
+      "propertyBands": {
+        "band:world-4f8a10": "#4F8A10",
+        "band:world-5b2c83": "#5B2C83",
+        "band:world-225f2b": "#225F2B",
+        "band:world-c5840a": "#C5840A",
+        "band:world-5a3025": "#5A3025",
+        "band:world-0878b8": "#0878B8",
+        "band:world-b83222": "#B83222",
+        "band:ocean": "#1F91B8",
+        "band:world-7a3e1f": "#7A3E1F",
+        "band:utility": "#8e7cc3"
+      }
+    }
+  }
+}

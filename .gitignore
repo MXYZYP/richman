@@ -1,0 +1,41 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+build/
+*.tsbuildinfo
+
+# 编辑器/系统
+.DS_Store
+.vscode/
+.idea/
+
+# 日志
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# 本地环境
+.env
+.env.local
+
+# deepwork 进度文件（OpenCode 可读，不入 git）
+.slim/deepwork/
+
+# 本地 worktree 隔离工作区
+.worktrees/
+
+# 工具本地元数据
+.omp/
+.superpowers/
+
+# 系统噪声
+Thumbs.db
+
+# 运行期存档（如后续实现持久化，不应入库）
+saves/
+
+# 密钥/证书，绝不入库
+*.pem
+*.key

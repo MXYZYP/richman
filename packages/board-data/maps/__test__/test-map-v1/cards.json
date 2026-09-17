@@ -1,0 +1,16 @@
+{
+  "chance": [
+    {
+      "id": "harbor-signal",
+      "text": "A clear signal earns 25 credits",
+      "effect": { "type": "receive_bank", "amount": 25 }
+    }
+  ],
+  "destiny": [
+    {
+      "id": "harbor-current",
+      "text": "The current carries you to Harbor Market",
+      "effect": { "type": "move_to", "cellId": 40, "collectSalary": true }
+    }
+  ]
+}

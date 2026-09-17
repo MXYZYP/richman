@@ -1,0 +1,36 @@
+{
+  "name": "richman",
+  "version": "2.6.0",
+  "private": true,
+  "description": "大富翁·中国之旅 网页游戏（亲友内部版）",
+  "packageManager": "pnpm@10.33.2",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @richman/client --filter @richman/server dev",
+    "build": "pnpm release:check && pnpm --filter @richman/client build && pnpm --filter @richman/server build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "echo '[阶段2起启用] Playwright 联机端到端测试'",
+    "validate-data": "pnpm -C packages/board-data run validate",
+    "typecheck": "pnpm -r exec tsc --noEmit && tsc --noEmit -p scripts/tsconfig.json",
+    "start": "pnpm --filter @richman/server start",
+    "party": "pnpm build && tsx scripts/party.ts",
+    "release": "tsx scripts/release.ts create",
+    "release:check": "tsx scripts/release.ts check"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/qrcode": "^1.5.5",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "@vue/server-renderer": "^3.5.39",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0",
+    "vue": "^3.5.39"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  }
+}

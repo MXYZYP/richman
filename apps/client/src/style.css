@@ -1,0 +1,115 @@
+/* 全局样式：M3-1.5 主题 A（实体复刻暖纸风），配色板取自 plan/02 §4.1。
+   变量集中在此，组件不写裸色值，便于将来换肤只改这一处。*/
+:root {
+  /* 页面与文字 */
+  --color-bg: #F7F3EA;       /* 页面背景 米白 */
+  --color-cell: #FFFFFF;     /* 棋盘格底 */
+  --color-border: #D8D2C4;   /* 描边 */
+  --color-primary: #C0392B;  /* 主色 中国红 */
+  --color-accent: #D9A441;   /* 点缀金 */
+  --color-text: #2B2B2B;     /* 正文 */
+  --color-muted: #6B6658;    /* 次要文字（AA 对比） */
+  --color-gain: #2E8B57;     /* 收钱 绿 */
+  --color-pay: #C0392B;      /* 付钱 红 */
+  --cash-profit-text: #7B2417;
+  --cash-profit-bg: #F3DDD9;
+  --cash-loss-text: #145A32;
+  --cash-loss-bg: #DDEDE3;
+  --price-color: #6f3b1c;    /* 地产价格 深棕 */
+
+  /* 棋盘底与阴影 */
+  --board-bg: #dfd4c1;       /* 棋盘底 暖纸板 */
+  --board-surface: #fff7ea;   /* 面板卡片暖纸面 */
+  --board-shadow: 0 14px 40px rgb(53 39 20 / 14%);
+  --board-radius: 24px;
+
+  /* 中央面板 */
+  --center-bg: linear-gradient(135deg, rgb(255 255 255 / 82%), rgb(247 237 221 / 72%));
+  --center-border: #cbbd9d;
+  --title-color: #7b2417;    /* 棋盘题字 深棕红 */
+  --event-bg: #fff3c2;       /* 事件提示条 暖黄票根 */
+  --event-text: #79552a;
+  --overlay-scrim: rgb(43 35 26 / 48%);  /* 模态遮罩 暖墨 */
+
+  /* 支线虚线轨迹 */
+  --branch-track: #8a5b2d;   /* 暖棕航线 */
+
+  /* 地产色带：normal 地皮按飞书表格 A 列背景色匹配；车站/utility 保留专用色 */
+  --band-feishu-d73a49: #d73a49;
+  --band-feishu-1677ff: #1677ff;
+  --band-feishu-8e44ad: #8e44ad;
+  --band-feishu-1f5fbf: #1f5fbf;
+  --band-feishu-e66a95: #e66a95;
+  --band-feishu-2ea44f: #2ea44f;
+  --band-feishu-c2185b: #c2185b;
+  --band-feishu-757575: #757575;
+  --band-station: #546E7A;   /* 火车站 蓝灰 */
+  --band-utility: #8E7CC3;   /* utility 紫 */
+
+  /* 玩家身份色（跨主题保持稳定，handoff §6.4）*/
+  --player-red: #d84b3f;
+  --player-blue: #3478c6;
+  --player-yellow: #d8a725;
+  --player-green: #2f9d63;
+  --player-purple: #8656c9;
+  --player-orange: #e2711d;
+  --owner-mortgaged: #757575;
+
+  /* 棋子 */
+  --token-ring: #fff;
+  --token-shadow: 0 2px 6px rgb(0 0 0 / 30%);
+
+  /* 按钮 */
+  --button-enabled-bg: #C0392B;   /* 主色 */
+  --button-enabled-text: #fff;
+  --button-disabled-bg: #eadfcb;  /* 暖灰纸 */
+  --button-disabled-text: #6B6658;
+
+  /* 连接横幅：重连中 琥珀警示；断开 红警（暖纸底，非纯色块）*/
+  --color-warning: #B7791F;
+  --banner-warning-bg: #fdf1d8;
+  --banner-error-bg: #fbe0d8;
+
+  /* 功能格背景（机会/命运/税/机场/起点/特殊/支线）*/
+  --cell-function-bg: linear-gradient(180deg, #fffdf8, #f4ecdd);
+
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #app {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  /* 关闭移动端字体自动放大（font boosting）：对局中战报/提示文字一增减，浏览器会重算字号，
+     造成画面“忽大忽小”。固定 100% 后字号只由我们的 CSS 决定，不再随内容变化。*/
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+button, input, select, textarea { font: inherit; }
+
+button:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+body { overflow-x: hidden; }
+#app { min-height: 100vh; }
+
+/* 只在对局页锁死文档滚动（game-view-active 由 GameView 挂载时加到 body），
+   与 .game-view{position:fixed;overflow:hidden} 双保险，杜绝地址栏显隐引发的整页缩放抖动。
+   首页/大厅/设置等普通页面不受影响，保持正常上下滚动。*/
+@media (max-width: 767px) {
+  body.game-view-active {
+    overflow: hidden;
+    height: 100%;
+  }
+}

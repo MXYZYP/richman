@@ -1,0 +1,96 @@
+{
+  "ref": {
+    "id": "test-harbor-loop",
+    "version": 1,
+    "contentHash": "1e3e8a48057c11df18a9eefd32994fa480af1bc5e0367ec02ebf8900a1d7c245"
+  },
+  "metadata": {
+    "title": "Test Harbor Loop",
+    "description": "Permanent non-player fixture for generic multi-map verification"
+  },
+  "requiredRuleModules": [
+    { "id": "core", "version": 1 }
+  ],
+  "presentation": {
+    "canvas": { "size": 80 },
+    "cells": {
+      "0": {
+        "x": 0, "y": 0, "width": 16, "height": 16,
+        "shortLabel": "Launch",
+        "artwork": { "type": "built-in-icon", "icon": "start" }
+      },
+      "10": {
+        "x": 20, "y": 0, "width": 16, "height": 16,
+        "shortLabel": "Cedar",
+        "propertyBand": "band:harbor"
+      },
+      "20": {
+        "x": 40, "y": 0, "width": 16, "height": 16,
+        "shortLabel": "Signal",
+        "artwork": { "type": "built-in-icon", "icon": "chance" }
+      },
+      "30": {
+        "x": 40, "y": 20, "width": 16, "height": 16,
+        "shortLabel": "Fee",
+        "artwork": { "type": "built-in-icon", "icon": "tax" }
+      },
+      "40": {
+        "x": 40, "y": 40, "width": 16, "height": 16,
+        "shortLabel": "Market",
+        "propertyBand": "band:harbor"
+      },
+      "50": {
+        "x": 20, "y": 40, "width": 16, "height": 16,
+        "shortLabel": "Current",
+        "artwork": { "type": "built-in-icon", "icon": "destiny" }
+      },
+      "60": {
+        "x": 0, "y": 40, "width": 16, "height": 16,
+        "shortLabel": "Tide",
+        "artwork": { "type": "built-in-icon", "icon": "special-moon" }
+      },
+      "70": {
+        "x": 0, "y": 20, "width": 16, "height": 16,
+        "shortLabel": "Lantern",
+        "propertyBand": "band:harbor"
+      }
+    },
+    "routes": [
+      {
+        "type": "polyline",
+        "points": [
+          { "x": 8, "y": 8 },
+          { "x": 48, "y": 8 },
+          { "x": 48, "y": 48 },
+          { "x": 8, "y": 48 },
+          { "x": 8, "y": 8 }
+        ],
+        "role": "route",
+        "strokeWidth": 2,
+        "lineCap": "round"
+      }
+    ],
+    "center": [
+      {
+        "type": "text",
+        "x": 18, "y": 18, "width": 20, "height": 20,
+        "role": "center",
+        "text": "HARBOR"
+      }
+    ],
+    "theme": {
+      "colors": {
+        "board": "#e8fffb",
+        "cell": "#ffffff",
+        "border": "#164e63",
+        "route": "#0891b2",
+        "title": "#134e4a",
+        "decoration": "#f59e0b",
+        "center": "#ccfbf1"
+      },
+      "propertyBands": {
+        "band:harbor": "#12a594"
+      }
+    }
+  }
+}

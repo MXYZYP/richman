@@ -1,0 +1,47 @@
+{
+  "boardName": "Harbor Circuit",
+  "direction": "clockwise",
+  "cells": [
+    { "id": 0, "type": "start", "name": "Launch" },
+    {
+      "id": 10,
+      "type": "property",
+      "subtype": "normal",
+      "name": "Cedar Pier",
+      "price": 90,
+      "houseCost": 20,
+      "rents": [4, 12, 30],
+      "mortgageValue": 40
+    },
+    { "id": 20, "type": "chance", "name": "Signal" },
+    { "id": 30, "type": "tax", "name": "Dock Fee", "amount": 15 },
+    {
+      "id": 40,
+      "type": "property",
+      "subtype": "normal",
+      "name": "Harbor Market",
+      "price": 120,
+      "houseCost": 30,
+      "rents": [6, 18, 42],
+      "mortgageValue": 55
+    },
+    { "id": 50, "type": "destiny", "name": "Current" },
+    {
+      "id": 60,
+      "type": "special",
+      "name": "Tide Bonus",
+      "effect": { "type": "receive_bank", "amount": 20 }
+    },
+    {
+      "id": 70,
+      "type": "property",
+      "subtype": "normal",
+      "name": "Lantern Quay",
+      "price": 150,
+      "houseCost": 35,
+      "rents": [8, 24, 55],
+      "mortgageValue": 70,
+      "nextId": 0
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@richman/engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "纯规则引擎（无 UI、无网络、无 IO）——同一份代码阶段 1 在浏览器跑、阶段 2 搬进服务器",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "simulate:500": "tsx src/simulate.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@richman/board-data": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}

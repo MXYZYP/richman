@@ -1,0 +1,124 @@
+/*
+ * 浅色掌机对局主题：仅作用于对局根容器与对局弹层（含 Teleport 到 body 的弹层根）。
+ * 不写 :root；首页 / 大厅 / 全局样式不受影响。
+ * 玩家身份色与收付钱语义色（--player-* / --color-gain / --color-pay / --cash-*）保持原值，
+ * 欠款、破产、真实亏钱仍是红色。
+ */
+
+.game-view,
+dialog.cell-dialog-layer,
+dialog.player-dialog-layer,
+dialog.mobile-sheet.sheet {
+  /* 浅色掌机基础面 */
+  --game-page: #e8e9e0;
+  --game-panel: #f6f7ef;
+  --game-board-base: #dce0d5;
+  --game-dice-tray: #d0d8c4;
+
+  /* 琥珀实体按键：深字压在琥珀面上 */
+  --game-action-bg: linear-gradient(180deg, #f6d381, #e7b551);
+  --game-action-text: #493616;
+  --game-action-shadow: #a57d32;
+
+  /* 扩展面 / 短阴影 / 焦点色 */
+  --game-panel-raised: #fbfcf6;
+  --game-panel-quiet: #edf0e3;
+  --game-line-soft: #cdd5c3;
+  --game-shadow-panel: 0 1px 0 #ccd5c2, 0 5px 12px rgb(57 72 44 / 8%);
+  --game-shadow-dialog: 0 20px 48px rgb(57 72 44 / 26%);
+  --game-focus: #8a6420;
+  --game-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --game-radius-panel: 12px;
+  --game-radius-control: 9px;
+
+  /* 对局内既有变量：sage-light 面 + 琥珀棕主色 */
+  --color-bg: var(--game-page);
+  --color-cell: #fafbf5;
+  --color-border: #b9c3ad;
+  --color-text: #333e36;
+  --color-muted: #5b6a50;
+  --color-primary: #88551f;
+  --color-accent: #b98634;
+
+  --board-bg: #e2e6d6;
+  --board-surface: var(--game-panel);
+  --board-shadow: 0 14px 40px rgb(57 72 44 / 16%);
+  --center-bg: linear-gradient(135deg, #fbfcf6, #eef1e4);
+  --center-border: #b7c2aa;
+  --title-color: #6f4c1e;
+  --event-bg: #f7efd8;
+  --event-text: #6b4d1c;
+  --overlay-scrim: rgb(43 52 38 / 48%);
+  --branch-track: #8a9a7c;
+  --price-color: #88551f;
+  --cell-function-bg: linear-gradient(180deg, #fbfcf6, #eef1e4);
+
+  --button-enabled-bg: #eec264;
+  --button-enabled-text: #493616;
+  --button-disabled-bg: #e3e7d8;
+  --button-disabled-text: #6a7460;
+
+  --token-ring: #fbfcf6;
+  --token-shadow: 0 2px 6px rgb(44 56 36 / 30%);
+
+  --banner-warning-bg: #f6efd7;
+  --banner-error-bg: #f7e2da;
+}
+
+/* 弹层动效：260ms 跟手进场 / 160ms 快速退场；不支持的浏览器瞬开瞬关 */
+@media (prefers-reduced-motion: no-preference) {
+  dialog.cell-dialog-layer,
+  dialog.player-dialog-layer {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+    transition:
+      opacity 160ms ease-in,
+      transform 160ms ease-in,
+      overlay 160ms ease-in allow-discrete,
+      display 160ms ease-in allow-discrete;
+  }
+
+  dialog.cell-dialog-layer[open],
+  dialog.player-dialog-layer[open] {
+    opacity: 1;
+    transform: none;
+    transition-duration: 260ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @starting-style {
+    dialog.cell-dialog-layer[open],
+    dialog.player-dialog-layer[open] {
+      opacity: 0;
+      transform: translateY(12px) scale(0.98);
+    }
+  }
+
+  dialog.cell-dialog-layer::backdrop,
+  dialog.player-dialog-layer::backdrop {
+    opacity: 0;
+    transition: opacity 160ms ease-in, overlay 160ms ease-in allow-discrete, display 160ms ease-in allow-discrete;
+  }
+
+  dialog.cell-dialog-layer[open]::backdrop,
+  dialog.player-dialog-layer[open]::backdrop {
+    opacity: 1;
+    transition-duration: 260ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @starting-style {
+    dialog.cell-dialog-layer[open]::backdrop,
+    dialog.player-dialog-layer[open]::backdrop {
+      opacity: 0;
+    }
+  }
+
+  :where(.game-view, dialog.cell-dialog-layer, dialog.player-dialog-layer, dialog.mobile-sheet.sheet) :where(button) {
+    transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+  }
+
+  :where(.game-view, dialog.cell-dialog-layer, dialog.player-dialog-layer, dialog.mobile-sheet.sheet) :where(button:active:not(:disabled)) {
+    transform: scale(0.98);
+  }
+}
