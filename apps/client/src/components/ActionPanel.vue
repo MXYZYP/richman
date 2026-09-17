@@ -638,7 +638,9 @@ button:disabled {
   text-align: center;
 }
 
-@media (max-width: 767px) {
+/* 紧凑端断点同步抬到 1024：折叠屏内屏/平板同样需要“按钮行固定在顶部、
+   长卡面在自己的反馈区里滚动”，否则命运牌一出现就把下方内容整体顶长。*/
+@media (max-width: 1024px) {
   /* 手机紧凑态：按钮行 44px 固定在面板顶部；买地/掷骰这类常规状态整块正好 114px。*/
   .action-panel {
     gap: 10px;

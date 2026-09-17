@@ -93,9 +93,45 @@ html {
      造成画面“忽大忽小”。固定 100% 后字号只由我们的 CSS 决定，不再随内容变化。*/
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* 触摸按下时的系统高光：即使系统开了“移除动画”（reduced motion），按下也有即时视觉回应。 */
+  -webkit-tap-highlight-color: rgb(53 39 20 / 14%);
 }
 
 button, input, select, textarea { font: inherit; }
+
+/* ---- 通用按压反馈 ----
+   覆盖所有按钮（棋格除外）：按下即时下沉，160ms 顺滑回弹。
+   只动 transform / 阴影 / 背景这类合成层属性，不触发重排。
+   系统开启“减少动态效果”时不做位移，改成瞬时压暗——仍然看得见反馈。 */
+button:not(:disabled):not(.board-cell) {
+  touch-action: manipulation; /* 去掉 300ms 点击延迟，按压手感更跟手 */
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease,
+    filter 160ms ease;
+}
+
+button:not(:disabled):not(.board-cell):active {
+  transform: translateY(1px) scale(0.985);
+}
+
+@media (hover: hover) {
+  button:not(:disabled):not(.board-cell):hover {
+    filter: brightness(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):not(.board-cell) {
+    transition: none;
+  }
+
+  button:not(:disabled):not(.board-cell):active {
+    transform: none;
+    filter: brightness(0.92);
+  }
+}
 
 button:focus-visible {
   outline: 3px solid var(--color-accent);
@@ -112,10 +148,10 @@ body { overflow-x: hidden; }
 
 /* 只在对局页锁死文档滚动（game-view-active 由 GameView 挂载时加到 body），
    与 .game-view{position:fixed;overflow:hidden} 双保险，杜绝地址栏显隐引发的整页缩放抖动。
-   首页/大厅/设置等普通页面不受影响，保持正常上下滚动。*/
-@media (max-width: 767px) {
-  body.game-view-active {
-    overflow: hidden;
-    height: 100%;
-  }
+   首页/大厅/设置等普通页面不受影响，保持正常上下滚动。
+   注意：这里不能加宽度断点——折叠屏内屏/平板宽度 >767px 但同样是移动端形态，
+   漏掉它们就会出现“内容变多 → 文档变高 → 地址栏伸缩 → 整页放大缩小”。 */
+body.game-view-active {
+  overflow: hidden;
+  height: 100%;
 }

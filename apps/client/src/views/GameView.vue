@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue';
 import GameBoard from '../components/GameBoard.vue';
 import PlayerRail from '../components/PlayerRail.vue';
 import ActionPanel from '../components/ActionPanel.vue';
@@ -41,7 +41,7 @@ const armedDebtAutoOpen = ref<string | null>(null);
 // the page behind the desktop layout.
 type MobileSheetId = 'assets' | 'log' | 'settings';
 const mobileSheet = ref<MobileSheetId | null>(null);
-const mobileLayoutQuery = typeof window === 'undefined' ? null : window.matchMedia('(max-width: 767px)');
+const mobileLayoutQuery = typeof window === 'undefined' ? null : window.matchMedia('(max-width: 1024px)');
 const isMobileLayout = ref(mobileLayoutQuery?.matches ?? false);
 
 function handleLayoutChange(event: MediaQueryListEvent): void {
@@ -414,7 +414,43 @@ const layoutEpoch = ref(0);
 function bumpLayout(): void {
   layoutEpoch.value += 1;
   void document.body?.offsetHeight; // 读一次布局属性，强制同步重排
+  // 顺带重测棋盘容器：折叠/旋转后宽高比会变，必须重新取 min(宽,高)。
+  measureBoardStage();
 }
+
+// ---- 棋盘尺寸：实测容器，而不是猜视口 ----
+// vh/dvh/svh 都以“视口”为基准，而棋盘真正能用的是“棋盘容器”的大小；
+// 折叠屏内屏、平板这类近正方形视口下二者差异极大，正方形棋盘会被算得比可视区还高而被裁掉。
+// 这里用 ResizeObserver 实测容器像素尺寸，取 min(宽, 高) 写进 --board-size。
+// 容器高度由布局固定（棋盘 56% / 栅格 1fr），不随内容变化，因此不存在“改尺寸→再触发”的回环。
+const boardStageRef = ref<HTMLElement | null>(null);
+const boardSize = ref(0);
+let stageObserver: ResizeObserver | null = null;
+
+function measureBoardStage(): void {
+  const el = boardStageRef.value;
+  if (!el) return;
+  const width = el.clientWidth;
+  const height = el.clientHeight;
+  if (width <= 0 || height <= 0) return;
+  const size = Math.floor(Math.min(width, height));
+  if (size > 0 && size !== boardSize.value) boardSize.value = size;
+}
+
+const boardStageStyle = computed<CSSProperties | undefined>(() => (
+  boardSize.value > 0 ? { '--board-size': `${boardSize.value}px` } : undefined
+));
+
+// 棋盘容器是在 state 就绪后才挂载的（v-if="state"），所以要在元素出现时再挂 observer，
+// 否则首屏对局数据还没到、观察的是 null，之后再也不会重测。
+watch(boardStageRef, (element) => {
+  stageObserver?.disconnect();
+  stageObserver = null;
+  if (!element || typeof ResizeObserver === 'undefined') return;
+  measureBoardStage();
+  stageObserver = new ResizeObserver(() => measureBoardStage());
+  stageObserver.observe(element);
+});
 
 // 对局期间给 body 打标记：移动端据此只锁对局页的文档滚动（见 style.css），
 // 首页/大厅等页面不受影响、可正常滚动；离开对局时移除标记。
@@ -423,10 +459,19 @@ onMounted(() => {
   window.addEventListener('resize', bumpLayout);
   window.addEventListener('orientationchange', bumpLayout);
   window.visualViewport?.addEventListener('resize', bumpLayout);
+  // 首帧先测一次；随后容器任何尺寸变化（折叠、旋转、分屏、地址栏）都由 observer 兜住。
+  measureBoardStage();
+  void nextTick(measureBoardStage);
+  if (typeof ResizeObserver !== 'undefined' && boardStageRef.value !== null) {
+    stageObserver = new ResizeObserver(() => measureBoardStage());
+    stageObserver.observe(boardStageRef.value);
+  }
 });
 
 onBeforeUnmount(() => {
   document.body.classList.remove('game-view-active');
+  stageObserver?.disconnect();
+  stageObserver = null;
   window.removeEventListener('resize', bumpLayout);
   window.removeEventListener('orientationchange', bumpLayout);
   window.visualViewport?.removeEventListener('resize', bumpLayout);
@@ -496,7 +541,7 @@ function inspectFinalBoard() {
           @select-player="openPlayerAssets"
         />
       </header>
-      <div class="board-stage">
+      <div ref="boardStageRef" class="board-stage" :style="boardStageStyle">
         <GameBoard
           class="board full-board"
           :state="state"
@@ -708,9 +753,16 @@ function inspectFinalBoard() {
 
 <style scoped>
 .game-view {
-  min-height: 100vh;
+  /* 对局页恒定铺满视口：整页钉死，不用 vh/dvh/svh，也不让文档参与滚动。
+     此前只在 ≤767px 生效，导致折叠屏内屏/平板（宽度 ≥768px 但形态仍是移动设备）
+     走的是桌面分支：文档可滚动 → 内容一变就顶高 → 地址栏显隐 → 视口单位重算 →
+     整页“放大缩小、位移”。改为无条件钉死后，任何设备的页面尺寸都只由视口决定。*/
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  overscroll-behavior: none;
   background: var(--game-page);
 }
 
@@ -836,7 +888,9 @@ function inspectFinalBoard() {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  scroll-behavior: smooth;
+  /* 关键：关掉滚动锚定（scroll anchoring）。内容增减时浏览器会自动补偿 scrollTop，
+     配合任何滚动动画都会表现为整个面板“漂移”；关掉后滚动位置只由用户手势决定。*/
+  overflow-anchor: none;
 }
 
 .location-card {
@@ -1170,19 +1224,10 @@ function inspectFinalBoard() {
   }
 }
 
-@media (max-width: 767px) {
-  /* 关键修复：把整页钉死在视口、禁止文档滚动，掐断“投掷骰子时整页大小大小闪”的根因。
-     此前 .game-view 用 100dvh 但内容可撑高整页 → 地址栏随之显隐 → dvh 跳动 → 页面来回缩放。
-     改为 fixed 满屏 + overflow:hidden 后，文档高度恒为 0，地址栏不再因布局抖动；
-     控制面板改为内部滚动（见 .side-panel），内容再多也不撑高整页。*/
-  .game-view {
-    position: fixed;
-    inset: 0;
-    min-height: 0;
-    overflow: hidden;
-    overscroll-behavior: none;
-  }
-
+/* 紧凑布局断点 1024px（原 767px）。
+   折叠屏内屏、小平板的 CSS 宽度普遍在 768–1024 之间，用 767 会把它们误判成桌面，
+   于是拿不到竖排布局、也拿不到底部操作坞——这正是“内屏展开态地图不完整”的来源。 */
+@media (max-width: 1024px) {
   .game-shell {
     flex: 1 1 auto;
     min-height: 0;
@@ -1200,17 +1245,25 @@ function inspectFinalBoard() {
     max-width: 100%;
   }
 
+  /* 三段高度全部按比例写死，绝不随内容变化：
+     玩家条 auto（内部 50px 定高）+ 棋盘 56% + 侧栏吃掉剩余。
+     内容再长也只让侧栏内部滚动，棋盘尺寸恒定 → 抽牌/切人都不再抽搐漂移。*/
   .players {
+    flex: 0 0 auto;
     padding: 0 7px;
     background: #e5e7dc;
   }
 
   .board-stage {
-    flex: 0 0 auto;
+    /* 0 0 56%：不吃内容高度、也不参与伸缩，高度恒定 = 棋盘可用高度。
+       棋盘尺寸由脚本实测这个盒子后写入 --board-size（见 measureBoardStage）。*/
+    flex: 0 0 56%;
+    min-height: 0;
     padding: 0 6px;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    align-items: center;
+    place-items: center;
+    overflow: hidden;
   }
 
   .board-stage > .full-board {
@@ -1222,7 +1275,9 @@ function inspectFinalBoard() {
   /* 控制面板内部滚动：min-height:0 让 flex 子项可以收缩，overflow-y:auto 接管滚动，
      这样整页文档高度恒定，地址栏不会因内容增减而显隐（即消除“大小大小闪”）。*/
   .side-panel {
-    flex: 1 1 auto;
+    /* 1 1 0：基准为 0，高度 = 剩余空间（恒定），内容超出就内部滚动，
+       因此命运牌把内容变长时不会顶到棋盘。*/
+    flex: 1 1 0;
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -1343,7 +1398,7 @@ function inspectFinalBoard() {
   }
 }
 
-@media (max-width: 767px) and (orientation: landscape) {
+@media (max-width: 1024px) and (orientation: landscape) {
   .game-shell {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr);

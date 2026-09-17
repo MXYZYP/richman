@@ -639,7 +639,9 @@ function confirmBankruptcy() {
   opacity: 0.9;
 }
 
-@media (max-width: 767px) {
+/* 断点同步抬到 1024：折叠屏/平板上资产面板同样是底部抽屉里的一屏，
+   走紧凑态（列表不再内层滚动）比桌面态更合适。*/
+@media (max-width: 1024px) {
   .asset-panel {
     padding: 10px;
   }

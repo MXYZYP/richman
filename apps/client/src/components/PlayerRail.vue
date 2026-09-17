@@ -448,15 +448,18 @@ function pillKey(notice: CashNotice): string {
   transform: translateY(6px);
 }
 
-/* 手机端：轨道补间期间现金会临时宽过收窄中的卡片，裁在卡片内，避免整页横向溢出。*/
-@media (max-width: 767px) {
+/* 紧凑端（手机 / 折叠屏 / 平板）：轨道补间期间现金会临时宽过收窄中的卡片，
+   裁在卡片内，避免整页横向溢出。主位在自身轨道就地加宽，席位顺序恒定、不重排。*/
+@media (max-width: 1024px) {
   .player-card.hero .seat-copy {
     overflow: hidden;
   }
 }
 
-/* 桌面端保持掌机比例：整条不拉成超宽面板。*/
-@media (min-width: 768px) {
+/* 桌面端保持掌机比例：整条不拉成超宽面板。
+   注意断点同步抬到 1025：折叠屏内屏/平板仍走上面的紧凑分支，
+   不做 order 重排与 FLIP 位移（那正是“切人时席位跳动漂移”的来源）。*/
+@media (min-width: 1025px) {
   /* 桌面改用主位在前的轨道模板，宽列跟着视觉上的主位走（与下面的 order 配套）。*/
   .player-seats {
     grid-template-columns: var(--seat-cols-desktop);

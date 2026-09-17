@@ -189,13 +189,13 @@ const playerTokens = computed(() => {
 
 <style scoped>
 .board-wrap {
-  /* 兜底：不支持 svh 的旧 WebView 仍走 vh。 */
-  width: min(100%, 84vh);
-  /* 优先：按“地址栏可见”的稳定视口高度(svh)取约束。
-     折叠屏内屏/平板这类接近正方形或偏矮的视口，若棋盘只按宽度取满，
-     正方形就会比可视高度还高而被裁掉（表现为“地图不显示/只露一角”）。 */
-  width: min(100%, 84svh);
+  /* --board-size 由 GameView 实测棋盘容器后写入（px）：取容器 min(宽,高)，
+     所以任何宽高比下都是一个完整可见的正方形，不会再被裁掉一角。
+     脚本还没跑完（首帧 / 老浏览器）时用视口高度兜底。 */
+  width: var(--board-size, min(100%, 84vh));
+  height: var(--board-size, auto);
   aspect-ratio: 1;
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -313,15 +313,8 @@ const playerTokens = computed(() => {
 .token-orange { background: var(--player-orange); }
 
 @media (max-width: 767px) {
-  /* 用 dvh 而非 vh：容器已按 100dvh 固定，棋盘若用 vh 会在地址栏显隐时与容器错位、偶发底部被裁切；
-     dvh 与容器同尺度，地址栏伸缩时棋盘等比跟随。*/
-  /* 竖屏手机：84svh 通常大于屏宽，min() 会取 100%（铺满屏宽、无两侧留白，与之前一致）；
-     方形/矮视口（折叠屏内屏、平板）时 84svh 才生效，避免棋盘高于可视区被裁切。 */
-  .board-wrap {
-    width: min(100%, 84vh);
-    width: min(100%, 84svh);
-  }
-
+  /* 棋盘尺寸一律交给 --board-size（脚本实测），这里只切换手机版的格子几何：
+     手机上格名/字号改用大一号触屏版坐标（--mobile-*）。 */
   .map-cell,
   .token-layer,
   .center-decoration {
@@ -334,13 +327,5 @@ const playerTokens = computed(() => {
   }
 }
 
-/* 横屏：棋盘改为按高度撑满（board-stage 为定高网格单元），避免竖屏 width:100% 在矮屏溢出裁切。*/
-@media (max-width: 767px) and (orientation: landscape) {
-  .board-wrap {
-    width: auto;
-    height: 100%;
-    aspect-ratio: 1;
-    max-width: 100%;
-  }
-}
+/* 横屏不再需要特例：--board-size 取的是容器 min(宽,高)，竖屏/横屏通用。 */
 </style>
