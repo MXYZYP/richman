@@ -17,11 +17,22 @@ interface AssetAllowlistEntry {
   readonly paths: readonly string[];
 }
 
-interface MapRegistryOptions {
+export interface MapRegistryOptions {
   readonly activeMapRefs: readonly MapRef[];
   readonly knownRuleModules: readonly RuleModuleRef[];
   readonly assetAllowlist?: readonly AssetAllowlistEntry[];
 }
+
+/**
+ * 生产环境允许的规则模块白名单（#117 地图工坊）。
+ * 提出来是为了让**客户端侧的自定义地图校验**用与生产注册表完全同一份白名单——
+ * 否则工坊会放行一张服务器/引擎根本不认识的模块地图，直到开局才炸。
+ */
+export const PRODUCTION_RULE_MODULES: readonly RuleModuleRef[] = [
+  { id: 'core', version: 1 },
+  { id: 'world-tour', version: 1 },
+  { id: 'great-wall', version: 1 },
+];
 
 export interface MapRegistry {
   listActiveMaps(): readonly MapCatalogEntry[];
@@ -153,11 +164,7 @@ const productionRegistry = createMapRegistry({
     xinjiangTourMap.ref,
     shanxiTourMap.ref,
   ],
-  knownRuleModules: [
-    { id: 'core', version: 1 },
-    { id: 'world-tour', version: 1 },
-    { id: 'great-wall', version: 1 },
-  ],
+  knownRuleModules: PRODUCTION_RULE_MODULES,
   assetAllowlist: [
     { ref: chinaTourMap.ref, paths: [] },
     { ref: worldTourMap.ref, paths: [] },

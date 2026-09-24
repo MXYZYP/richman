@@ -121,11 +121,38 @@ describe('production map registry', () => {
     expect(publicApi.listActiveMaps).toBe(listActiveMaps);
     expect(publicApi.getActiveMapPack).toBe(getActiveMapPack);
     expect(publicApi.getMapPack).toBe(getMapPack);
-    expect(publicApi).not.toHaveProperty('createMapRegistry');
+    // 地图工坊（#117）要在客户端另建一个**独立**注册表来装玩家导入的自定义地图，
+    // 所以工厂与规则模块白名单是**有意**开放的：生产注册表是模块私有的，外部只能拿工厂造新实例。
+    // 真正要守住的底线不是「不导出 createMapRegistry」，而是「没有任何能改动生产单例的入口」——
+    // 下面这条 registerMapPack 断言才是那道门。
+    expect(publicApi.createMapRegistry).toBe(createMapRegistry);
+    expect(publicApi.PRODUCTION_RULE_MODULES).toEqual([
+      { id: 'core', version: 1 },
+      { id: 'world-tour', version: 1 },
+      { id: 'great-wall', version: 1 },
+    ]);
     expect(publicApi).not.toHaveProperty('registerMapPack');
 
     const registryModule = await import('../registry');
     expect(registryModule).not.toHaveProperty('registerMapPack');
+  });
+
+  it('工坊式的独立注册表与生产注册表互不影响（#117）', async () => {
+    const publicApi = await import('../index');
+    const sandbox = publicApi.createMapRegistry({
+      activeMapRefs: [],
+      knownRuleModules: publicApi.PRODUCTION_RULE_MODULES,
+      assetAllowlist: [],
+    });
+
+    // 空沙箱里什么都没有：既看不到生产地图（独立实例不共享 packsById），
+    // 也不会因为在里面注册而污染生产的那十张地图。
+    expect(sandbox.listActiveMaps()).toEqual([]);
+    expect(() => sandbox.getMapPack(chinaTourMap.ref)).toThrow(/Unknown map id: china-tour/);
+    expect(listActiveMaps().map((entry) => entry.ref.id)).toEqual([
+      'china-tour', 'world-tour', 'classic-tour', 'silk-road', 'great-wall',
+      'yellow-river', 'yangtze-tour', 'pearl-tour', 'xinjiang-tour', 'shanxi-tour',
+    ]);
   });
 
   it('package exports 只开放根入口，阻止消费者绕过 public API 导入 registry subpath', () => {

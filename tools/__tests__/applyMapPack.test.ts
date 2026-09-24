@@ -71,12 +71,13 @@ describe('apply-map-pack: camelCase', () => {
 });
 
 describe('apply-map-pack: readKnownModules', () => {
-  it('从 registry.ts 解析出 knownRuleModules，不自己维护副本', () => {
+  it('从 registry.ts 的 PRODUCTION_RULE_MODULES 常量解析出白名单，不自己维护副本', () => {
     expect(readKnownModules(registrySource)).toEqual([
       { id: 'core', version: 1 },
       { id: 'world-tour', version: 1 },
       { id: 'great-wall', version: 1 },
     ]);
+    expect(registrySource).toContain('PRODUCTION_RULE_MODULES: readonly RuleModuleRef[] = [');
   });
 });
 
@@ -149,11 +150,12 @@ describe('apply-map-pack: 新地图确实能被补进去', () => {
     expect(allowLineAt).toBeLessThan(allowEnd);
   });
 
-  it('registry.ts 只补缺失的 knownRuleModules 项，已有的不重复', () => {
+  it('registry.ts 只补缺失的规则模块项，已有的不重复', () => {
     const modules = [...readKnownModules(registrySource), { id: 'fixture-module', version: 1 }];
     const patch = patchRegistryTs(registrySource, camel, modules);
 
-    expect(patch.content).toContain("    { id: 'fixture-module', version: 1 },");
+    // 白名单住在顶层常量里，项缩进是 2 空格（比闭合行 `];` 深一级）。
+    expect(patch.content).toContain("  { id: 'fixture-module', version: 1 },");
     expect(patch.content.match(/\{ id: 'core', version: 1 \}/g)).toHaveLength(1);
     expect(patch.content.match(/\{ id: 'world-tour', version: 1 \}/g)).toHaveLength(1);
   });
@@ -199,7 +201,7 @@ describe('apply-map-pack: 低层插入原语', () => {
     expect(second.content).toBe(first.content);
   });
 
-  it('insertBeforeClosingBracket 插到数组结束前（只承担配置对象里的 `],` 收尾形态）', () => {
+  it('insertBeforeClosingBracket 插到数组结束前（配置对象里的 `],` 收尾形态）', () => {
     const source = ['const config = {', '  list: [', '    one,', '    two,', '  ],', '};', ''].join('\n');
     const patch = insertBeforeClosingBracket(source, '  list: [', '    three,');
 
@@ -212,6 +214,27 @@ describe('apply-map-pack: 低层插入原语', () => {
       '    three,',
       '  ],',
       '};',
+    ]);
+  });
+
+  it('insertBeforeClosingBracket 也能处理顶层常量声明（`];` 收尾、项缩进 2 空格）', () => {
+    const source = [
+      'export const MODULES: readonly Ref[] = [',
+      "  { id: 'core', version: 1 },",
+      '];',
+      '',
+      'const other = 1;',
+    ].join('\n');
+    const patch = insertBeforeClosingBracket(source, 'MODULES: readonly Ref[] = [', "    { id: 'extra', version: 1 },");
+
+    expect(patch.changed).toBe(true);
+    expect(patch.content.split('\n')).toEqual([
+      'export const MODULES: readonly Ref[] = [',
+      "  { id: 'core', version: 1 },",
+      "  { id: 'extra', version: 1 },",
+      '];',
+      '',
+      'const other = 1;',
     ]);
   });
 });

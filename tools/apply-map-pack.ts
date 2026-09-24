@@ -46,11 +46,21 @@ function camelCase(id: string): string {
     .join('');
 }
 
-/** 从 registry.ts 里读出已知规则模块白名单，避免本工具自己维护一份会漂移的副本。 */
+/**
+ * 从 registry.ts 里读出已知规则模块白名单，避免本工具自己维护一份会漂移的副本。
+ *
+ * #117 之后白名单从对象属性 `knownRuleModules: [...]` 抽成了顶层常量
+ * `PRODUCTION_RULE_MODULES`（客户端地图工坊要与服务端共用**同一份**白名单，
+ * 不能再各写一套）。两种形态都认：优先常量声明，找不到再退回旧写法，
+ * 这样工具在两种布局下都能用，不会因为一次重构就静默失效。
+ */
 function readKnownModules(registrySource: string) {
-  const start = registrySource.indexOf('  knownRuleModules: [');
+  const constAnchor = 'PRODUCTION_RULE_MODULES: readonly RuleModuleRef[] = [';
+  const inlineAnchor = '  knownRuleModules: [';
+  const usingConst = registrySource.includes(constAnchor);
+  const start = registrySource.indexOf(usingConst ? constAnchor : inlineAnchor);
   if (start < 0) fail('registry.ts 里找不到 knownRuleModules 数组');
-  const end = registrySource.indexOf('  ],', start);
+  const end = registrySource.indexOf(usingConst ? '\n];' : '  ],', start);
   if (end < 0) fail('registry.ts 的 knownRuleModules 数组没有正常闭合');
   const block = registrySource.slice(start, end);
   const modules = [...block.matchAll(/\{\s*id:\s*'([^']+)',\s*version:\s*(\d+)\s*\}/g)].map((match) => ({
@@ -83,10 +93,17 @@ function insertAfterLast(content: string, pattern: RegExp, line: string): PatchR
 function insertBeforeClosingBracket(content: string, anchor: string, line: string): PatchResult {
   const start = content.indexOf(anchor);
   if (start < 0) fail('找不到数组锚点：' + anchor);
-  const end = content.indexOf('\n' + anchor.split('\n')[0].replace(/\[\s*$/, '') + '],', start);
-  const closeAt = end >= 0 ? end + 1 : content.indexOf('\n  ],', start) + 1;
-  if (closeAt <= 0) fail('数组没有正常闭合：' + anchor);
-  return { content: content.slice(0, closeAt) + line + '\n' + content.slice(closeAt), changed: true };
+  // 从数组起始处往后找**第一个**独立成行的闭合括号（`],` 或 `];`，允许任意缩进）。
+  // 之所以不用「锚点文字 + `],`」这种写法：同一个数组既可能是配置对象里的属性（收 `  ],`），
+  // 也可能是顶层常量声明（收 `];`）——写死一种就会在另一种上 fail，而这正是 #117 那次重构干的事。
+  const closing = /^[ \t]*\](?:,|;)?[ \t]*$/m.exec(content.slice(start));
+  if (closing === null) fail('数组没有正常闭合：' + anchor);
+  const closeAt = start + closing.index;
+  // 数组项比闭合括号深一级：闭合行缩进 + 2 空格。
+  // 这样不管是 `  ],`（项 4 空格）还是 `];`（项 2 空格）都能落成与邻居一致的排版。
+  const closingIndent = /^[ \t]*/.exec(content.slice(closeAt))?.[0] ?? '';
+  const entry = closingIndent + '  ' + line.trimStart();
+  return { content: content.slice(0, closeAt) + entry + '\n' + content.slice(closeAt), changed: true };
 }
 
 function patchIndexTs(source: string, camel: string): PatchResult {
@@ -101,10 +118,17 @@ function patchRegistryTs(source: string, camel: string, modules: readonly { id: 
   const allowlistLine = `    { ref: ${camel}Map.ref, paths: [] },`;
   if (!next.includes(allowlistLine)) next = insertBeforeClosingBracket(next, '  assetAllowlist: [', allowlistLine).content;
   next = insertAfterLast(next, /^productionRegistry\.registerMapPack\(\w+Map\);$/m, `productionRegistry.registerMapPack(${camel}Map);`).content;
+  // 白名单现在住在顶层常量 PRODUCTION_RULE_MODULES 里（见 readKnownModules 的说明）；
+  // 常量在就往常量里补，否则退回旧的 inline 属性写法。
+  const moduleAnchor = next.includes('PRODUCTION_RULE_MODULES: readonly RuleModuleRef[] = [')
+    ? 'PRODUCTION_RULE_MODULES: readonly RuleModuleRef[] = ['
+    : '  knownRuleModules: [';
   for (const module of modules) {
-    const line = `    { id: '${module.id}', version: ${module.version} },`;
-    if (!next.includes(line)) {
-      next = insertBeforeClosingBracket(next, '  knownRuleModules: [', line).content;
+    // 判存在时**不带前导缩进**：同一个模块在顶层常量里是 2 空格、在旧的对象属性里是 4 空格，
+    // 带上缩进去比对会把已有的模块当成缺失的，重复插一遍。
+    const entry = `{ id: '${module.id}', version: ${module.version} },`;
+    if (!next.includes(entry)) {
+      next = insertBeforeClosingBracket(next, moduleAnchor, `    ${entry}`).content;
     }
   }
   return { content: next, changed: next !== source };
