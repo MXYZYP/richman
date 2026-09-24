@@ -312,7 +312,29 @@ $files = @(
   "apps/client/src/session/quickPhrases.test.ts",
   "apps/client/src/session/firstRunGuide.test.ts",
   "apps/client/src/components/ChatPanel.test.ts",
-  "apps/client/src/components/FirstRunGuide.test.ts"
+  "apps/client/src/components/FirstRunGuide.test.ts",
+  # Fourth batch: replay export (#115), achievements + leaderboard (#116), map workshop (#117),
+  # map theme skins (#118), plus the leaderboard API and its IP rate limiter on the server.
+  # Same rule as above: vue-tsc/tsc run over the whole package, so a file left out here gets
+  # type-checked against a stale server copy -- or fails only at runtime under tsx.
+  "apps/client/package.json",
+  "apps/client/src/session/achievements.ts",
+  "apps/client/src/session/achievements.test.ts",
+  "apps/client/src/session/leaderboard.ts",
+  "apps/client/src/session/leaderboard.test.ts",
+  "apps/client/src/session/replayCode.ts",
+  "apps/client/src/session/replayCode.test.ts",
+  "apps/client/src/session/customMaps.ts",
+  "apps/client/src/session/customMaps.test.ts",
+  "apps/client/src/ui/themeManager.test.ts",
+  "apps/client/src/components/ReplayDialog.vue",
+  "apps/client/src/components/ReplayDialog.test.ts",
+  "apps/client/src/components/MapWorkshopDialog.vue",
+  "apps/client/src/components/MapWorkshopDialog.test.ts",
+  "apps/server/src/__tests__/leaderboard.test.ts",
+  "apps/server/src/http/slidingWindowRateLimiter.ts",
+  "apps/server/src/leaderboard/leaderboardStore.ts",
+  "apps/server/src/leaderboard/leaderboardRoutes.ts"
 )
 
 # ---------- Pre-flight guard (added 2026-09-23 after a failed deploy) ----------
@@ -330,6 +352,11 @@ try {
     if ($line.Length -lt 4) { continue }
     $rel = $line.Substring(3).Trim().Trim('"')
     if (-not ($rel.StartsWith("apps/") -or $rel.StartsWith("packages/"))) { continue }
+    # Native shell projects (HarmonyOS / Android / iOS) are NOT part of this deploy: scp only
+    # ships client + server + engine, so their files must never be demanded in $files. Without
+    # this skip, any touch under apps/harmonyos blocks an unrelated deploy -- including a pending
+    # rename (EntryAbility.ts -> EntryAbility.ets), where the deleted .ts shows up as a missing entry.
+    if ($rel.StartsWith("apps/harmonyos/") -or $rel.StartsWith("apps/android/") -or $rel.StartsWith("apps/ios/")) { continue }
     $targets = @()
     if ($rel.EndsWith("/")) {
       $root = (Get-Location).Path
