@@ -268,9 +268,9 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
   }
 
   /**
-   * 房间设置单播（#4 / #6）：建房 / 加入 / 重连各发一次，之后由 `room_settings` 领域事件广播同步。
-   * 与聊天历史同理，刻意排在 ack **之后**——客户端的 ack 处理里可能 resetSession()，
-   * 先发的设置会被那次清空一并吞掉。
+   * 房间设置单播（#4 / #6）：进入房间（建房 / 加入 / 重连）各发一次，
+   * 之后由 `room_settings` 领域事件广播同步。**必须排在 ack 之后**，理由见
+   * `ackThenRoomEntryState`（客户端的 ack 处理可能 resetSession()）。
    */
   function emitRoomSettings(socket: RoomSocket, roomCode: string): void {
     const settings = roomManager.getRoomSettings(roomCode);
@@ -280,7 +280,19 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
     socket.emit('room:settings', settings);
   }
 
-  function ackThenChatHistory<TSuccess extends object>(
+  /**
+   * 补齐「进入房间」时必须单播、但**不在 ack 里**的两份快照：聊天历史与房间设置（#4 / #6）。
+   *
+   * 两者都刻意排在 ack **之后**：客户端的 ack 处理里可能 resetSession()（会把 chatLog 与
+   * roomSettings 一起清空），先发的会被那次清空吞掉。
+   *
+   * ★ 建房（`room:create`）也必须走这里：`CreateRoomAck` 只带
+   *   roomCode / playerId / token / room，**不含 settings**。少了这次单播，房主端
+   *   `roomSettings` 会一直是 null，`LobbyView` 的 `rulesVisible` 因此为 false ——
+   *   「房间规则」面板（含电脑难度）要等刷新触发 `session:resume` 才出现
+   *   （2026-09-24 实测线上复现的正是这条路径）。
+   */
+  function ackThenRoomEntryState<TSuccess extends object>(
     socket: RoomSocket,
     roomCode: string,
     ack: (response: Ack<TSuccess>) => void,
@@ -331,7 +343,8 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
       }
       bindSocket(socket, binding);
       dispatchEntryEvents(result.events, resumed.events, binding.roomCode, resumed.value);
-      ackAfterEventFlushFrom(ack, () => ({
+      // 建房也要补聊天历史与房间设置：ack 里没有 settings，少了这次单播房主的规则面板不显示。
+      ackAfterEventFlushFrom(ackThenRoomEntryState<CreateRoomAck>(socket, binding.roomCode, ack), () => ({
         ok: true,
         ...result.value,
         room: roomManager.getPublicRoom(binding.roomCode) ?? result.value.room,
@@ -367,7 +380,7 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
       }
       bindSocket(socket, binding);
       dispatchEntryEvents(result.events, resumed.events, binding.roomCode, resumed.value);
-      ackAfterEventFlushFrom(ackThenChatHistory<JoinRoomAck>(socket, binding.roomCode, ack), () => {
+      ackAfterEventFlushFrom(ackThenRoomEntryState<JoinRoomAck>(socket, binding.roomCode, ack), () => {
         const room = roomManager.getPublicRoom(binding.roomCode) ?? result.value.room;
         const snapshot = roomManager.getGameSnapshot(binding.roomCode);
         return {
@@ -408,7 +421,7 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
       bindSocket(socket, binding);
       dispatchDomainEvents(result.events);
       dispatchLobbyStateAfterConnectionEvent(result);
-      ackAfterEventFlushFrom(ackThenChatHistory<ResumeAck>(socket, payload.roomCode, ack), () => {
+      ackAfterEventFlushFrom(ackThenRoomEntryState<ResumeAck>(socket, payload.roomCode, ack), () => {
         const room = roomManager.getPublicRoom(payload.roomCode) ?? result.value;
         const snapshot = roomManager.getGameSnapshot(payload.roomCode);
         return snapshot === null

@@ -3,12 +3,13 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { io as connectSocket, type Socket as ClientSocket } from 'socket.io-client';
 import { createRoomServer } from '../server';
-import type { Ack, ChatMessage, ClientToServerEvents, CreateRoomAck, JoinRoomAck, PublicRoomState, ServerToClientEvents } from '@richman/protocol';
+import type { Ack, ChatMessage, ClientToServerEvents, CreateRoomAck, JoinRoomAck, PublicRoomState, RoomSettings, RoomSettingsPatch, ServerToClientEvents } from '@richman/protocol';
 import { CHAT_HISTORY_LIMIT } from '@richman/protocol';
 import { RoomManager } from '../rooms/roomManager';
 import type { CreateRoomRateLimit } from '../socket/roomSocketAdapter';
 import type { RoomDomainEvent, RoomManagerDependencies } from '../rooms/roomTypes';
 import { getActiveMapPack } from '@richman/board-data';
+import type { BotDifficulty } from '@richman/engine';
 
 type TimerHandle = {
   callback: () => void;
@@ -16,7 +17,7 @@ type TimerHandle = {
   active: boolean;
 };
 
-type CreateRoomPayload = { nickname: string; mapId: string; requestId?: string };
+type CreateRoomPayload = { nickname: string; mapId: string; requestId?: string; botDifficulty?: BotDifficulty };
 type JoinRoomPayload = { roomCode: string; nickname: string; requestId?: string; role?: "player" | "spectator" };
 type RemoveBotPayload = { playerId: string };
 type RenameBotPayload = { playerId: string; nickname: string };
@@ -1270,6 +1271,97 @@ describe('Socket.IO room chat broadcast and history', () => {
   });
 });
 
+describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
+  // 回归（2026-09-24 线上实测）：建房后「房间规则」面板（含电脑难度）不显示，
+  // 必须刷新页面才出现。根因是建房路径漏发 `room:settings` 单播 ——
+  // `CreateRoomAck` 只带 roomCode/playerId/token/room，**不含 settings**，
+  // 于是房主端 `roomSettings` 恒为 null，`LobbyView.rulesVisible` 为 false。
+  // 刷新能救回来，是因为重连走 `session:resume`，那条路径本来就发。
+  test('room:create hands the host the authoritative settings right after the ack', async () => {
+    const { url } = await startTestServer();
+    const host = await connectClient(url);
+    const order: string[] = [];
+    host.on('room:settings', () => order.push('settings'));
+    const settingsPromise = nextRoomSettings(host, 'room:settings after room:create');
+
+    const create = await emitAckRecordingOrder(host, 'room:create', { mapId: 'china-tour', nickname: '房主' }, order);
+    expectCreateRoomSuccess(create);
+
+    // 默认难度 normal；没自定义任何规则时 ruleConfig 为 null（客户端据此显示「地图默认」）。
+    expect(await settingsPromise).toEqual({ botDifficulty: 'normal', ruleConfig: null });
+    // 顺序是硬要求：ack 之后才发，才不会被客户端 ack 处理里的 resetSession() 清掉。
+    expect(order).toEqual(['ack', 'settings']);
+  });
+
+  test('room:create carries the requested bot difficulty back to the host without a refresh', async () => {
+    const { url } = await startTestServer();
+    const host = await connectClient(url);
+    const settingsPromise = nextRoomSettings(host, 'room:settings after room:create with difficulty');
+
+    const create = await emitAck(host, 'room:create', {
+      mapId: 'china-tour',
+      nickname: '房主',
+      botDifficulty: 'hard',
+    });
+    expectCreateRoomSuccess(create);
+
+    expect(await settingsPromise).toEqual({ botDifficulty: 'hard', ruleConfig: null });
+  });
+
+  test('a joining member receives the room settings right after the join ack', async () => {
+    const { url } = await startTestServer();
+    const host = await connectClient(url);
+    const create = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' });
+    expectCreateRoomSuccess(create);
+    // 房主把规则改成自定义值，后进来的成员必须立刻看到同一份设置（而不是地图默认）。
+    const updated = await emitUpdateSettings(host, { ruleConfig: {
+      initialCash: 25_000,
+      maxHouseLevel: 3,
+      mortgageInterestRate: 0.12,
+    } });
+    expect(updated.ok).toBe(true);
+
+    const guest = await connectClient(url);
+    const order: string[] = [];
+    guest.on('room:settings', () => order.push('settings'));
+    const settingsPromise = nextRoomSettings(guest, 'room:settings after room:join');
+    const guestJoinState = nextRoomStateWithin(guest, 'guest lobby join room_state');
+    const join = await emitAckRecordingOrder(guest, 'room:join', { roomCode: create.roomCode, nickname: '玩家二' }, order);
+    expectJoinRoomSuccess(join);
+    await guestJoinState;
+
+    expect(await settingsPromise).toEqual({
+      botDifficulty: 'normal',
+      ruleConfig: { initialCash: 25_000, maxHouseLevel: 3, mortgageInterestRate: 0.12 },
+    });
+    expect(order).toEqual(['ack', 'settings']);
+  });
+
+  test('session:resume re-sends the room settings, which is why a refresh rebuilds the rules panel', async () => {
+    const { url } = await startTestServer();
+    const host = await connectClient(url);
+    const settingsPromiseAfterCreate = nextRoomSettings(host, 'host settings after create');
+    const create = await emitAck(host, 'room:create', {
+      mapId: 'china-tour',
+      nickname: '房主',
+      botDifficulty: 'easy',
+    });
+    expectCreateRoomSuccess(create);
+    await settingsPromiseAfterCreate;
+
+    const reconnecting = await connectClient(url);
+    const settingsPromise = nextRoomSettings(reconnecting, 'room:settings after session:resume');
+    const resume = await emitResume(reconnecting, {
+      roomCode: create.roomCode,
+      playerId: 'player-host',
+      token: create.token,
+    });
+    expect(resume.ok).toBe(true);
+
+    expect(await settingsPromise).toEqual({ botDifficulty: 'easy', ruleConfig: null });
+  });
+});
+
 describe('Socket.IO room:create rate limit', () => {
   test('a create past the per-window cap is rejected with a dedicated retryable code and never reaches the room manager', async () => {
     const { url, server } = await startTestServer({
@@ -1473,6 +1565,41 @@ function emitAck(
   });
 }
 
+/**
+ * 与 `emitAck` 相同，但把 ack 的到达顺序记进 `order`。
+ * 用于断言「进入房间的单播（聊天历史 / 房间设置）必须晚于 ack」——
+ * 客户端的 ack 处理里可能 resetSession()，先到的单播会被那次清空吞掉。
+ */
+function emitAckRecordingOrder(
+  socket: RoomClient,
+  event: 'room:create',
+  payload: CreateRoomPayload,
+  order: string[],
+): Promise<CreateRoomResponse>;
+function emitAckRecordingOrder(
+  socket: RoomClient,
+  event: 'room:join',
+  payload: JoinRoomPayload,
+  order: string[],
+): Promise<JoinRoomResponse>;
+function emitAckRecordingOrder(
+  socket: RoomClient,
+  event: 'room:create' | 'room:join',
+  payload: CreateRoomPayload | JoinRoomPayload,
+  order: string[],
+): Promise<CreateRoomResponse | JoinRoomResponse> {
+  const untypedSocket: ClientSocket = socket;
+  return withEventTimeout(
+    new Promise<CreateRoomResponse | JoinRoomResponse>((resolve) => {
+      untypedSocket.emit(event, withRequestId(payload), (response: CreateRoomResponse | JoinRoomResponse) => {
+        order.push('ack');
+        resolve(response);
+      });
+    }),
+    `${event} ack with order`,
+  );
+}
+
 function emitAckAndIgnore(
   socket: RoomClient,
   event: 'room:create' | 'room:join',
@@ -1502,6 +1629,16 @@ function emitMalformedJoinPayload(socket: RoomClient, payload: unknown): Promise
 
 function emitAddBot(socket: RoomClient): Promise<EmptyAckResponse> {
   return emitNoPayloadRoomAction(socket, 'room:add_bot');
+}
+
+function emitUpdateSettings(socket: RoomClient, patch: RoomSettingsPatch): Promise<Ack<RoomSettings>> {
+  const untypedSocket: ClientSocket = socket;
+  return withEventTimeout(
+    new Promise<Ack<RoomSettings>>((resolve) => {
+      untypedSocket.emit('room:update_settings', patch, resolve);
+    }),
+    'room:update_settings ack',
+  );
 }
 
 function emitRemoveBot(socket: RoomClient, payload: RemoveBotPayload): Promise<EmptyAckResponse> {
@@ -1693,6 +1830,15 @@ function nextChatHistory(socket: RoomClient, label: string): Promise<{ messages:
   return withEventTimeout(
     new Promise<{ messages: ChatMessage[] }>((resolve) => {
       socket.once('room:chat_history', resolve);
+    }),
+    label,
+  );
+}
+
+function nextRoomSettings(socket: RoomClient, label: string): Promise<RoomSettings> {
+  return withEventTimeout(
+    new Promise<RoomSettings>((resolve) => {
+      socket.once('room:settings', resolve);
     }),
     label,
   );
