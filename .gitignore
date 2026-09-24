@@ -50,3 +50,14 @@ test-results/
 # 密钥/证书，绝不入库
 *.pem
 *.key
+
+# 鸿蒙工程（apps/harmonyos）：DevEco 本地产物与签名材料，绝不入库
+oh_modules/
+.hvigor/
+.cxx/
+local.properties
+*.har
+*.p12
+*.cer
+*.p7b
+*.csr

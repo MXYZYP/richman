@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vue-tsc --noEmit && vite build",
+    "build:offline": "vite build --base=./",
     "preview": "vite preview",
     "cap:init": "cap init",
     "cap:add:android": "cap add android",

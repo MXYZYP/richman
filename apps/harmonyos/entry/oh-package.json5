@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "大富翁联机游戏入口模块（WebView 壳）",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {}
+}
