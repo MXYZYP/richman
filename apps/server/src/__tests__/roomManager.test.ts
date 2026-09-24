@@ -44,6 +44,9 @@ interface PublicRoomState {
 type RoomDomainEvent =
   | { type: 'room_state'; roomCode: string; room: PublicRoomState }
   | { type: 'room_settings'; roomCode: string; settings: unknown }
+  | { type: 'undo_request'; roomCode: string; request: unknown }
+  | { type: 'undo_result'; roomCode: string; result: unknown }
+  | { type: 'undo_available'; roomCode: string; playerId: string | null }
   | { type: 'player_connection'; roomCode: string; playerId: string; online: boolean }
   | { type: 'room_closed'; roomCode: string; reason: 'empty_lobby' | 'lobby_idle_timeout' }
   | { type: 'game_events'; roomCode: string; events: unknown[] }

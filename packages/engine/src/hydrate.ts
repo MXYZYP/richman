@@ -20,6 +20,8 @@ const TURN_PHASES = new Set([
   'awaiting_airport_roll',
   'awaiting_buy_decision',
   'awaiting_build_decision',
+  'awaiting_trade_response',
+  'awaiting_auction_bid',
   'managing',
 ]);
 const MIN_RNG_STATE = -2_147_483_648;
@@ -196,6 +198,40 @@ function validateRecentEvent(
       return hasExactKeys(value, ['type', 'winnerId', 'reason'])
         && validPlayerReference(value.winnerId, playerIds)
         && (value.reason === 'last_standing' || value.reason === 'cash_goal');
+    // === 交易（#105）===
+    case 'trade_proposed':
+    case 'trade_cancelled':
+      return hasExactKeys(value, ['type', 'proposerId', 'targetId'])
+        && validPlayerReference(value.proposerId, playerIds)
+        && validPlayerReference(value.targetId, playerIds);
+    case 'trade_resolved': {
+      if (!hasExactKeys(value, [
+        'type', 'proposerId', 'targetId', 'accepted',
+        'cashFromProposer', 'cashFromTarget', 'cellsToProposer', 'cellsToTarget',
+      ])
+        || !validPlayerReference(value.proposerId, playerIds)
+        || !validPlayerReference(value.targetId, playerIds)
+        || typeof value.accepted !== 'boolean'
+        || !amount('cashFromProposer') || !amount('cashFromTarget')) return false;
+      const cells = (raw: unknown): boolean => Array.isArray(raw)
+        && raw.every((id) => Number.isSafeInteger(id) && cellIds.has(id as number));
+      return cells(value.cellsToProposer) && cells(value.cellsToTarget);
+    }
+    // === 拍卖（#106）===
+    case 'auction_started':
+      return hasExactKeys(value, ['type', 'cellId', 'firstBidderId'])
+        && cell()
+        && validPlayerReference(value.firstBidderId, playerIds);
+    case 'auction_bid_placed':
+      return hasExactKeys(value, ['type', 'playerId', 'cellId', 'amount'])
+        && player() && cell() && amount();
+    case 'auction_passed':
+      return hasExactKeys(value, ['type', 'playerId', 'cellId']) && player() && cell();
+    case 'auction_resolved':
+      return hasExactKeys(value, ['type', 'cellId', 'winnerId', 'amount'])
+        && cell()
+        && validPlayerReference(value.winnerId, playerIds, true)
+        && amount();
     case 'module':
       return hasExactKeys(value, ['type', 'module', 'eventType', 'payload'])
         && hasExactModule(value.module, enabledModules)
@@ -204,6 +240,88 @@ function validateRecentEvent(
     default:
       return false;
   }
+}
+
+/** 交易一侧（#105）：现金不得超过该玩家实有现金；地产必须属于该玩家且**没有房屋**（房屋不随地产转手）。 */
+function validateTradeSide(
+  value: unknown,
+  ownerId: string,
+  ownerCash: number,
+  properties: Record<string, unknown>,
+  propertyIds: ReadonlySet<number>,
+): boolean {
+  if (!isRecord(value) || !hasExactKeys(value, ['cash', 'cellIds'])) return false;
+  const cash = value.cash as number;
+  if (!Number.isSafeInteger(cash) || cash < 0 || cash > ownerCash) return false;
+  if (!Array.isArray(value.cellIds)) return false;
+  const seen = new Set<number>();
+  for (const cellId of value.cellIds) {
+    if (!Number.isSafeInteger(cellId) || !propertyIds.has(cellId as number) || seen.has(cellId as number)) return false;
+    seen.add(cellId as number);
+    const property = properties[String(cellId)];
+    if (!isRecord(property) || property.ownerId !== ownerId || property.level !== 0) return false;
+  }
+  return true;
+}
+
+function validatePendingTrade(
+  value: unknown,
+  players: GameState['players'],
+  properties: Record<string, unknown>,
+  propertyIds: ReadonlySet<number>,
+): boolean {
+  if (!isRecord(value) || !hasExactKeys(value, ['proposerId', 'targetId', 'offer', 'request'])) return false;
+  const proposerId = value.proposerId;
+  const targetId = value.targetId;
+  if (!isNonEmptyString(proposerId) || !isNonEmptyString(targetId) || proposerId === targetId) return false;
+  const proposer = players.find((player) => player.id === proposerId);
+  const target = players.find((player) => player.id === targetId);
+  if (proposer === undefined || target === undefined || proposer.bankrupt || target.bankrupt) return false;
+  if (!validateTradeSide(value.offer, proposerId, proposer.cash, properties, propertyIds)) return false;
+  if (!validateTradeSide(value.request, targetId, target.cash, properties, propertyIds)) return false;
+  const offer = value.offer as { cash: number; cellIds: unknown[] };
+  const request = value.request as { cash: number; cellIds: unknown[] };
+  // 双方都空手的报价没有意义，引擎不会产出（也绝不允许从存档里恢复）。
+  return !(offer.cash === 0 && offer.cellIds.length === 0 && request.cash === 0 && request.cellIds.length === 0);
+}
+
+function validatePendingAuction(
+  value: unknown,
+  players: GameState['players'],
+  properties: Record<string, unknown>,
+  propertyIds: ReadonlySet<number>,
+): boolean {
+  if (!isRecord(value)
+    || !hasExactKeys(value, ['cellId', 'bidderId', 'leaderId', 'leaderBid', 'passedIds'])) return false;
+  const cellId = value.cellId as number;
+  if (!Number.isSafeInteger(cellId) || !propertyIds.has(cellId)) return false;
+  const property = properties[String(cellId)];
+  if (!isRecord(property) || property.ownerId !== null) return false;
+
+  const byId = new Map(players.map((player) => [player.id, player] as const));
+  const bidderId = value.bidderId as string;
+  const bidder = byId.get(bidderId);
+  if (bidder === undefined || bidder.bankrupt) return false;
+
+  const leaderId = value.leaderId;
+  if (!(leaderId === null || (typeof leaderId === 'string' && byId.has(leaderId)))) return false;
+  const leader = leaderId === null ? undefined : byId.get(leaderId as string);
+  if (leader !== undefined && leader.bankrupt) return false;
+
+  const leaderBid = value.leaderBid as number;
+  if (!Number.isSafeInteger(leaderBid) || leaderBid < 0) return false;
+  if (leaderId === null ? leaderBid !== 0 : leaderBid <= 0) return false;
+  if (leader !== undefined && leaderBid > leader.cash) return false;
+
+  if (!Array.isArray(value.passedIds)) return false;
+  const passed = new Set<string>();
+  for (const id of value.passedIds) {
+    if (typeof id !== 'string' || passed.has(id)) return false;
+    const player = byId.get(id);
+    if (player === undefined || player.bankrupt) return false;
+    passed.add(id);
+  }
+  return !passed.has(bidderId) && !(leaderId !== null && passed.has(leaderId as string));
 }
 
 function validateDebt(value: unknown, playerIds: ReadonlySet<string>): boolean {
@@ -432,8 +550,14 @@ export function hydrateGameState(
     'players', 'properties', 'decks', 'debt', 'lastDice', 'recentLog', 'winnerId',
     'cashGoal', 'publicRuleState', 'board', 'cards', 'config',
   ];
-  // 单机真人抽卡确认（cardChoice）为可选字段：旧存档没有该键，联机快照也不会出现。
-  if (!isRecord(value) || !hasExactKeys(value, value.cardChoice === undefined ? stateKeys : [...stateKeys, 'cardChoice'])) {
+  // 可选字段（旧存档 / 旧房间快照里没有这些键）：
+  //  - cardChoice：单机真人抽卡确认
+  //  - pendingTrade / pendingAuction / auctionOnDecline：交易与拍卖（#105 / #106）
+  // 判定方式刻意与 hasExactKeys 等价 —— 必填键一个不能少、未知键一个不能多、可选键可有可无。
+  const optionalKeys = ['cardChoice', 'pendingTrade', 'pendingAuction', 'auctionOnDecline'];
+  if (!isRecord(value)
+    || stateKeys.some((key) => !Object.hasOwn(value, key))
+    || Object.keys(value).some((key) => !stateKeys.includes(key) && !optionalKeys.includes(key))) {
     return fail('invalid game state shape');
   }
 
@@ -564,6 +688,33 @@ export function hydrateGameState(
         return fail('invalid pending card choice');
       }
     }
+  }
+
+  // 交易 / 拍卖（#105 / #106）：均为可选字段，缺省 = 没有进行中的议价（旧存档/旧快照即如此）。
+  if (value.auctionOnDecline !== undefined && typeof value.auctionOnDecline !== 'boolean') {
+    return fail('invalid auction rule flag');
+  }
+  const rawPendingTrade = value.pendingTrade ?? null;
+  const rawPendingAuction = value.pendingAuction ?? null;
+  if (rawPendingTrade !== null
+    && !validatePendingTrade(rawPendingTrade, players, value.properties, propertyIds)) {
+    return fail('invalid pending trade');
+  }
+  if (rawPendingAuction !== null
+    && !validatePendingAuction(rawPendingAuction, players, value.properties, propertyIds)) {
+    return fail('invalid pending auction');
+  }
+  // 阶段与议价状态必须彼此对应：只恢复一半会得到一个「没人能动」的残局
+  // （turnPhase 说在等答复，但 pendingTrade 没了 —— 谁也提交不出合法意图）。
+  if (value.phase === 'playing') {
+    if ((value.turnPhase === 'awaiting_trade_response') !== (rawPendingTrade !== null)) {
+      return fail('inconsistent trade turn phase');
+    }
+    if ((value.turnPhase === 'awaiting_auction_bid') !== (rawPendingAuction !== null)) {
+      return fail('inconsistent auction turn phase');
+    }
+  } else if (rawPendingTrade !== null || rawPendingAuction !== null) {
+    return fail('terminal bargaining state');
   }
 
   if (!validateDebt(value.debt, playerIds)) return fail('invalid debt');

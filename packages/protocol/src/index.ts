@@ -1,4 +1,4 @@
-import type { BotDifficulty, GameEvent, GameState, Intent } from '@richman/engine';
+import type { BotDifficulty, GameEvent, GameState, Intent, PendingAuction, PendingTrade } from '@richman/engine';
 
 export interface PublicGameSnapshot {
   mapRef: GameState['mapRef'];
@@ -14,6 +14,17 @@ export interface PublicGameSnapshot {
   recentLog: GameState['recentLog'];
   winnerId: GameState['winnerId'];
   cashGoal: GameState['cashGoal'];
+  /**
+   * 进行中的交易报价（#105）与拍卖（#106）；`null` = 此刻没有议价。
+   *
+   * 必须进快照：这两个阶段的合法行动者不是 `currentPlayerId`（交易要由报价目标答复、
+   * 拍卖要由轮到的叫价者出价），客户端只能靠这两份数据渲染「谁来出价 / 谁能同意」。
+   * 也正因为它们是**公开信息**（报价内容本来就摆在台面上），不涉及任何隐藏信息。
+   */
+  pendingTrade: PendingTrade | null;
+  pendingAuction: PendingAuction | null;
+  /** 房规「放弃购买即拍卖」（#106）：客户端据此决定 skip_buy 的按钮文案。 */
+  auctionOnDecline: boolean;
   deckCounts: {
     chance: number;
     destiny: number;
@@ -103,17 +114,56 @@ export interface RoomRuleConfig {
   mortgageInterestRate: number;
 }
 
-/** 房间级的可调设置（#4 / #6）：房主在大厅里设定，随房间存在，开局时生效。 */
+/** 房间级的可调设置（#4 / #6 / #101 / #106）：房主在大厅里设定，随房间存在，开局时生效。 */
 export interface RoomSettings {
   botDifficulty: BotDifficulty;
   /** null = 用地图默认规则（房主没有自定义任何一项）。 */
   ruleConfig: RoomRuleConfig | null;
+  /**
+   * 联机最小悔棋（#101）：开启后，对局中「上一手行动者」可发起悔棋，
+   * **须经在场对手逐一确认**才真正回退一步（不是单方面回退）。默认关闭。
+   */
+  minimalUndoEnabled: boolean;
+  /**
+   * 房规「放弃购买即拍卖」（#106）：开启后，落到无主地产并选择「不买」时，
+   * 该地产由**其他**玩家按座次轮流叫价（放弃者自己不参与），无人出价即流拍。默认关闭。
+   */
+  auctionOnDecline: boolean;
 }
 
 /** 增量更新房间设置；`ruleConfig: null` 明确表示「回到地图默认」。 */
 export interface RoomSettingsPatch {
   botDifficulty?: BotDifficulty;
   ruleConfig?: RoomRuleConfig | null;
+  minimalUndoEnabled?: boolean;
+  auctionOnDecline?: boolean;
+}
+
+/**
+ * 一次「悔棋」请求（#101）。
+ *
+ * 由服务端在「上一手行动者」发起时创建并广播给全房间：发起者显示等待态，
+ * `voterIds` 里的对手看到「同意 / 拒绝」。**全部同意**才真正回退，任一拒绝即作废；
+ * 超时同样作废。这样悔棋永远是「双方同意的一步回退」，而不是某一方单方面改历史。
+ */
+export interface UndoRequestInfo {
+  requestId: string;
+  requesterId: string;
+  requesterNickname: string;
+  /** 需要确认的对手（发起那一刻的「在场人类对手」快照，离线者不计入）。 */
+  voterIds: string[];
+  /** 已同意的对手 id（用于显示「1/2 已确认」）。 */
+  approvals: string[];
+  /** 投票截止时间戳（ms）；到点未集齐即视为拒绝。 */
+  expiresAt: number;
+}
+
+/** 悔棋请求的终态（#101）——四种结果都会广播一次，客户端据此给出发起者反馈。 */
+export type UndoOutcome = 'applied' | 'rejected' | 'cancelled' | 'expired';
+
+export interface UndoResultInfo {
+  requestId: string;
+  outcome: UndoOutcome;
 }
 
 export interface JoinRoomPayload {
@@ -155,6 +205,15 @@ export interface ClientToServerEvents {
   'room:chat_message': (payload: { text: string }, ack: (response: Ack<Record<string, never>>) => void) => void;
   /** 房主设定房间规则（#4 / #6）：仅房主、仅开局前；成功后 ack 回最新设置。 */
   'room:update_settings': (payload: RoomSettingsPatch, ack: (response: Ack<RoomSettings>) => void) => void;
+  /**
+   * 发起悔棋（#101）：只有「上一手行动者」本人能发起，且必须房间开了悔棋、当前无未清债务、
+   * 还存在至少一名在场人类对手（否则「需对手确认」无从谈起）。ack 回本次请求详情。
+   */
+  'room:undo_request': (ack: (response: Ack<UndoRequestInfo>) => void) => void;
+  /** 对手对悔棋请求投票（#101）：全部同意才回退，任一人拒绝即作废。 */
+  'room:undo_vote': (payload: { requestId: string; approve: boolean }, ack: (response: Ack<Record<string, never>>) => void) => void;
+  /** 发起者撤回自己尚未有结果的悔棋请求（#101）。 */
+  'room:undo_cancel': (ack: (response: Ack<Record<string, never>>) => void) => void;
 }
 
 export interface ServerToClientEvents {
@@ -175,6 +234,24 @@ export interface ServerToClientEvents {
    * 房间设置是「独立的旁路信息」，用一条独立事件承载更稳。
    */
   'room:settings': (settings: RoomSettings) => void;
+  /**
+   * 悔棋请求广播（#101）：发起时、以及每收到一个「同意」时各广播一次
+   * （携带最新的 `approvals`），让所有人在同一时刻看到同一份进度。
+   */
+  'room:undo_request': (payload: UndoRequestInfo) => void;
+  /**
+   * 悔棋结果广播（#101）。`applied` 时服务端会紧接着推一份回退后的 `game:snapshot`；
+   * 客户端应把那份快照当作**硬重置**处理（对局时间线倒退了，不能按增量播放）。
+   */
+  'room:undo_result': (payload: UndoResultInfo) => void;
+  /**
+   * 「此刻谁可以发起悔棋」（#101）：`playerId` 为该玩家 id，`null` 表示没人可悔
+   * （房间未开启、无上一手、上一手是电脑、有未清债务、或没有在场对手可确认）。
+   *
+   * 单独一条事件而不塞进 `PublicRoomState`：后者是房间成员的投影，改它的形状会让
+   * 所有既有全等断言与落盘快照一起变红（同 `room:settings` 的理由）。
+   */
+  'room:undo_available': (payload: { playerId: string | null }) => void;
 }
 
 export interface InterServerEvents {}

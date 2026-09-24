@@ -1,10 +1,11 @@
 import { getActiveMapPack, getMapPack } from '@richman/board-data';
 import type { MapPack, MapRef } from '@richman/board-data';
 import { hydrateGameState } from '@richman/engine';
+import { currentPendingAuction, currentPendingTrade } from '@richman/engine';
 import type { BotDifficulty, GameState } from '@richman/engine';
 import { applyGameIntent as applyRuntimeGameIntent, chooseTakeoverIntent, createInitialGame, defaultGameGateway, skipOfflineTakeoverTurn } from '../game/gameRuntime';
 import type { GameRuntimeGateway } from '../game/gameRuntime';
-import type { PublicRoomState, RoomRole, RoomRuleConfig, RoomSettings, RoomSettingsPatch } from '@richman/protocol';
+import type { PublicRoomState, RoomRole, RoomRuleConfig, RoomSettings, RoomSettingsPatch, UndoOutcome, UndoRequestInfo } from '@richman/protocol';
 import { gameFailure, roomFailure } from './roomErrors';
 import type { RoomFailure, WireFailure } from './roomErrors';
 import { ROOM_SNAPSHOT_SCHEMA_VERSION } from './roomSnapshotStore';
@@ -20,7 +21,38 @@ const ROOM_CODE_COUNT = 1_000_000;
 const LOBBY_DISCONNECT_GRACE_MS = 300_000;
 /** 自动化连续失败自愈上限：超过后放弃并永久清空，避免无限空转（详见 #runAutomationCallback）。 */
 const MAX_AUTOMATION_SELF_HEAL_RETRIES = 3;
+/**
+ * 悔棋投票窗口（#101）：到点还没集齐「全部同意」就按拒绝处理。
+ * 有它才不会出现「一个对手不表态 → 请求永远挂着」的僵局。
+ */
+const UNDO_REQUEST_TTL_MS = 20_000;
 const DEFAULT_MAP_RESOLVER: RoomMapResolver = { getActiveMapPack, getMapPack };
+
+/**
+ * 一步「可悔的棋」（#101）：悔棋就是把 `state` 装回去。
+ *
+ * 持的是**旧状态对象的引用**而非深拷贝——引擎的状态是不可变的（`applyIntent` 返回新对象），
+ * 因此旧引用天然是一份可靠的历史快照，不需要额外复制。
+ */
+type UndoPoint = {
+  /** 这一步**之前**的权威状态。 */
+  state: GameState;
+  /** 走出这一步的玩家：只有他能发起悔棋（「我悔我自己的棋」）。 */
+  actorId: string;
+  /** 走这一步时所在回合，仅作自检与排查用的标记。 */
+  turn: number;
+};
+
+/** 悬而未决的悔棋投票（#101）。 */
+type PendingUndo = {
+  requestId: string;
+  requesterId: string;
+  requesterNickname: string;
+  /** 发起那一刻的「在场人类对手」快照；全部同意才真正回退。 */
+  voterIds: string[];
+  approvals: Set<string>;
+  point: UndoPoint;
+};
 
 function copyMapRef(ref: MapRef): MapRef {
   return Object.freeze({ id: ref.id, version: ref.version, contentHash: ref.contentHash });
@@ -49,6 +81,14 @@ export class RoomManager<TTimerHandle = unknown> {
   /** 自动化连续提交/决策失败计数：用于「有界自愈」——失败后下一拍重新计算意图，
    *  避免一次 WRONG_PHASE 就把电脑玩家/托管永久冻结在「行动中」（联网电脑 B 卡死的根因之一）。 */
   readonly #automationFailures = new Map<string, number>();
+  /**
+   * 悔棋点（#101）：每个房间只保留**最近一步**真人手动棋的前置状态——「最小悔棋」只退一步，
+   * 退完即清，不支持连环回退（那会让复盘与自动化重建都变得难以收敛）。
+   * 电脑 / 离线托管走步会把它清掉：可悔的必须是真人自己刚走的那一步。
+   */
+  readonly #undoPoints = new Map<string, UndoPoint>();
+  readonly #undoRequests = new Map<string, PendingUndo>();
+  readonly #undoTimers = new Map<string, TTimerHandle>();
   readonly #gateway: GameRuntimeGateway;
   readonly #mapResolver: RoomMapResolver;
   /** 房间落盘快照（C-③）：为 null 时纯内存运行，行为与引入前完全一致。 */
@@ -98,6 +138,11 @@ export class RoomManager<TTimerHandle = unknown> {
       botDifficulty,
       // 建房时先不覆盖任何规则：房主进大厅后再按需改（#4）。
       ruleConfig: null,
+      // 悔棋默认关闭（#101）：它会改变对局历史的可回退性，必须是房主显式选择加入的能力。
+      minimalUndoEnabled: false,
+      // 「放弃购买即拍卖」默认关闭（#106）：它就是既有语义（放弃 = 流拍），
+      // 开启是房主显式选择的房规，与地图自带的规则无关。
+      auctionOnDecline: false,
       players: [
         {
           id: playerId,
@@ -308,13 +353,37 @@ export class RoomManager<TTimerHandle = unknown> {
       }
     }
 
+    // 悔棋开关（#101）：只认布尔值。关掉时顺手丢弃「可悔权」，避免 UI 上留一个按不动的按钮。
+    if (patch.minimalUndoEnabled !== undefined) {
+      if (typeof patch.minimalUndoEnabled !== 'boolean') {
+        return roomFailure('INVALID_ROOM_ACTION', 'minimalUndoEnabled must be a boolean.');
+      }
+      room.minimalUndoEnabled = patch.minimalUndoEnabled;
+      if (!room.minimalUndoEnabled) {
+        this.#undoPoints.delete(room.code);
+      }
+    }
+
+    // 房规「放弃购买即拍卖」（#106）：只认布尔值，且**仅开局前可改**
+    // （开局后改它没有意义：对局中的每一条拍卖分支都读的是状态里的 auctionOnDecline，
+    //  而那份状态在 createGame 时就已经定下来了）。
+    if (patch.auctionOnDecline !== undefined) {
+      if (typeof patch.auctionOnDecline !== 'boolean') {
+        return roomFailure('INVALID_ROOM_ACTION', 'auctionOnDecline must be a boolean.');
+      }
+      room.auctionOnDecline = patch.auctionOnDecline;
+    }
+
     // 先把设置本身落盘，再产出广播事件：这样即便广播失败，重启后读到的也是最新设置。
     this.#persistRoom(room);
     const settings = projectRoomSettings(room);
     return {
       ok: true,
       value: settings,
-      events: [{ type: 'room_settings', roomCode: room.code, settings }],
+      events: [
+        { type: 'room_settings', roomCode: room.code, settings },
+        { type: 'undo_available', roomCode: room.code, playerId: this.#undoAvailability(room) },
+      ],
     };
   }
 
@@ -322,6 +391,222 @@ export class RoomManager<TTimerHandle = unknown> {
   getRoomSettings(roomCode: string): RoomSettings | null {
     const room = this.#rooms.get(roomCode);
     return room === undefined ? null : projectRoomSettings(room);
+  }
+
+  // ───────────────────────── 联机最小悔棋（#101） ─────────────────────────
+
+  /**
+   * 此刻「谁可以发起悔棋」（单播 / 广播用）；没人可悔时返回 `null`。
+   *
+   * 判据（任一不满足即没人可悔）：房间开了悔棋、正在对局、没有未清债务、
+   * 存在一个「真人刚手动走完」的可悔点、且这名真人还在房间里。
+   *
+   * 刻意**不**在这里检查「是否有在场对手可确认」：那是发起时的前置条件（见 `requestUndo`），
+   * 放进这里就得在对手上下线的每个时刻重新广播可悔权，成本远大于收益——
+   * 对手恰好不在线时，发起者点一下就会收到「没有对手可以确认」的明确提示。
+   */
+  getUndoAvailability(roomCode: string): string | null {
+    const room = this.#rooms.get(roomCode);
+    return room === undefined ? null : this.#undoAvailability(room);
+  }
+
+  /**
+   * 发起悔棋（#101）。**只有上一手行动者本人**能发起——悔棋的语义就是「我刚走错了想退回来」，
+   * 替别人的棋悔没有意义，也正是「不能单方面回退」的第一层约束。
+   *
+   * 三条前置（任一不满足即拒）：
+   *  - 房主开了悔棋（`minimalUndoEnabled`）；
+   *  - 当前无未清债务（债务态下状态机停在半路，回退会造出一个引擎不认的局面）；
+   *  - 至少有一名「在场人类对手」——这是「需对手确认」的物理前提，没有确认方就无从确认。
+   *
+   * 创建后广播 `undo_request`，等对手逐一投票；20 秒内没集齐全部同意即视为拒绝。
+   */
+  requestUndo(roomCode: string, requesterId: string): RoomResult<UndoRequestInfo> {
+    const room = this.#rooms.get(roomCode);
+    if (room === undefined) {
+      return roomFailure('ROOM_NOT_FOUND', '房间不存在或已关闭。');
+    }
+    if (!room.minimalUndoEnabled) {
+      return roomFailure('UNDO_DISABLED', '本房间未开启悔棋。');
+    }
+    if (this.#undoAvailability(room) !== requesterId) {
+      return roomFailure('UNDO_UNAVAILABLE', '当前没有你可以悔的一步。');
+    }
+    if (this.#undoRequests.has(roomCode)) {
+      return roomFailure('UNDO_PENDING', '已经有一个悔棋请求在处理中。');
+    }
+
+    const point = this.#undoPoints.get(roomCode);
+    const requester = room.players.find((player) => player.id === requesterId);
+    if (point === undefined || requester === undefined) {
+      return roomFailure('UNDO_UNAVAILABLE', '当前没有你可以悔的一步。');
+    }
+    const voterIds = this.#undoVoters(room, requesterId);
+    if (voterIds.length === 0) {
+      return roomFailure('UNDO_UNAVAILABLE', '现在没有在线对手可以确认这次悔棋。');
+    }
+
+    const pending: PendingUndo = {
+      requestId: this.#dependencies.generateToken(),
+      requesterId,
+      requesterNickname: requester.nickname,
+      voterIds,
+      approvals: new Set(),
+      point,
+    };
+    this.#undoRequests.set(roomCode, pending);
+    this.#undoTimers.set(roomCode, this.#dependencies.setTimer(() => {
+      this.#undoTimers.delete(roomCode);
+      this.#dependencies.onAsyncEvents(this.#settleUndo(roomCode, 'expired'));
+    }, UNDO_REQUEST_TTL_MS));
+
+    return {
+      ok: true,
+      value: this.#undoRequestInfo(pending),
+      events: [{ type: 'undo_request', roomCode, request: this.#undoRequestInfo(pending) }],
+    };
+  }
+
+  /**
+   * 对手对悔棋请求表决（#101）：**全部同意**才真正回退一步，任一人拒绝立刻作废。
+   *
+   * 只有请求创建时快照下来的 `voterIds` 能投票——发起之后才掉线/出局的人不再被要求表态，
+   * 发起之后才上线的人也不追溯（否则请求会随着成员进出永远集不齐票）。
+   * 重复同意是幂等的（不重复广播），因为网络重发不该让一次请求被算成两票。
+   */
+  voteUndo(roomCode: string, voterId: string, requestId: string, approve: boolean): GameActionResult<Record<string, never>> {
+    const pending = this.#undoRequests.get(roomCode);
+    if (pending === undefined || pending.requestId !== requestId) {
+      return roomFailure('UNDO_UNAVAILABLE', '这个悔棋请求已经结束了。');
+    }
+    if (!pending.voterIds.includes(voterId)) {
+      return roomFailure('UNDO_UNAVAILABLE', '你不需要对这一手悔棋表态。');
+    }
+    if (pending.approvals.has(voterId)) {
+      return { ok: true, value: {}, events: [] };
+    }
+    if (!approve) {
+      return { ok: true, value: {}, events: this.#settleUndo(roomCode, 'rejected') };
+    }
+
+    pending.approvals.add(voterId);
+    if (pending.approvals.size < pending.voterIds.length) {
+      // 还有人没表态：把最新进度广播出去（发起者能看到「1/2 已确认」），继续等。
+      return { ok: true, value: {}, events: [{ type: 'undo_request', roomCode, request: this.#undoRequestInfo(pending) }] };
+    }
+    return { ok: true, value: {}, events: this.#settleUndo(roomCode, 'applied') };
+  }
+
+  /** 发起者撤回自己尚未有结果的悔棋请求（#101）。 */
+  cancelUndo(roomCode: string, requesterId: string): GameActionResult<Record<string, never>> {
+    const pending = this.#undoRequests.get(roomCode);
+    if (pending === undefined) {
+      return roomFailure('UNDO_UNAVAILABLE', '没有正在处理中的悔棋请求。');
+    }
+    if (pending.requesterId !== requesterId) {
+      return roomFailure('UNDO_UNAVAILABLE', '只有发起者可以撤回悔棋请求。');
+    }
+    return { ok: true, value: {}, events: this.#settleUndo(roomCode, 'cancelled') };
+  }
+
+  /**
+   * 结束一个悔棋请求并给出结果（#101）。四个终态共用这一条出口：
+   *  - `applied`：真的把状态退回去，并重建自动化；
+   *  - 其余三个：只是收尾（清计时器 + 清记录 + 广播结果），不动对局。
+   *
+   * `applied` 的事件顺序刻意是 **先 `undo_result` 再 `game_snapshot`**：客户端收到
+   * 「已回退」之后再把快照当**硬重置**处理（时间线倒退不能用增量动画播），顺序反了就播歪。
+   */
+  #settleUndo(roomCode: string, outcome: UndoOutcome): RoomDomainEvent[] {
+    const pending = this.#undoRequests.get(roomCode);
+    if (pending === undefined) {
+      return [];
+    }
+    this.#cancelUndoTimer(roomCode);
+    this.#undoRequests.delete(roomCode);
+
+    const room = this.#rooms.get(roomCode);
+    const events: RoomDomainEvent[] = [
+      { type: 'undo_result', roomCode, result: { requestId: pending.requestId, outcome } },
+    ];
+    if (outcome !== 'applied' || room === undefined) {
+      return events;
+    }
+
+    room.gameState = pending.point.state;
+    // 只退一步：退完就清掉可悔点，避免退成一条可以无限往回走的时间线。
+    this.#undoPoints.delete(roomCode);
+
+    // 回退后行动者可能变了（甚至回到某个玩家的回合）：先清空一切自动化再按新状态重建。
+    // 少这一步就会留下一个指向「旧行动者」的计时器 —— 那正是线上「静默冻结」的成因。
+    const clearEvent = this.#clearAutomation(roomCode);
+    if (clearEvent !== null) events.push(clearEvent);
+
+    const state = room.gameState;
+    if (state.phase === 'game_over') {
+      room.status = 'ended';
+    } else {
+      const actorId = this.#engineActor(state);
+      this.#startBotIfActorIsBot(room, state, actorId);
+      events.push(...this.#maybeAutoTakeover(room, state, actorId));
+    }
+
+    this.#persistRoom(room);
+    events.push({ type: 'game_snapshot', roomCode, state });
+    events.push({ type: 'undo_available', roomCode, playerId: this.#undoAvailability(room) });
+    return events;
+  }
+
+  /** 可悔权判据（见 `getUndoAvailability` 的说明）。 */
+  #undoAvailability(room: Room): string | null {
+    if (!room.minimalUndoEnabled) return null;
+    if (room.status !== 'playing' || room.gameState === null) return null;
+    if (room.gameState.phase === 'game_over' || room.gameState.debt !== null) return null;
+    const point = this.#undoPoints.get(room.code);
+    if (point === undefined) return null;
+    const actor = room.players.find((player) => player.id === point.actorId);
+    if (actor === undefined || actor.isBot) return null;
+    // 已破产的人不能悔棋：他的那一步已经结算完毕（房产释放、现金归零），
+    // 退回去等于凭空复活一个已经出局的玩家。
+    const seat = room.gameState.players.find((player) => player.id === point.actorId);
+    return seat === undefined || seat.bankrupt ? null : actor.id;
+  }
+
+  /** 「在场人类对手」：确认悔棋的人。电脑与离线真人都不算——它们无法表态。 */
+  #undoVoters(room: Room, requesterId: string): string[] {
+    const state = room.gameState;
+    return room.players
+      .filter((player) => !player.isBot && player.online && player.id !== requesterId)
+      .filter((player) => {
+        const seat = state?.players.find((candidate) => candidate.id === player.id);
+        return seat !== undefined && !seat.bankrupt;
+      })
+      .map((player) => player.id);
+  }
+
+  #undoRequestInfo(pending: PendingUndo): UndoRequestInfo {
+    return {
+      requestId: pending.requestId,
+      requesterId: pending.requesterId,
+      requesterNickname: pending.requesterNickname,
+      voterIds: [...pending.voterIds],
+      approvals: [...pending.approvals],
+      expiresAt: Date.now() + UNDO_REQUEST_TTL_MS,
+    };
+  }
+
+  #cancelUndoTimer(roomCode: string): void {
+    const handle = this.#undoTimers.get(roomCode);
+    if (handle === undefined) return;
+    this.#dependencies.clearTimer(handle);
+    this.#undoTimers.delete(roomCode);
+  }
+
+  /** 房间层面的悔棋收尾（房间解散 / 服务端销毁时调用）。 */
+  #forgetUndo(roomCode: string): void {
+    this.#cancelUndoTimer(roomCode);
+    this.#undoRequests.delete(roomCode);
+    this.#undoPoints.delete(roomCode);
   }
 
   startRoom(roomCode: string, requesterId: string): RoomResult<PublicRoomState> {
@@ -372,6 +657,9 @@ export class RoomManager<TTimerHandle = unknown> {
       effectiveConfig,
       room.mapRef,
       mapPack.game.requiredRuleModules,
+      // 房规「放弃购买即拍卖」（#106）：写进 createGame，此后由状态里的 auctionOnDecline 驱动，
+      // 中途改房间设置也不会影响这一局（避免「同一局两套规则」）。
+      { auctionOnDecline: room.auctionOnDecline },
     );
     if (!created.ok) {
       this.#dependencies.onServerError?.('startRoom createGame failed', created.error);
@@ -419,8 +707,22 @@ export class RoomManager<TTimerHandle = unknown> {
       return roomFailure('INVALID_ROOM_ACTION', 'The offline takeover is already committing this turn.');
     }
 
-    return this.#commitTransition(room, playerId, intent, 'manual');
+    // 记下「这一步之前」的状态（#101）：悔棋就是把这份旧状态装回去。
+    // 引擎状态不可变（`applyIntent` 返回新对象），所以这个引用天然是一份可靠快照，无需深拷贝。
+    // 只有提交成功才留下可悔点——失败的意图没改变任何东西，凭空出现一个「可悔」按钮只会让人困惑。
+    const before: UndoPoint = { state: room.gameState, actorId: playerId, turn: room.gameState.turn };
+    const committed = this.#commitTransition(room, playerId, intent, 'manual');
+    if (committed.ok) {
+      this.#undoPoints.set(roomCode, before);
+      // 只在这间房确实开了悔棋时才广播可悔权：否则每个房间的每一步都会多出一条
+      // 恒为 null 的「没人可悔」，白白给全网所有对局加一路无用流量。
+      if (room.minimalUndoEnabled) {
+        committed.events.push({ type: 'undo_available', roomCode, playerId: this.#undoAvailability(room) });
+      }
+    }
+    return committed;
   }
+
   requestSkipOfflineTurn(roomCode: string, requesterId: string): GameActionResult<Record<string, never>> {
     const room = this.#rooms.get(roomCode);
     if (room === undefined || room.status !== 'playing' || room.gameState === null) {
@@ -554,6 +856,10 @@ export class RoomManager<TTimerHandle = unknown> {
       this.#clearAutomation(room.code);
     }
 
+    // 踢人结算走的是 'manual' 通道，但它并不是「玩家自己走的那一步」：
+    // 必须连旧的可悔点一起作废，否则一次悔棋会把刚被踢出局的人原样复活。
+    this.#undoPoints.delete(room.code);
+
     const committed = this.#commitTransition(room, targetPlayerId, { type: 'surrender' }, 'manual');
     if (!committed.ok) {
       // 引擎拒绝出局（如已被淘汰、或仅剩该玩家）：回退为旧语义「标记离线 + 自动托管」兜底。
@@ -564,7 +870,14 @@ export class RoomManager<TTimerHandle = unknown> {
     return {
       ok: true,
       value: publicRoom,
-      events: [...committed.events, { type: 'room_state', roomCode: room.code, room: publicRoom }],
+      events: [
+        ...committed.events,
+        { type: 'room_state', roomCode: room.code, room: publicRoom },
+        // 踢人也作废了可悔点：同步广播一次「现在没人可悔」，别让别人的面板留着旧的可悔权。
+        ...(room.minimalUndoEnabled
+          ? [{ type: 'undo_available' as const, roomCode: room.code, playerId: this.#undoAvailability(room) }]
+          : []),
+      ],
     };
   }
 
@@ -723,6 +1036,12 @@ export class RoomManager<TTimerHandle = unknown> {
     }
     this.#gameAutomationTimers.clear();
     this.#automation.clear();
+    // 悔棋状态（#101）：先逐个清掉投票计时器，再丢掉两个 Map（迭代中删除要拷一份键）。
+    for (const roomCode of [...this.#undoTimers.keys()]) {
+      this.#cancelUndoTimer(roomCode);
+    }
+    this.#undoRequests.clear();
+    this.#undoPoints.clear();
     this.#createRequestIndex.clear();
     this.#joinRequestIndex.clear();
   }
@@ -822,6 +1141,11 @@ export class RoomManager<TTimerHandle = unknown> {
       hostId: record.hostId,
       botDifficulty: record.botDifficulty,
       ruleConfig,
+      // 旧快照里没有这个字段（#101 之前写下的），缺省按「关闭」处理 —— 因此
+      // ROOM_SNAPSHOT_SCHEMA_VERSION 不需要抬版本，进行中的对局不会因为这次改动被整间丢掉。
+      minimalUndoEnabled: record.minimalUndoEnabled === true,
+      // 同上（#106）：本字段引入之前的快照里没有它，缺省按「关闭」处理。
+      auctionOnDecline: record.auctionOnDecline === true,
       players,
       spectators,
       gameState: gameState === null
@@ -910,6 +1234,12 @@ export class RoomManager<TTimerHandle = unknown> {
       // 自定义规则随快照落盘（#4）：不写它，重启后房间会退回地图默认值，
       // 而 gameState 里已经是按自定义值跑出来的状态，两边立刻对不上。
       ruleConfig: room.ruleConfig === null ? null : { ...room.ruleConfig },
+      // 悔棋开关也落盘（#101）：不写它，重启后房主开过的悔棋会悄悄变回关闭，
+      // 而客户端在大厅里看到的仍是「已开启」的旧认知。
+      minimalUndoEnabled: room.minimalUndoEnabled,
+      // 房规「放弃购买即拍卖」也落盘（#106）：不写它，重启后房主开过的拍卖会悄悄变回关闭，
+      // 于是「放弃购买」又回到「直接流拍」的旧语义，与客户端的认知对不上。
+      auctionOnDecline: room.auctionOnDecline,
       players: room.players.map((player) => ({ ...player })),
       spectators: room.spectators.map((spectator) => ({ ...spectator })),
       createRequestId: room.createRequestId,
@@ -1023,6 +1353,9 @@ export class RoomManager<TTimerHandle = unknown> {
       }
     }
     this.#rooms.delete(roomCode);
+    // 房间解散：悔棋点 / 悬而未决的请求 / 投票计时器一并丢掉，
+    // 不然那个 20 秒计时器到点后会去操作一个已经不存在的房间。
+    this.#forgetUndo(roomCode);
     this.#forgetRoom(roomCode);
   }
 
@@ -1067,7 +1400,17 @@ export class RoomManager<TTimerHandle = unknown> {
   }
 
   #engineActor(state: GameState): string {
-    return state.debt?.debtorId ?? state.currentPlayerId;
+    if (state.debt !== null) return state.debt.debtorId;
+    // 议价阶段（#105 / #106）的合法行动者**不是** currentPlayerId：交易要由报价目标答复、
+    // 拍卖要由轮到的叫价者出价。这里必须给出真实行动者，否则
+    //  - 电脑玩家不会被排期 → 整局停在「等某人答复」；
+    //  - 离线真人的 15s 宽限托管也不会被启动 → 静默冻结（本项目最熟悉的那类事故）。
+    // 引擎侧同样的判断在 applyIntent 的 activePlayerId（两处必须同源，改一处就要改另一处）。
+    const pendingTrade = currentPendingTrade(state);
+    if (state.turnPhase === 'awaiting_trade_response' && pendingTrade !== null) return pendingTrade.targetId;
+    const pendingAuction = currentPendingAuction(state);
+    if (state.turnPhase === 'awaiting_auction_bid' && pendingAuction !== null) return pendingAuction.bidderId;
+    return state.currentPlayerId;
   }
 
   #commitTransition(
@@ -1095,6 +1438,13 @@ export class RoomManager<TTimerHandle = unknown> {
     }
 
     room.gameState = outcome.state;
+    // 可悔点（#101）：电脑 / 离线托管推进的一步会作废上一步的可悔权——
+    // 「可悔的永远是我自己刚走的那一步」，否则回退会把自动走的那步也一并抹掉，
+    // 而玩家根本没「看见」过那一步。
+    // （真人手动走棋的可悔点由 applyGameIntent 在提交成功后写入，因此 'manual' 不在此处清。）
+    if (source !== 'manual') {
+      this.#undoPoints.delete(room.code);
+    }
     const events: RoomDomainEvent[] = [
       { type: 'game_events', roomCode: room.code, events: outcome.events },
       { type: 'game_snapshot', roomCode: room.code, state: outcome.state },
@@ -1107,6 +1457,12 @@ export class RoomManager<TTimerHandle = unknown> {
       if (clearEvent !== null) events.push(clearEvent);
     } else {
       events.push(...this.#reconcileAfterTransition(room, source));
+    }
+
+    // 电脑 / 离线托管推进的一步会作废上一步的可悔权，这里把「现在没人可悔」显式广播出去。
+    // 少了这一条，客户端会一直挂着一个「发起悔棋」按钮，直到玩家点下去被服务端拒绝才知道过期。
+    if (room.minimalUndoEnabled && source !== 'manual') {
+      events.push({ type: 'undo_available', roomCode: room.code, playerId: this.#undoAvailability(room) });
     }
 
     // 每次回合推进后落盘：这是对局状态唯一的实质变更点，写在这里等于「每步都不丢」。
@@ -1129,7 +1485,10 @@ export class RoomManager<TTimerHandle = unknown> {
     const record = this.#automation.get(room.code);
 
     if (source === 'offline_takeover' && record !== undefined && record.mode === 'offline_takeover') {
-      const keep = state.debt === null && record.playerId === actorId && record.startedTurn === state.turn;
+      // 债务清偿期间同样保持托管：这份债属于当前行动者时（或此刻无债），记录原样续期，
+      // 而不是每清偿一步就清空重来——重来意味着重新等一轮 15s 宽限。
+      const debtIsActors = state.debt === null || state.debt.debtorId === actorId;
+      const keep = debtIsActors && record.playerId === actorId && record.startedTurn === state.turn;
       if (keep) {
         this.#scheduleAutomation(room, record);
         return [];
@@ -1185,7 +1544,11 @@ export class RoomManager<TTimerHandle = unknown> {
   #maybeAutoTakeover(room: Room, state: GameState, actorId: string): RoomDomainEvent[] {
     const actor = state.players.find((p) => p.id === actorId);
     if (actor === undefined || actor.isBot || actor.online) return [];
-    if (state.debt !== null) return [];
+    // 债务阶段不再一律拒托管。`#engineActor` 在欠债时返回的就是债务人本人，所以
+    // 「此刻的行动者离线」恰好等价于「这笔债没人来还」。旧行为（debt !== null 直接返回）
+    // 会让离线欠债玩家永久停摆：没有电脑排期、也没有托管宽限，房间进入
+    // 「零活跃计时器、零服务端错误」的静默冻结（整局冒烟可复现：电脑在拍卖里把现金花光后欠租）。
+    // 清偿本身由 chooseTakeoverIntent 的债务分支交给 bot 策略完成。
     if (this.#automation.has(room.code) || this.#gameAutomationTimers.has(room.code)) return [];
     if (this.#autoTakeoverGrace.has(room.code)) return [];
     // 宽限期内不立即托管：给掉线玩家重连机会，避免短暂网络抖动即被托管替玩家走完一回合。
@@ -1195,7 +1558,10 @@ export class RoomManager<TTimerHandle = unknown> {
       this.#autoTakeoverGrace.delete(room.code);
       if (room.status !== 'playing' || room.gameState === null) return;
       const current = room.gameState.players.find((candidate) => candidate.id === actorId);
-      if (current === undefined || current.online || current.bankrupt || room.gameState.debt !== null) return;
+      if (current === undefined || current.online || current.bankrupt) return;
+      // 宽限期间可能出现了别人的债（真人重连后行动过）：只有「这份债就是他的」才代为清偿。
+      const debt = room.gameState.debt;
+      if (debt !== null && debt.debtorId !== actorId) return;
       if (this.#automation.has(room.code) || this.#gameAutomationTimers.has(room.code)) return;
       const events = this.#startAutoTakeover(room, room.gameState, actorId);
       this.#dependencies.onAsyncEvents(events);
@@ -1252,7 +1618,11 @@ export class RoomManager<TTimerHandle = unknown> {
     const actor = state.players.find((p) => p.id === actorId);
     if (actor === undefined || actor.bankrupt) return false;
     if (record.mode === 'bot') return actor.isBot;
-    return !actor.isBot && state.debt === null;
+    // 离线托管允许「带着债务」继续：`#engineActor` 保证此时 actorId 就是债务人本人，
+    // 而清偿是一连串步骤（卖房 → 抵押 → 卖地 → 宣告破产）。若在这里要求 debt === null，
+    // 托管会在第一步之后就把自己判为失效，反复清空重建、每步都退回 15s 宽限。
+    // 是否「该由他清偿」由 stillCurrent 里的 record.playerId === actorId 把关。
+    return !actor.isBot;
   }
 
   #runAutomationCallback(roomCode: string, generation: number): void {
@@ -1470,6 +1840,8 @@ function projectRoomSettings(room: Room): RoomSettings {
   return {
     botDifficulty: room.botDifficulty,
     ruleConfig: room.ruleConfig === null ? null : { ...room.ruleConfig },
+    minimalUndoEnabled: room.minimalUndoEnabled,
+    auctionOnDecline: room.auctionOnDecline,
   };
 }
 

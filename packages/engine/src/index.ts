@@ -5,6 +5,13 @@ export type { CreateGameInput } from './engine';
 export { getCurrentRent, canBuyProperty, canBuild, getSellableAssets } from './selectors';
 export { chooseBotIntent } from './bot';
 export type { BotDifficulty } from './bot';
+// 交易 / 拍卖（#105 / #106）：服务端需要按「当前真实行动者」调度自动化，
+// 而交易等待阶段与拍卖阶段的行动者都不是 currentPlayerId，故把读取器导出。
+export {
+  AUCTION_MIN_INCREMENT,
+  currentPendingTrade,
+  currentPendingAuction,
+} from './bargain';
 export { hydrateGameState, resolveOverriddenGameConfig } from './hydrate';
 export type { HydrateGameStateResult } from './hydrate';
 export {

@@ -14,6 +14,7 @@ import type {
   RoomSettingsPatch,
   ServerToClientEvents,
   SocketData,
+  UndoRequestInfo,
 } from '@richman/protocol';
 import { CHAT_HISTORY_LIMIT, CHAT_TEXT_MAX_LENGTH } from '@richman/protocol';
 import { toPublicGameSnapshot } from '../publicGameSnapshot';
@@ -191,6 +192,22 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
         continue;
       }
 
+      // 悔棋三条（#101）：都是房间内广播，各自独立一条事件，沿用 room:settings 的模式。
+      if (event.type === 'undo_request') {
+        io.to(event.roomCode).emit('room:undo_request', event.request);
+        continue;
+      }
+
+      if (event.type === 'undo_result') {
+        io.to(event.roomCode).emit('room:undo_result', event.result);
+        continue;
+      }
+
+      if (event.type === 'undo_available') {
+        io.to(event.roomCode).emit('room:undo_available', { playerId: event.playerId });
+        continue;
+      }
+
       io.to(event.roomCode).emit('room:closed', { reason: event.reason });
       chatHistory.delete(event.roomCode);
       for (const [socketId, binding] of socketBindings) {
@@ -281,6 +298,19 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
   }
 
   /**
+   * 「此刻谁可以悔棋」单播（#101）：与房间设置同样的时机（进入房间时一次）。
+   *
+   * 不这么做的话，**掉线重连/刷新后按钮会消失**：`room:undo_available` 只在状态变化时广播，
+   * 而那一次广播早于本次连接，重连的客户端拿不到——明明有一手可悔，按钮却是灰的。
+   */
+  function emitUndoAvailability(socket: RoomSocket, roomCode: string): void {
+    if (roomManager.getRoomSettings(roomCode) === null) {
+      return;
+    }
+    socket.emit('room:undo_available', { playerId: roomManager.getUndoAvailability(roomCode) });
+  }
+
+  /**
    * 补齐「进入房间」时必须单播、但**不在 ack 里**的两份快照：聊天历史与房间设置（#4 / #6）。
    *
    * 两者都刻意排在 ack **之后**：客户端的 ack 处理里可能 resetSession()（会把 chatLog 与
@@ -301,6 +331,7 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
       ack(response);
       emitChatHistory(socket, roomCode);
       emitRoomSettings(socket, roomCode);
+      emitUndoAvailability(socket, roomCode);
     };
   }
 
@@ -613,6 +644,80 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
     }
   }
 
+  /**
+   * 悔棋三条（#101）：发起 / 表决 / 撤回。
+   *
+   * 三条都不接受「谁在操作」这样的参数——身份一律取自 socket 绑定（`socketBindings`），
+   * 与 `game:intent` 同一套做法：客户端没有伪造他人身份的入口。
+   * 业务约束（是否开了悔棋、是否轮得到你、你还要不要表态）全部由 `RoomManager` 把关，
+   * 这里只负责 payload 形状与广播。
+   */
+  function handleUndoRequest(socket: RoomSocket, ack: (response: Ack<UndoRequestInfo>) => void): void {
+    const binding = socketBindings.get(socket.id);
+    if (binding === undefined) {
+      ack(INVALID_ROOM_ACTION_ACK);
+      return;
+    }
+
+    try {
+      const result = roomManager.requestUndo(binding.roomCode, binding.playerId);
+      if (result.ok) {
+        dispatchDomainEvents(result.events);
+      }
+      ackAfterEventFlush(ack, toAck(result));
+    } catch (error) {
+      logger?.error?.('room:undo_request failed unexpectedly', error);
+      ack(INVALID_ROOM_ACTION_ACK);
+    }
+  }
+
+  function handleUndoVote(
+    socket: RoomSocket,
+    payload: unknown,
+    ack: (response: Ack<Record<string, never>>) => void,
+  ): void {
+    if (!isUndoVotePayload(payload)) {
+      ack(INVALID_ROOM_ACTION_ACK);
+      return;
+    }
+
+    const binding = socketBindings.get(socket.id);
+    if (binding === undefined) {
+      ack(INVALID_ROOM_ACTION_ACK);
+      return;
+    }
+
+    try {
+      const result = roomManager.voteUndo(binding.roomCode, binding.playerId, payload.requestId, payload.approve);
+      if (result.ok) {
+        dispatchDomainEvents(result.events);
+      }
+      ackAfterEventFlush(ack, toActionAck(result));
+    } catch (error) {
+      logger?.error?.('room:undo_vote failed unexpectedly', error);
+      ack(INVALID_ROOM_ACTION_ACK);
+    }
+  }
+
+  function handleUndoCancel(socket: RoomSocket, ack: (response: Ack<Record<string, never>>) => void): void {
+    const binding = socketBindings.get(socket.id);
+    if (binding === undefined) {
+      ack(INVALID_ROOM_ACTION_ACK);
+      return;
+    }
+
+    try {
+      const result = roomManager.cancelUndo(binding.roomCode, binding.playerId);
+      if (result.ok) {
+        dispatchDomainEvents(result.events);
+      }
+      ackAfterEventFlush(ack, toActionAck(result));
+    } catch (error) {
+      logger?.error?.('room:undo_cancel failed unexpectedly', error);
+      ack(INVALID_ROOM_ACTION_ACK);
+    }
+  }
+
   function handleLeave(socket: RoomSocket, ack: (response: Ack<Record<string, never>>) => void): void {
     const binding = socketBindings.get(socket.id);
     if (binding === undefined) {
@@ -837,6 +942,27 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
 
         handleChat(socket, payload, ack);
       });
+      socket.on('room:undo_request', (ack) => {
+        if (typeof ack !== 'function') {
+          return;
+        }
+
+        handleUndoRequest(socket, ack);
+      });
+      socket.on('room:undo_vote', (payload, ack) => {
+        if (typeof ack !== 'function') {
+          return;
+        }
+
+        handleUndoVote(socket, payload, ack);
+      });
+      socket.on('room:undo_cancel', (ack) => {
+        if (typeof ack !== 'function') {
+          return;
+        }
+
+        handleUndoCancel(socket, ack);
+      });
       socket.on('disconnect', () => {
         handleDisconnect(socket);
       });
@@ -916,10 +1042,10 @@ function isRenameBotPayload(payload: unknown): payload is { playerId: string; ni
     && typeof payload.nickname === 'string';
 }
 
-/** 房间设置 patch（#4 / #6）：两个字段都可省略；`ruleConfig: null` 表示「恢复地图默认」。 */
+/** 房间设置 patch（#4 / #6 / #101）：各字段均可省略；`ruleConfig: null` 表示「恢复地图默认」。 */
 function isUpdateSettingsPayload(payload: unknown): payload is RoomSettingsPatch {
   if (!isRecord(payload)) return false;
-  const { botDifficulty, ruleConfig } = payload;
+  const { botDifficulty, ruleConfig, minimalUndoEnabled, auctionOnDecline } = payload;
   if (botDifficulty !== undefined
     && botDifficulty !== 'easy'
     && botDifficulty !== 'normal'
@@ -927,6 +1053,14 @@ function isUpdateSettingsPayload(payload: unknown): payload is RoomSettingsPatch
     return false;
   }
   if (ruleConfig !== undefined && ruleConfig !== null && !isRuleConfigShape(ruleConfig)) {
+    return false;
+  }
+  if (minimalUndoEnabled !== undefined && typeof minimalUndoEnabled !== 'boolean') {
+    return false;
+  }
+  // 拍卖房规（#106）与 minimalUndoEnabled 同类：布尔门禁在适配器层就拦掉，
+  // 不让「字符串 true」这类载荷走到 RoomManager 再回一个语义更模糊的错误。
+  if (auctionOnDecline !== undefined && typeof auctionOnDecline !== 'boolean') {
     return false;
   }
   return true;
@@ -942,6 +1076,20 @@ function isRuleConfigShape(value: unknown): boolean {
 
 function isGameIntentPayload(payload: unknown): payload is { intent: Intent } {
   return isRecord(payload) && isValidIntent(payload.intent);
+}
+
+/**
+ * 悔棋表决 payload（#101）。
+ *
+ * `requestId` 只校验「非空字符串」而**不**套 `REQUEST_ID_RE`：那个 32 位十六进制的约束
+ * 是客户端建房/加入时自己生成的关联 id，而悔棋的 requestId 由服务端 `generateToken()` 产出
+ * （单测里就是 `token-1` 这样的字面量），两者根本不是同一套格式。
+ */
+function isUndoVotePayload(payload: unknown): payload is { requestId: string; approve: boolean } {
+  return isRecord(payload)
+    && typeof payload.requestId === 'string'
+    && payload.requestId.length > 0
+    && typeof payload.approve === 'boolean';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

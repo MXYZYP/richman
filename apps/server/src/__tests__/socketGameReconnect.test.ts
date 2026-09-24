@@ -660,6 +660,11 @@ function intentFor(turnPhase: GameState['turnPhase']): Intent {
       return { type: 'skip_build' };
     case 'managing':
       return { type: 'end_turn' };
+    // 议价阶段（#105 / #106）：本套件不开「放弃购买即拍卖」，拍卖分支不可达；交易分支用撤回。
+    case 'awaiting_trade_response':
+      return { type: 'cancel_trade' };
+    case 'awaiting_auction_bid':
+      return { type: 'pass_bid' };
   }
 }
 

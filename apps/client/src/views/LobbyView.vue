@@ -161,6 +161,8 @@ const rulesReadOnly = computed(() => (
   !props.isHost || !canMutate.value || props.room.status !== 'lobby' || props.roomSettings === null
 ));
 const rulesVisible = computed(() => props.roomSettings !== null && ruleDefaults.value !== null);
+/** 悔棋开关（#101）：服务端广播的权威值；旧服务端/未收到时按「关闭」处理。 */
+const undoEnabled = computed(() => props.roomSettings?.minimalUndoEnabled === true);
 const ruleError = ref<string | null>(null);
 
 // 输入框允许中途处于非法状态（例如清空重打），只在 change / blur 时才校验并提交。
@@ -235,6 +237,19 @@ function resetRoomRules(): void {
   emit('updateSettings', { ruleConfig: null });
 }
 
+/**
+ * 「允许悔棋」开关（#101）。默认**关闭**——它改变的是「已经走过的棋能不能退」这件事，
+ * 必须是房主显式的选择加入，而不是悄悄塞给所有人的默认能力。
+ *
+ * 开启后也不是单方面回退：走错一步的玩家发起后，要由在场对手逐一确认才真的退回，
+ * 因此它是一个「双方同意的一步回退」，不会变成某一方随意改历史。
+ */
+function chooseMinimalUndo(enabled: boolean): void {
+  if (rulesReadOnly.value) return;
+  if (undoEnabled.value === enabled) return;
+  emit('updateSettings', { minimalUndoEnabled: enabled });
+}
+
 const botDifficultyHint = computed(
   () => BOT_DIFFICULTY_OPTIONS.find((option) => option.value === props.roomSettings?.botDifficulty)?.hint ?? '',
 );
@@ -244,7 +259,10 @@ const ruleSummary = computed(() => {
   const rule = effectiveRule.value;
   if (rule === null) return '';
   const percent = Math.round(rule.mortgageInterestRate * 1000) / 10;
-  return `初始资金 ¥${rule.initialCash} · 最高房级 ${rule.maxHouseLevel} 级 · 抵押利率 ${percent}%`;
+  // 悔棋也写进摘要（#101）：它不是「规则三项」之一，但同样决定了这局的手感，
+  // 非房主只能从摘要里知道这件事（开关本身只渲染在房主区）。
+  const undo = undoEnabled.value ? ' · 可悔棋（需对手同意）' : '';
+  return `初始资金 ¥${rule.initialCash} · 最高房级 ${rule.maxHouseLevel} 级 · 抵押利率 ${percent}%${undo}`;
 });
 
 // Copy feedback is transient and self-describing so a clipboard rejection is never silent.
@@ -476,6 +494,33 @@ onBeforeUnmount(() => {
               >{{ option.label }}</button>
             </div>
             <p class="lobby-rules__hint">{{ botDifficultyHint }}仅影响电脑决策，不影响真人玩家。</p>
+          </div>
+
+          <!-- 悔棋开关（#101）：默认关闭。开启后也不是单方面回退——发起方仍需在场对手
+               逐一同意，因此它改变的是「历史能不能退一步」，而不改变任何一步的规则。 -->
+          <div class="lobby-rules__difficulty">
+            <span class="lobby-rules__difficulty-label">悔棋</span>
+            <div class="lobby-rules__difficulty-options" role="radiogroup" aria-label="悔棋">
+              <button
+                type="button"
+                class="lobby-rules__difficulty-option"
+                :class="{ active: !undoEnabled }"
+                :aria-pressed="!undoEnabled"
+                :disabled="rulesReadOnly"
+                @click="chooseMinimalUndo(false)"
+              >关闭</button>
+              <button
+                type="button"
+                class="lobby-rules__difficulty-option"
+                :class="{ active: undoEnabled }"
+                :aria-pressed="undoEnabled"
+                :disabled="rulesReadOnly"
+                @click="chooseMinimalUndo(true)"
+              >允许悔棋</button>
+            </div>
+            <p class="lobby-rules__hint">
+              开启后，走错一步的玩家可发起悔棋，但需在场对手逐一同意才会退回上一步；20 秒内没集齐即作废。
+            </p>
           </div>
 
           <p v-if="ruleError" class="lobby-rules__error" role="alert">{{ ruleError }}</p>

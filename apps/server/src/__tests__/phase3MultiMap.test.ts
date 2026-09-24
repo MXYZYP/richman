@@ -480,12 +480,15 @@ describe('Phase 3 public snapshot allowlist', () => {
     const snapshot = toPublicGameSnapshot(state);
 
     expect(Object.keys(snapshot).sort()).toEqual([
+      'auctionOnDecline',
       'cashGoal',
       'currentPlayerId',
       'debt',
       'deckCounts',
       'lastDice',
       'mapRef',
+      'pendingAuction',
+      'pendingTrade',
       'phase',
       'players',
       'properties',
@@ -556,7 +559,8 @@ describe('Phase 3 real Socket.IO map flow', () => {
     const snapshot = (await snapshotPromise).state;
     expect(snapshot.mapRef).toEqual(testMap.ref);
     expect(Object.keys(snapshot).sort()).toEqual([
-      'cashGoal', 'currentPlayerId', 'debt', 'deckCounts', 'lastDice', 'mapRef', 'phase',
+      'auctionOnDecline', 'cashGoal', 'currentPlayerId', 'debt', 'deckCounts', 'lastDice', 'mapRef',
+      'pendingAuction', 'pendingTrade', 'phase',
       'players', 'properties', 'publicRuleState', 'recentLog', 'turn', 'turnPhase', 'winnerId',
     ].sort());
 
@@ -783,6 +787,9 @@ function nextAuthoritativeIntent(state: GameState): Intent {
     case 'awaiting_buy_decision': return { type: 'skip_buy' };
     case 'awaiting_build_decision': return { type: 'skip_build' };
     case 'managing': return { type: 'end_turn' };
+    // 议价阶段（#105 / #106）：本套件不开「放弃购买即拍卖」，拍卖分支不可达；交易分支用撤回。
+    case 'awaiting_trade_response': return { type: 'cancel_trade' };
+    case 'awaiting_auction_bid': return { type: 'pass_bid' };
   }
 }
 

@@ -32,8 +32,29 @@ echo "[1/4] 拉取远端最新代码 (origin/$BRANCH) ..."
 git fetch origin "$BRANCH"
 git reset --hard "origin/$BRANCH"
 
-echo "[2/4] 安装依赖（锁文件有变化时才需要，可注释掉以加速）..."
-# pnpm install --frozen-lockfile
+echo "[2/4] 安装依赖（pnpm-lock.yaml 变化时自动执行）..."
+# 为什么不能用 pnpm install 一直禁用：服务端新增/升级运行时依赖时，
+# 旧 node_modules 会导致线上 "Cannot find module"，必须在部署时对齐 lockfile。
+#
+# 为什么用 stamp 做条件判断：pnpm install 在依赖无变化时也要跑 ~20s，
+# 且会把 devDependencies（@playwright/test）装回服务器。用上次安装时的
+# lockfile 摘要做标记，不变即跳过，变化才真正安装。
+#
+# 关于 pnpm 10 的 "Ignored build scripts: esbuild, vue-demi" 警告：
+# 本项目已实测 —— 忽略这些脚本不影响 vite 生产构建产物（esbuild 的平台二进制
+# 来自 optionalDependencies，不依赖 postinstall），故无需 onlyBuiltDependencies。
+#
+# --frozen-lockfile：lockfile 与 package.json 不一致时直接报错退出（预期保护，
+# 避免部署出一份依赖状态不可复现的代码）。--prefer-offline：优先用本地缓存加速。
+LOCKFILE_STAMP="$APP_DIR/.runtime/pnpm-lock.sha256"
+CURRENT_LOCK_STAMP="$(sha256sum "$APP_DIR/pnpm-lock.yaml" 2>/dev/null || echo missing)"
+if [ -f "$LOCKFILE_STAMP" ] && [ "$(cat "$LOCKFILE_STAMP")" = "$CURRENT_LOCK_STAMP" ]; then
+  echo "  pnpm-lock.yaml 未变化，跳过依赖安装（强制重装：删除 $LOCKFILE_STAMP 后重跑本脚本）"
+else
+  pnpm install --frozen-lockfile --prefer-offline
+  mkdir -p "$(dirname "$LOCKFILE_STAMP")"
+  printf '%s\n' "$CURRENT_LOCK_STAMP" > "$LOCKFILE_STAMP"
+fi
 
 echo "[3/4] 构建前端 ..."
 pnpm --filter @richman/client build

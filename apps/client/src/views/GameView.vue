@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSPro
 import GameBoard from '../components/GameBoard.vue';
 import PlayerRail from '../components/PlayerRail.vue';
 import ActionPanel from '../components/ActionPanel.vue';
+import BargainPanel from '../components/BargainPanel.vue';
 import AssetPanel from '../components/AssetPanel.vue';
 import CellDetailPanel from '../components/CellDetailPanel.vue';
 import PlayerAssetDialog from '../components/PlayerAssetDialog.vue';
@@ -11,7 +12,7 @@ import PropertyAwards from '../components/PropertyAwards.vue';
 import MobileSheet from '../components/MobileSheet.vue';
 import ChatPanel from '../components/ChatPanel.vue';
 import SettingsDialog from '../components/SettingsDialog.vue';
-import { formatRecentLogEvent, getAssetRows, getCellDetail, getPendingCardChoice, getPendingPurchaseOffer, getPlayerAssetDialogModel, type ClientAction } from '../game/clientGame';
+import { formatRecentLogEvent, canProposeTrade, getAssetRows, getAuctionDisplay, getCellDetail, getOwnTradableCells, getPendingCardChoice, getPendingPurchaseOffer, getPlayerAssetDialogModel, getTradeDisplay, getTradeProposalOptions, type ClientAction } from '../game/clientGame';
 import { formatCashAnnouncement, formatMoney } from '../ui/format';
 import type { CashNotice, GameSession } from '../session/gameSession';
 import { paceMultiplier } from '../session/playbackPace';
@@ -282,6 +283,44 @@ async function replayGame(): Promise<void> {
   await props.session.replay?.();
 }
 
+// ---- 联机最小悔棋（#101）----
+// 只在「联机 + 房主开了悔棋」时出现这条面板。它与上面那套本地悔棋是两回事：
+// 本地没有别人，回退就是本地回退；联机的回退必须经在场对手逐一确认，由服务端裁决，
+// 客户端不自己判定「你能不能悔」——那由服务端算好、通过 room:undo_available 广播下来。
+const undoEnabled = computed(() =>
+  props.session.mode !== 'local' && props.session.roomSettings?.value?.minimalUndoEnabled === true,
+);
+const undoRequest = computed(() => props.session.undoRequest?.value ?? null);
+const canRequestUndo = computed(() => props.session.canRequestUndo?.value ?? false);
+const canVoteUndo = computed(() => props.session.canVoteUndo?.value ?? false);
+const isUndoRequester = computed(() => props.session.isUndoRequester?.value ?? false);
+/** 「2/3 已确认」：进度条文案，发起者与对手都看这一份。 */
+const undoApprovalLabel = computed(() => {
+  const pending = undoRequest.value;
+  return pending === null ? '' : `${pending.approvals.length}/${pending.voterIds.length} 已确认`;
+});
+/** 还没表态的对手昵称（发起者最关心这个：在等谁）。 */
+const undoWaitingNames = computed(() => {
+  const pending = undoRequest.value;
+  if (pending === null) return '';
+  const room = props.session.room.value;
+  return pending.voterIds
+    .filter((id) => !pending.approvals.includes(id))
+    .map((id) => room?.players.find((player) => player.id === id)?.nickname ?? '对手')
+    .join('、');
+});
+function requestUndo(): void {
+  void props.session.requestUndo?.();
+}
+function voteUndo(approve: boolean): void {
+  const pending = undoRequest.value;
+  if (pending === null) return;
+  void props.session.voteUndo?.(pending.requestId, approve);
+}
+function cancelUndo(): void {
+  void props.session.cancelUndo?.();
+}
+
 // 骰子落下（dice ref 由 null 变非 null）时播声音。
 watch(
   () => dice.value,
@@ -329,6 +368,43 @@ const assetRows = computed(() => (state.value === null ? [] : getAssetRows(state
 const pendingPurchaseOffer = computed(() => (state.value === null ? null : getPendingPurchaseOffer(state.value)));
 // 单机真人作弊：待确认卡牌来自权威快照（刷新/恢复后依然存在），与动画中的 activeCard 互补。
 const pendingCardChoice = computed(() => (state.value === null ? null : getPendingCardChoice(state.value)));
+
+/* ---- 议价（#105 交易 / #106 拍卖） ----
+   议价阶段的合法行动者不是 currentPlayerId：交易看报价目标、拍卖看轮到的叫价者。
+   联机有 localPlayerId；单机热座没有，就用这一阶段的合法行动者代表「当前这台设备上的人」。 */
+const bargainViewerId = computed(() => {
+  const local = props.session.localPlayerId.value;
+  if (local !== null) return local;
+  const current = state.value;
+  if (current === null) return '';
+  return current.pendingTrade?.targetId ?? current.pendingAuction?.bidderId ?? current.currentPlayerId;
+});
+const tradeDisplay = computed(() => (
+  state.value === null ? null : getTradeDisplay(state.value, bargainViewerId.value)
+));
+const auctionDisplay = computed(() => (
+  state.value === null ? null : getAuctionDisplay(state.value, bargainViewerId.value)
+));
+// 观战者不参与议价：面板对它只读。发起入口也只对合法发起人出现。
+const tradeProposalOptions = computed(() => {
+  const current = state.value;
+  if (current === null || isSpectator.value) return null;
+  if (props.session.localPlayerId.value !== null
+    && props.session.localPlayerId.value !== current.currentPlayerId) return null;
+  if (!canProposeTrade(current, current.currentPlayerId)) return null;
+  return getTradeProposalOptions(current, current.currentPlayerId);
+});
+const ownTradableCells = computed(() => (
+  state.value === null ? [] : getOwnTradableCells(state.value, state.value.currentPlayerId)
+));
+const ownCash = computed(() => (
+  state.value?.players.find((player) => player.id === state.value?.currentPlayerId)?.cash ?? 0
+));
+const showBargainPanel = computed(() => (
+  tradeDisplay.value !== null
+  || auctionDisplay.value !== null
+  || (tradeProposalOptions.value !== null && tradeProposalOptions.value.length > 0)
+));
 const selectedCellDetail = computed(() => (
   state.value === null || selectedCellId.value === null ? null : getCellDetail(state.value, selectedCellId.value)
 ));
@@ -568,6 +644,19 @@ async function handleAction(action: ClientAction) {
   isSubmittingIntent.value = true;
   try {
     await props.session.sendIntent(action.intent);
+  } finally {
+    isSubmittingIntent.value = false;
+  }
+}
+
+async function handleBargainIntent(intent: Intent) {
+  if (isConfirmingLeave.value || isSubmittingIntent.value) return;
+  // 议价的合法行动者不是当前玩家（交易看目标、拍卖看叫价者），所以不能复用
+  // `interaction.canSendIntent`（那条闸门认的是 currentPlayerId）；这里只挡观战与断线重连。
+  if (isSpectator.value || !interaction.value.canSendIntent) return;
+  isSubmittingIntent.value = true;
+  try {
+    await props.session.sendIntent(intent);
   } finally {
     isSubmittingIntent.value = false;
   }
@@ -830,6 +919,53 @@ function inspectFinalBoard() {
           :pending-card="pendingCardChoice"
           @action="handleAction"
         />
+        <!-- 议价面板（#105 交易 / #106 拍卖）：三态互斥，与悔棋面板并列排在操作面板下方。
+             没有进行中的议价、也不轮到我发起时整块不出现，不会给控制台留下常驻空白。 -->
+        <BargainPanel
+          v-if="showBargainPanel"
+          :trade="tradeDisplay"
+          :auction="auctionDisplay"
+          :proposal-options="tradeProposalOptions"
+          :own-cells="ownTradableCells"
+          :own-cash="ownCash"
+          :is-busy="isBusy || isSubmittingIntent"
+          :is-spectator="isSpectator"
+          @intent="handleBargainIntent"
+        />
+        <!-- 联机最小悔棋（#101）：房主在大厅开启后才出现。三态合一——
+             我可发起 / 我已发起（等对手确认）/ 我需要表态。单机的本地悔棋不在这一块。 -->
+        <section v-if="undoEnabled && (canRequestUndo || undoRequest !== null)" class="undo-panel" aria-label="悔棋">
+          <template v-if="undoRequest">
+            <p class="undo-panel__title">
+              <span>悔棋请求 · {{ undoRequest.requesterNickname }}</span>
+              <span class="undo-panel__progress">{{ undoApprovalLabel }}</span>
+            </p>
+            <p v-if="isUndoRequester" class="undo-panel__hint">
+              等待 {{ undoWaitingNames }} 确认；20 秒内没集齐全部同意就作废。
+            </p>
+            <p v-else-if="canVoteUndo" class="undo-panel__hint">
+              同意后，{{ undoRequest.requesterNickname }} 刚走的那一步会被退回。
+            </p>
+            <p v-else class="undo-panel__hint">你已确认，等待其他对手。</p>
+            <div class="undo-panel__actions">
+              <button v-if="canVoteUndo" type="button" class="undo-btn undo-btn--approve" @click="voteUndo(true)">
+                同意悔棋
+              </button>
+              <button v-if="canVoteUndo" type="button" class="undo-btn undo-btn--reject" @click="voteUndo(false)">
+                拒绝
+              </button>
+              <button v-if="isUndoRequester" type="button" class="undo-btn undo-btn--ghost" @click="cancelUndo()">
+                撤回请求
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <p class="undo-panel__hint">走错了？可以请在场对手允许你退回刚走的那一步。</p>
+            <div class="undo-panel__actions">
+              <button type="button" class="undo-btn" @click="requestUndo()">发起悔棋</button>
+            </div>
+          </template>
+        </section>
         <!-- 位置/欠款属于可变信息：一律排在操作面板下方，永不挤动按钮行。-->
         <button
           v-if="currentCellDetail"
@@ -1339,6 +1475,80 @@ function inspectFinalBoard() {
 @media (hover: none) {
   .surrender-button:active {
     background: color-mix(in srgb, var(--surrender) 14%, var(--board-surface));
+  }
+}
+
+/* 联机悔棋面板（#101）：排在操作面板下方，与它同宽同层——不挤动上面那排按钮。 */
+.undo-panel {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--board-surface);
+}
+
+.undo-panel__title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.undo-panel__progress {
+  flex: none;
+  font-size: 0.8em;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.undo-panel__hint {
+  margin: 0;
+  font-size: 0.85em;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--color-text) 74%, transparent);
+}
+
+.undo-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.undo-btn {
+  flex: 1 1 auto;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--board-surface);
+  color: var(--color-primary);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* 「同意悔棋」是这一组里唯一的前进动作，给它强调色；拒绝与撤回保持低调。 */
+.undo-btn--approve {
+  background: var(--color-accent);
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+
+.undo-btn--reject,
+.undo-btn--ghost {
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+}
+
+.undo-btn:hover {
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--board-surface));
+}
+
+@media (hover: none) {
+  .undo-btn:active {
+    background: color-mix(in srgb, var(--color-primary) 14%, var(--board-surface));
   }
 }
 

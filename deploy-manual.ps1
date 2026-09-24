@@ -45,6 +45,10 @@ $files = @(
   "apps/client/src/components/MobileSheet.vue",
   "apps/client/src/components/PlayerAssetDialog.vue",
   "apps/client/src/components/ActionPanel.vue",
+  # Bargain panel (#105 / #106): the shared trade-confirmation / auction-bidding console block,
+  # imported by GameView. NEW component - if left out, the server vite build fails with
+  # `Could not resolve "../components/BargainPanel.vue"`.
+  "apps/client/src/components/BargainPanel.vue",
   "apps/client/src/components/ChatPanel.vue",
   "apps/client/src/components/GameBoard.vue",
   # Seat rail (top-of-board actor strip, #9/#94). Imported by GameView and by
@@ -85,6 +89,10 @@ $files = @(
   # readable "rules at a glance" list shown in SettingsDialog. SettingsDialog.vue IS listed,
   # so leaving this out breaks the server build with TS2307 / "Could not resolve ./mapRules".
   "apps/client/src/ui/mapRules.ts",
+  # Client build config. The server runs `pnpm --filter @richman/client build`, which reads
+  # THIS file: leave it out and the server keeps its old copy, so manualChunks / first-screen
+  # code splitting (#104) and any asset rule silently diverge from the committed source.
+  "apps/client/vite.config.ts",
   # ---------- PWA (P2-11): public assets must be uploaded explicitly, otherwise the server
   # build never copies them into dist ----------
   "apps/client/public/manifest.webmanifest",
@@ -97,6 +105,10 @@ $files = @(
   "packages/engine/src/moduleRegistry.ts",
   "packages/engine/src/engine.ts",
   "packages/engine/src/bot.ts",
+  # Trading + auctions (#105 / #106). Imported by engine.ts (skip_buy -> auction) and by
+  # index.ts (currentPendingTrade / currentPendingAuction / AUCTION_MIN_INCREMENT), so a
+  # missing upload makes the server reject or mis-read every bargain-phase intent.
+  "packages/engine/src/bargain.ts",
   "packages/engine/src/index.ts",
   "packages/engine/src/hydrate.ts",
   # ---------- Engine modules (scp only uploads what is listed; a missing file leaves a stale
@@ -122,6 +134,9 @@ $files = @(
   "packages/engine/src/__tests__/surrender.test.ts",
   "packages/engine/src/__tests__/botDifficulty.test.ts",
   "packages/engine/src/__tests__/greatWallModule.test.ts",
+  # Bargain tests (#105 trade / #106 auction). The server runs the client build (vue-tsc) but
+  # engine tests are executed there too; a stale copy would validate the old engine contract.
+  "packages/engine/src/__tests__/bargain.test.ts",
   "packages/protocol/src/index.ts",
   # ---------- Board data (maps; server uses its initial clone, so new maps must be uploaded explicitly) ----------
   # china-tour / world-tour predate this list. They are listed here too so that a future edit to
@@ -211,6 +226,10 @@ $files = @(
   "apps/server/src/rooms/roomErrors.ts",
   "apps/server/src/rooms/roomTypes.ts",
   "apps/server/src/rooms/roomSnapshotStore.ts",
+  # Public game snapshot projection. It is the ONLY place that whitelists which engine fields
+  # reach the wire, so a stale copy silently drops new fields (pendingTrade / pendingAuction /
+  # auctionOnDecline, #105 / #106) and the client never sees a bargain in progress.
+  "apps/server/src/publicGameSnapshot.ts",
   "apps/server/src/production.ts",
   "apps/server/src/socket/roomSocketAdapter.ts",
   "apps/server/src/server.ts",
@@ -231,11 +250,14 @@ $files = @(
   "apps/server/src/__tests__/gameRuntime.test.ts",
   "apps/server/src/__tests__/fullGameSmoke.test.ts",
   "apps/server/src/__tests__/roomSnapshot.test.ts",
+  "apps/server/src/__tests__/roomUndo.test.ts",
   # ---------- Client tests (all, so vue-tsc never uses stale copies) ----------
   "apps/client/src/components/boardRendering.test.ts",
   "apps/client/src/session/gamePresenter.test.ts",
   "apps/client/src/game/clientGame.test.ts",
   "apps/client/src/components/ActionPanel.test.ts",
+  # Bargain panel (#105 trade confirmation / #106 auction bidding / propose form) SSR tests.
+  "apps/client/src/components/BargainPanel.test.ts",
   "apps/client/src/components/BoardCell.test.ts",
   "apps/client/src/game/gameSetup.test.ts",
   "apps/client/src/components/GameSetup.test.ts",
@@ -261,6 +283,7 @@ $files = @(
   "apps/client/src/session/localSession.test.ts",
   "apps/client/src/session/localStartGuard.test.ts",
   "apps/client/src/session/onlineSession.test.ts",
+  "apps/client/src/session/playerStats.test.ts",
   "apps/client/src/session/playbackPace.test.ts",
   "apps/client/src/session/sessionStorage.test.ts",
   "apps/client/src/ui/mapThumbnail.test.ts",

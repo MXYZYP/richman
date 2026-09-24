@@ -19,6 +19,17 @@ import { processQueuedPayments } from './payments';
 import { finishCashGoalIfReached } from './victory';
 import { defaultRuleModuleRegistry, type RuleModuleRegistry } from './moduleRegistry';
 import { advanceToNextPlayableTurn } from './turns';
+import {
+  currentPendingAuction,
+  currentPendingTrade,
+  handleCancelTrade,
+  handlePassBid,
+  handlePlaceBid,
+  handleProposeTrade,
+  handleRespondTrade,
+  reconcileBargainAfterDeparture,
+  startAuction,
+} from './bargain';
 
 export interface CreateGameInput {
   board: DeepReadonly<BoardData>;
@@ -31,6 +42,8 @@ export interface CreateGameInput {
   cashGoal?: number | null;
   /** 单机真人抽卡确认（作弊重抽）：仅本地会话传入；不传 = 原有立即结算，联机/电脑玩家不受影响。 */
   cardChoiceMode?: 'local-human';
+  /** 房规「放弃购买即拍卖」（#106）：不传 = false = 沿用既有「无拍卖」行为。 */
+  auctionOnDecline?: boolean;
 }
 
 const SEAT_COLORS: PlayerColor[] = ['red', 'blue', 'yellow', 'green', 'purple', 'orange'];
@@ -184,6 +197,11 @@ export function createGame(input: CreateGameInput): GameState {
     properties,
     decks: { chance: shuffledChance, destiny: shuffledDestiny },
     debt: null,
+    // 交易 / 拍卖（#105 / #106）：显式落成 null / false，让 createGame 产出的状态是完整形状，
+    // 不依赖「读的时候再 ?? null」（缺省仍被 hydrate 接受，见那里对可选键的处理）。
+    pendingTrade: null,
+    pendingAuction: null,
+    auctionOnDecline: input.auctionOnDecline ?? false,
     lastDice: null,
     recentLog: [{ type: 'game_started' }],
     winnerId: null,
@@ -203,10 +221,28 @@ export function applyIntent(
 ): ApplyResult {
   // 全局校验
   if (state.phase !== 'playing') return { ok: false, code: 'WRONG_PHASE' };
+
+  // 「本阶段谁才是合法行动者」：正常是 currentPlayerId；但交易等待阶段要由**报价目标**答复、
+  // 拍卖阶段要由**轮到的叫价者**出价，二者都不是 currentPlayerId。这是引擎里仅有的两处例外，
+  // 集中在这里判断，避免散落到各个 handler 里导致「谁能动」这件事出现两个真相。
+  const pendingTrade = currentPendingTrade(state);
+  const pendingAuction = currentPendingAuction(state);
+  const isTradePhase = state.turnPhase === 'awaiting_trade_response' && pendingTrade !== null;
+  const isAuctionPhase = state.turnPhase === 'awaiting_auction_bid' && pendingAuction !== null;
+  const activePlayerId = isTradePhase
+    ? pendingTrade!.targetId
+    : isAuctionPhase
+      ? pendingAuction!.bidderId
+      : state.currentPlayerId;
+  // 发起者本人撤回自己的报价也算合法（否则对手离线时这个回合只能靠超时机制救）。
+  const isProposerCancelling = isTradePhase
+    && intent.type === 'cancel_trade'
+    && playerId === pendingTrade!.proposerId;
+
   // 投降不受“是否轮到该玩家 / 是否处于债务态”限制：任何仍在局的玩家都能随时认输出局。
   if (state.debt) {
     if (playerId !== state.debt.debtorId && intent.type !== 'surrender') return { ok: false, code: 'NOT_YOUR_TURN' };
-  } else if (playerId !== state.currentPlayerId && intent.type !== 'surrender') {
+  } else if (playerId !== activePlayerId && !isProposerCancelling && intent.type !== 'surrender') {
     return { ok: false, code: 'NOT_YOUR_TURN' };
   }
 
@@ -288,6 +324,16 @@ export function applyIntent(
       return handleRedrawCard(state, playerId);
     case 'accept_card':
       return handleAcceptCard(state, playerId, registry);
+    case 'propose_trade':
+      return handleProposeTrade(state, playerId, intent);
+    case 'respond_trade':
+      return handleRespondTrade(state, playerId, intent);
+    case 'cancel_trade':
+      return handleCancelTrade(state, playerId);
+    case 'place_bid':
+      return handlePlaceBid(state, playerId, intent);
+    case 'pass_bid':
+      return handlePassBid(state, playerId);
     default:
       return { ok: false, code: 'ILLEGAL_INTENT' };
     }
@@ -710,10 +756,22 @@ function handleBuyProperty(state: GameState, playerId: string): ApplyResult {
   return { ok: true, state: newState, events };
 }
 
-/** 处理 skip_buy：放弃购买，地产保持无主，转 managing（01 §6.2：无拍卖） */
+/** 处理 skip_buy：放弃购买，地产保持无主，转 managing（01 §6.2：无拍卖）
+ *  房规开启「放弃购买即拍卖」（#106）时改走拍卖：全场按座次轮流叫价，流拍则保持无主。 */
 function handleSkipBuy(state: GameState, playerId: string): ApplyResult {
   if (state.turnPhase !== 'awaiting_buy_decision') return { ok: false, code: 'WRONG_PHASE' };
   const events: GameEvent[] = [{ type: 'buy_declined' }];
+
+  if (state.auctionOnDecline === true) {
+    const player = state.players.find((p) => p.id === playerId);
+    const cell = player === undefined ? undefined : state.board.cells.find((c) => c.id === player.position);
+    const property = player === undefined ? undefined : state.properties[player.position];
+    // 只有「无主的真实地产」才谈得上拍卖；其余情况静默退回既有行为。
+    if (player !== undefined && cell?.type === 'property' && property !== undefined && property.ownerId === null) {
+      return startAuction(state, player.position, playerId, events);
+    }
+  }
+
   return {
     ok: true,
     state: {
@@ -993,6 +1051,14 @@ function settlePlayerBankruptcy(
         events.splice(0, events.length, ...advanced.events);
       }
     }
+  }
+
+  // 有人出局时，交易/拍卖可能正停在这个人身上：不清理就会留下「等一个已经不在场的人答复」
+  // 的静默冻结（详见 bargain.ts 的 reconcileBargainAfterDeparture）。终局则无需处理。
+  if (newState.phase !== 'game_over') {
+    const reconciled = reconcileBargainAfterDeparture(newState, playerId);
+    newState = reconciled.state;
+    events.push(...reconciled.events);
   }
 
   return {

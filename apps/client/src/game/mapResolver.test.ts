@@ -35,6 +35,10 @@ function publicSnapshot(pack: MapPack): PublicGameSnapshot {
       chance: state.decks.chance.length,
       destiny: state.decks.destiny.length,
     },
+    // 议价（#105/#106）三个新字段：`?? null` / `=== true` 归一，与 publicGameSnapshot 的服务端投影同源。
+    pendingTrade: state.pendingTrade ?? null,
+    pendingAuction: state.pendingAuction ?? null,
+    auctionOnDecline: state.auctionOnDecline === true,
   };
 }
 

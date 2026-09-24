@@ -290,7 +290,10 @@ const rulesSummary = computed(() => (
           @click="emit('replay')"
         >观看本局回放</button>
       </div>
-      <p class="settings-hint">悔棋与回放只在单机对局可用；联机对局以服务器状态为准，无法本地回退。</p>
+      <p class="settings-hint">
+        悔棋与回放只在单机对局可用：单机没有别人，回退不会影响任何对手。
+        联机的悔棋在对局面板上发起，且需要在场对手逐一同意才会生效——不能本地单方面回退。
+      </p>
     </section>
 
     <section class="settings-group" aria-labelledby="settings-help">

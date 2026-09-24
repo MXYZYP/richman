@@ -504,6 +504,12 @@ function intentForTurnPhase(state: GameState): Intent {
       return { type: 'skip_build' };
     case 'managing':
       return { type: 'end_turn' };
+    // 议价阶段（#105 / #106）：本套件不开「放弃购买即拍卖」，拍卖分支不可达；
+    // 交易分支用撤回（发起者即 currentPlayerId）。
+    case 'awaiting_trade_response':
+      return { type: 'cancel_trade' };
+    case 'awaiting_auction_bid':
+      return { type: 'pass_bid' };
   }
 }
 
@@ -1521,6 +1527,137 @@ function startedRoomWithOfflineActor(options: HarnessOptions = {}) {
   return { ...harness, actor, host };
 }
 
+/** 从房间域事件里摊平出引擎事件的类型序列（`game_events` 是唯一承载引擎事件的事件）。 */
+function engineEventTypes(events: RoomDomainEvent[]): string[] {
+  return events
+    .filter((event) => event.type === 'game_events')
+    .flatMap((event) => (event.type === 'game_events' ? event.events.map((inner) => inner.type) : []));
+}
+
+/**
+ * 议价（#105 / #106）排期专用网关。
+ *
+ * 它不模拟引擎语义，只把「交易 / 拍卖」压成几步可控状态机，好让被测对象变成
+ * roomManager 的**排期**逻辑：议价挂起时 `#engineActor` 必须指向真正的行动者
+ * （交易 = 报价目标、拍卖 = 轮到的叫价者），而不是回合主人。若它退化成 `currentPlayerId`
+ * （这里是真人 host），电脑永远不会被排期、真人又不被允许替对手答复，
+ * 房间就会停在「等某人答复」且**没有任何计时器**——本项目最熟悉的那类静默冻结。
+ */
+function bargainingSchedulingGateway(): {
+  gateway: GameRuntimeGateway;
+  applied: () => Intent['type'][];
+} {
+  const applied: Intent['type'][] = [];
+  const side = { cash: 0, cellIds: [] };
+  const auctionCellId = chinaMapPack.game.board.cells.find((cell) => cell.type === 'property')?.id ?? 1;
+  return {
+    applied: () => [...applied],
+    gateway: {
+      createGame,
+      // 同一个网关服务两条测试：按挂起阶段给出电脑的答复
+      // （拍卖 → 出价 / 交易 → 拒绝 / 其余阶段 → 收尾结束这一回合）。
+      chooseBotIntent: (state) => {
+        if (state.turnPhase === 'awaiting_auction_bid') return { type: 'place_bid', amount: 100 };
+        if (state.turnPhase === 'awaiting_trade_response') return { type: 'respond_trade', accept: false };
+        return { type: 'end_turn' };
+      },
+      applyIntent(state, playerId, intent) {
+        applied.push(intent.type);
+        const logged = (event: GameEvent) => [...state.recentLog, event].slice(-200);
+        switch (intent.type) {
+          case 'end_turn': {
+            // 电脑走完自己这一回合，把回合交到真人手上（座次顺序在此无关紧要，显式指定即可）。
+            const event: GameEvent = { type: 'turn_ended', playerId };
+            return {
+              ok: true,
+              state: { ...state, currentPlayerId: 'host', turn: state.turn + 1, turnPhase: 'managing', recentLog: logged(event) },
+              events: [event],
+            };
+          }
+          case 'propose_trade': {
+            const event: GameEvent = { type: 'trade_proposed', proposerId: playerId, targetId: intent.targetId };
+            return {
+              ok: true,
+              state: {
+                ...state,
+                turnPhase: 'awaiting_trade_response',
+                pendingTrade: { proposerId: playerId, targetId: intent.targetId, offer: side, request: side },
+                recentLog: logged(event),
+              },
+              events: [event],
+            };
+          }
+          case 'respond_trade': {
+            const trade = state.pendingTrade ?? null;
+            const event: GameEvent = {
+              type: 'trade_resolved',
+              proposerId: trade?.proposerId ?? playerId,
+              targetId: trade?.targetId ?? playerId,
+              accepted: intent.accept,
+              cashFromProposer: 0,
+              cashFromTarget: 0,
+              cellsToProposer: [],
+              cellsToTarget: [],
+            };
+            return {
+              ok: true,
+              state: { ...state, pendingTrade: null, turnPhase: 'managing', recentLog: logged(event) },
+              events: [event],
+            };
+          }
+          case 'skip_buy': {
+            const event: GameEvent = { type: 'auction_started', cellId: auctionCellId, firstBidderId: 'botA' };
+            return {
+              ok: true,
+              state: {
+                ...state,
+                turnPhase: 'awaiting_auction_bid',
+                pendingAuction: { cellId: auctionCellId, bidderId: 'botA', leaderId: null, leaderBid: 0, passedIds: [] },
+                recentLog: logged(event),
+              },
+              events: [event],
+            };
+          }
+          case 'place_bid': {
+            const event: GameEvent = { type: 'auction_resolved', cellId: auctionCellId, winnerId: playerId, amount: intent.amount };
+            return {
+              ok: true,
+              state: { ...state, pendingAuction: null, turnPhase: 'managing', recentLog: logged(event) },
+              events: [event],
+            };
+          }
+          case 'pass_bid': {
+            const event: GameEvent = { type: 'auction_resolved', cellId: auctionCellId, winnerId: null, amount: 0 };
+            return {
+              ok: true,
+              state: { ...state, pendingAuction: null, turnPhase: 'managing', recentLog: logged(event) },
+              events: [event],
+            };
+          }
+          default:
+            throw new Error(`bargainingSchedulingGateway got an unexpected intent: ${intent.type}`);
+        }
+      },
+    },
+  };
+}
+
+/**
+ * 电脑先手 → 托管替它走完这一回合 → 回合落到真人 host 手上，且此刻**没有任何活跃计时器**。
+ * 这是议价排期测试的共同起点：议价只能由回合主人在 managing 阶段发起。
+ */
+function startedWithHumanTurnAfterBot(botActorId: 'botA' | 'botB', gateway: GameRuntimeGateway, delays: number[]) {
+  const harness = startedRoomBotFirstWithGateway(botActorId, gateway, { delays });
+  const botTick = activeTimers(harness.timers)[0];
+  if (botTick === undefined) throw new Error('expected the first bot automation tick');
+  botTick.callback();
+
+  const state = getCommittedGameState(harness.manager);
+  expect(state.currentPlayerId).toBe('host');
+  expect(activeTimers(harness.timers)).toEqual([]);
+  return harness;
+}
+
 function startedRoomWithOfflineActorGateway(gameGateway: GameRuntimeGateway, options: Omit<HarnessOptions, 'gameGateway'> = {}) {
   return startedRoomWithOfflineActor({ ...options, gameGateway });
 }
@@ -1566,30 +1703,40 @@ function fixedPolicyGateway(): { gateway: GameRuntimeGateway; intents: () => Int
   };
 }
 
-function debtDuringTakeoverGateway(): GameRuntimeGateway {
+/**
+ * 债务态专用网关：无债时把任意意图变成「欠债」，有债时把**债务人的任何意图**变成「债务已清」
+ * （真实引擎里那一步是卖房 / 抵押 / 卖地 / 宣告破产，这里只关心「托管确实把牌打出去了」）。
+ * 同时记录意图序列，便于断言托管在债务态下交给 bot 策略、而不是照 managing 阶段发 end_turn。
+ */
+function debtDuringTakeoverGateway(): { gateway: GameRuntimeGateway; intents: () => Intent['type'][] } {
+  const applied: Intent['type'][] = [];
   return {
-    createGame,
-    chooseBotIntent: () => ({ type: 'end_turn' }),
-    applyIntent(state, playerId, intent) {
-      if (state.debt !== null && playerId === state.debt.debtorId && intent.type === 'end_turn') {
-        const event: GameEvent = { type: 'debt_resolved', amount: state.debt.amount, creditorId: null };
+    intents: () => [...applied],
+    gateway: {
+      createGame,
+      chooseBotIntent: () => ({ type: 'end_turn' }),
+      applyIntent(state, playerId, intent) {
+        applied.push(intent.type);
+        if (state.debt !== null && playerId === state.debt.debtorId) {
+          const event: GameEvent = { type: 'debt_resolved', amount: state.debt.amount, creditorId: null };
+          return {
+            ok: true,
+            state: { ...state, debt: null, turnPhase: 'managing', recentLog: [...state.recentLog, event].slice(-200) },
+            events: [event],
+          };
+        }
+        const event: GameEvent = { type: 'debt_entered', debtorId: playerId, creditorId: null, amount: 50 };
         return {
           ok: true,
-          state: { ...state, debt: null, turnPhase: 'managing', recentLog: [...state.recentLog, event].slice(-200) },
+          state: {
+            ...state,
+            debt: { debtorId: playerId, creditorId: null, amount: 50 },
+            turnPhase: 'managing',
+            recentLog: [...state.recentLog, event].slice(-200),
+          },
           events: [event],
         };
-      }
-      const event: GameEvent = { type: 'debt_entered', debtorId: playerId, creditorId: null, amount: 50 };
-      return {
-        ok: true,
-        state: {
-          ...state,
-          debt: { debtorId: playerId, creditorId: null, amount: 50 },
-          turnPhase: 'managing',
-          recentLog: [...state.recentLog, event].slice(-200),
-        },
-        events: [event],
-      };
+      },
     },
   };
 }
@@ -1660,7 +1807,7 @@ describe('offline takeover', () => {
       message: 'The current player is not a human.',
     });
 
-    const debt = startedRoomWithOfflineActorGateway(debtDuringTakeoverGateway());
+    const debt = startedRoomWithOfflineActorGateway(debtDuringTakeoverGateway().gateway);
     // The typed gateway seam supplies debt through a canonical committed transition, not a mutable snapshot.
     const debtResult = applyRoomGameIntent(debt.manager, '000007', debt.actor, { type: 'roll_dice' });
     expect(debtResult.ok).toBe(true);
@@ -1783,26 +1930,120 @@ describe('offline takeover', () => {
   });
 
 
-  test('debt during takeover clears the lock without rescheduling, allowing reconnect and manual debt resolution', () => {
-    const { asyncEvents, manager, timers, actor, host } = startedRoomWithOfflineActorGateway(debtDuringTakeoverGateway(), {
-      delays: [731, 732],
+  test('debt during takeover keeps the lock, reschedules automation, and the takeover clears the debt itself', () => {
+    const controlled = debtDuringTakeoverGateway();
+    const { asyncEvents, manager, timers, actor, host } = startedRoomWithOfflineActorGateway(controlled.gateway, {
+      delays: [731, 732, 733],
     });
     expect(requestOfflineTakeover(manager, '000007', host).ok).toBe(true);
     const handle = takeoverTimers(timers)[0];
     if (handle === undefined) throw new Error('expected debt takeover timer');
     handle.callback();
-    expect(getCommittedGameState(manager).debt?.debtorId).toBe(actor);
-    expect(takeoverTimers(timers)).toEqual([]);
-    expect(graceTimers(timers)).toHaveLength(1);
-    expect(asyncEvents.filter((event) => event.type === 'room_state')).toEqual([
-      expect.objectContaining({ room: expect.objectContaining({ takeoverPlayerId: null }) }),
-    ]);
-    const timerCount = timers.length;
 
-    expect(manager.resumeRoom('000007', actor, actor === 'host' ? 'tok-host' : 'tok-guest').ok).toBe(true);
-    expect(applyRoomGameIntent(manager, '000007', actor, { type: 'end_turn' }).ok).toBe(true);
+    // 托管第一步把玩家推进了债务。这一步之后必须**继续托管**，而不是退回 15s 重连宽限：
+    // 旧契约（欠债即清空托管、只留宽限）在「离线玩家根本不会回来」时就是静默冻结——
+    // 宽限到点后 #maybeAutoTakeover 又会因为 debt !== null 直接返回，房间停在零活跃计时器、
+    // 零服务端错误的状态（整局冒烟已复现：拍卖把电脑现金掏空后立刻欠租，stalledAtStep 1945）。
+    expect(getCommittedGameState(manager).debt?.debtorId).toBe(actor);
+    const rescheduled = takeoverTimers(timers);
+    expect(rescheduled).toHaveLength(1);
+    expect(rescheduled[0]?.delayMs).toBe(732);
+    expect(rescheduled[0]).not.toBe(handle);
+    // 依然是 markDisconnected 留下的那一条重连宽限（显式托管请求不取消它；它到点后看到托管仍在会自行退出）。
+    // 关键在于**没有新增**宽限计时器来顶替托管——旧契约正是清空托管后改排一条新的 15s 宽限。
+    expect(graceTimers(timers)).toHaveLength(1);
+    expect(manager.getPublicRoom('000007')).toEqual(expect.objectContaining({ takeoverPlayerId: actor }));
+    // 保留托管就不会有「锁被清掉」的广播；旧契约这里会多出一条 takeoverPlayerId: null。
+    expect(asyncEvents.filter((event) => event.type === 'room_state')).toEqual([]);
+
+    // 债务清偿必须由托管交给 bot 策略：照 managing 阶段查表会发 end_turn，欠债时的 end_turn 必然吃 WRONG_PHASE。
+    const ticksBefore = controlled.intents().length;
+    takeoverTimers(timers)[0]?.callback();
+    expect(controlled.intents().slice(ticksBefore)).toEqual(['declare_bankrupt']);
     expect(getCommittedGameState(manager).debt).toBeNull();
-    expect(timers).toHaveLength(timerCount);
+
+    // 债务清了，但这一回合仍然托管着：锁继续持有，直到整回合走完。
+    expect(manager.getPublicRoom('000007')).toEqual(expect.objectContaining({ takeoverPlayerId: actor }));
+    expect(takeoverTimers(timers)).toHaveLength(1);
+    expect(takeoverTimers(timers)[0]?.delayMs).toBe(733);
+    expect(graceTimers(timers)).toHaveLength(1);
+
+    // 托管持有锁期间真人即使重连也不能插手动这一步——与托管期间其它任何一步一致。
+    expect(manager.resumeRoom('000007', actor, actor === 'host' ? 'tok-host' : 'tok-guest').ok).toBe(true);
+    expect(takeoverTimers(timers)).toHaveLength(1);
+    const locked = applyRoomGameIntent(manager, '000007', actor, { type: 'end_turn' });
+    expect(locked.ok).toBe(false);
+    if (locked.ok) throw new Error('takeover lock unexpectedly released while clearing debt');
+    expect(locked.code).toBe('INVALID_ROOM_ACTION');
+    expect(getCommittedGameState(manager).debt).toBeNull();
     expect(JSON.stringify(asyncEvents)).not.toContain('tok-');
+  });
+});
+
+describe('议价挂起时的自动化排期（#105 / #106）', () => {
+  test('a bot as the trade target is scheduled to answer, so the proposal cannot hang the room', () => {
+    const controlled = bargainingSchedulingGateway();
+    const { asyncEvents, manager, timers } = startedWithHumanTurnAfterBot('botA', controlled.gateway, [751, 752]);
+
+    const proposed = applyRoomGameIntent(manager, '000007', 'host', {
+      type: 'propose_trade',
+      targetId: 'botA',
+      offer: { cash: 0, cellIds: [] },
+      request: { cash: 0, cellIds: [] },
+    });
+    expect(proposed.ok).toBe(true);
+    if (!proposed.ok) throw new Error('propose_trade was rejected');
+    expect(getCommittedGameState(manager).turnPhase).toBe('awaiting_trade_response');
+
+    // 报价挂起时的行动者是**报价目标** botA，所以必须为它排电脑自动化。
+    // 若 #engineActor 退化成 currentPlayerId（真人 host），这里一个计时器都不会有：
+    // 真人发 respond_trade 会被引擎判 NOT_YOUR_TURN、电脑又没人驱动，房间就停在
+    // 「等 botA 答复」且零活跃计时器——线上表现正是「一直显示某人行动中、谁都没法继续」。
+    const answerTick = activeTimers(timers);
+    expect(answerTick).toHaveLength(1);
+    expect(answerTick[0]?.delayMs).toBe(752);
+    // 电脑答复走的是 bot 自动化，不是离线托管：房间不该出现「托管锁」。
+    expect(manager.getPublicRoom('000007')).toEqual(expect.objectContaining({ takeoverPlayerId: null }));
+
+    answerTick[0]?.callback();
+    expect(controlled.applied().at(-1)).toBe('respond_trade');
+    const settled = getCommittedGameState(manager);
+    expect(settled.pendingTrade).toBeNull();
+    expect(settled.turnPhase).toBe('managing');
+    // 答复完毕即无待驱动的行动者，不应留下任何悬空计时器。
+    expect(activeTimers(timers)).toEqual([]);
+    // 而且回合主人立刻能继续行动——议价流程不会把这一回合吞掉。
+    expect(applyRoomGameIntent(manager, '000007', 'host', { type: 'end_turn' }).ok).toBe(true);
+    expect(activeTimers(timers)).toEqual([]);
+
+    // 手动意图的事件是**返回给调用方**（由 socket 层广播）的，只有自动化提交才走 onAsyncEvents。
+    expect(engineEventTypes(proposed.events)).toContain('trade_proposed');
+    expect(engineEventTypes(asyncEvents)).toContain('trade_resolved');
+  });
+
+  test('a bot as the current bidder is scheduled to bid, so the auction cannot hang the room', () => {
+    const controlled = bargainingSchedulingGateway();
+    const { asyncEvents, manager, timers } = startedWithHumanTurnAfterBot('botA', controlled.gateway, [761, 762]);
+
+    const declined = applyRoomGameIntent(manager, '000007', 'host', { type: 'skip_buy' });
+    expect(declined.ok).toBe(true);
+    if (!declined.ok) throw new Error('skip_buy was rejected');
+    expect(getCommittedGameState(manager).turnPhase).toBe('awaiting_auction_bid');
+
+    // 同理：拍卖挂起时的行动者是**轮到的叫价者** botA（不是回合主人 host）。
+    const bidTick = activeTimers(timers);
+    expect(bidTick).toHaveLength(1);
+    expect(bidTick[0]?.delayMs).toBe(762);
+    expect(manager.getPublicRoom('000007')).toEqual(expect.objectContaining({ takeoverPlayerId: null }));
+
+    bidTick[0]?.callback();
+    expect(controlled.applied().at(-1)).toBe('place_bid');
+    const settled = getCommittedGameState(manager);
+    expect(settled.pendingAuction).toBeNull();
+    expect(settled.turnPhase).toBe('managing');
+    expect(activeTimers(timers)).toEqual([]);
+
+    expect(engineEventTypes(declined.events)).toContain('auction_started');
+    expect(engineEventTypes(asyncEvents)).toContain('auction_resolved');
   });
 });

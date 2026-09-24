@@ -376,6 +376,32 @@ describe('RoomManager 落盘与恢复', () => {
     expect(restarted.manager.getRoomSettings(ROOM_CODE)).toMatchObject({ ruleConfig });
   });
 
+  test('悔棋开关随快照落盘并在重启后恢复；旧快照缺这个字段则按「关闭」处理', () => {
+    const directory = makeSnapshotDirectory();
+    const harness = createHarness({
+      playerIds: ['host', 'guest'],
+      tokens: ['tok-host', 'tok-guest'],
+      snapshotStore: createRoomSnapshotStore({ directory }),
+    });
+    expect(harness.manager.createRoom('房主', 'china-tour').ok).toBe(true);
+    expect(harness.manager.joinRoom(ROOM_CODE, '客人').ok).toBe(true);
+    expect(harness.manager.updateRoomSettings(ROOM_CODE, 'host', { minimalUndoEnabled: true }).ok).toBe(true);
+    expect(readRecord(directory).minimalUndoEnabled).toBe(true);
+
+    const restarted = createHarness({ snapshotStore: createRoomSnapshotStore({ directory }) });
+    expect(restarted.manager.getRoomSettings(ROOM_CODE)?.minimalUndoEnabled).toBe(true);
+
+    // 旧版本写下的快照里根本没这个字段：恢复时按「关闭」处理即可，
+    // 绝不能因为少一个可选的设置项就把整间房判成损坏丢掉。
+    const legacy = readRecord(directory);
+    delete (legacy as { minimalUndoEnabled?: boolean }).minimalUndoEnabled;
+    writeFileSync(snapshotFile(directory), JSON.stringify(legacy), 'utf8');
+
+    const legacyRestarted = createHarness({ snapshotStore: createRoomSnapshotStore({ directory }) });
+    expect(legacyRestarted.manager.getPublicRoom(ROOM_CODE)?.status).toBe('lobby');
+    expect(legacyRestarted.manager.getRoomSettings(ROOM_CODE)?.minimalUndoEnabled).toBe(false);
+  });
+
   test('房间规则越界或非房主提交时被拒，已有设置不被污染', () => {
     const directory = makeSnapshotDirectory();
     const harness = createHarness({

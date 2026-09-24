@@ -66,6 +66,21 @@ export interface RoomSnapshotRecord {
    * 具体字段的范围校验放在 `RoomManager.#restoreRoom`，那里才能拿到地图的 maxHouseLevel。
    */
   ruleConfig?: RoomRuleConfig | null;
+  /**
+   * 联机最小悔棋开关（#101）；**缺省即 `false`**。
+   *
+   * 与 `ruleConfig` 同样的理由保持**可选**：`schemaVersion` 因此可以继续停在 1，
+   * 那些「在本字段引入之前写下」的快照在部署重启后仍能恢复 —— 抬版本号会把所有
+   * 进行中的对局整间丢掉，而这个字段缺省时语义明确（没开 = 关），没有抬版本的必要。
+   */
+  minimalUndoEnabled?: boolean;
+  /**
+   * 房规「放弃购买即拍卖」（#106）；**缺省即 `false`**。
+   *
+   * 与上两个字段同样的理由保持**可选**（`schemaVersion` 继续停在 1）：缺省语义明确
+   * （没开 = 关），而抬版本号会连带把「在本字段引入之前写下」的进行中对局整间丢掉。
+   */
+  auctionOnDecline?: boolean;
   players: RoomSnapshotPlayerRecord[];
   spectators: RoomSnapshotSpectatorRecord[];
   createRequestId: string | null;
@@ -292,6 +307,8 @@ export function isRoomSnapshotRecord(value: unknown): value is RoomSnapshotRecor
   if (typeof value.status !== 'string' || !ROOM_STATUSES.has(value.status)) return false;
   if (typeof value.hostId !== 'string' || value.hostId.length === 0) return false;
   if (typeof value.botDifficulty !== 'string' || !BOT_DIFFICULTIES.has(value.botDifficulty)) return false;
+  if (value.minimalUndoEnabled !== undefined && typeof value.minimalUndoEnabled !== 'boolean') return false;
+  if (value.auctionOnDecline !== undefined && typeof value.auctionOnDecline !== 'boolean') return false;
   if (!Array.isArray(value.players) || value.players.length === 0) return false;
   if (!value.players.every(isPlayerRecord)) return false;
   if (!Array.isArray(value.spectators) || !value.spectators.every(isSpectatorRecord)) return false;

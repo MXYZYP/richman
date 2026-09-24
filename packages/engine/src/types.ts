@@ -11,7 +11,8 @@ import type {
 } from '@richman/board-data';
 
 // 核心类型定义（字段名以 plan/03 §4.1 为准）
-// 本版无监狱字段（01 §8 关闭）、无交易字段（01 §10 关闭）——注释中标明未来扩展点
+// 本版无监狱字段（01 §8 关闭）；交易（01 §10）与拍卖已启用（#105 / #106），
+// 见下方 PendingTrade / PendingAuction。
 
 // === 阶段 ===
 export type Phase = 'playing' | 'game_over';
@@ -21,6 +22,12 @@ export type TurnPhase =
   | 'awaiting_airport_roll'
   | 'awaiting_buy_decision'
   | 'awaiting_build_decision'
+  // 交易（#105）：当前玩家在 managing 阶段发起报价后，暂停回合等待**对手**答复。
+  // 答复者是 pendingTrade.targetId（不是 currentPlayerId）——这是引擎里唯一
+  // 「当前行动者之外的玩家可以合法提交意图」的阶段，applyIntent 的全局闸门为此开了特例。
+  | 'awaiting_trade_response'
+  // 拍卖（#106）：放弃购买且房规开启拍卖时进入。由 pendingAuction.bidderId 按座次轮流叫价 / 弃权。
+  | 'awaiting_auction_bid'
   | 'managing';
 // 未来启用监狱时增加 'awaiting_jail_decision'
 
@@ -42,6 +49,36 @@ export interface PublicRuleState {
   readonly pendingActions: readonly PendingModuleAction[];
 }
 
+// === 交易（#105）===
+/** 交易的一侧：现金 + 地产格。cellIds 必须全部属于该侧的付出方。 */
+export interface TradeSide {
+  readonly cash: number;
+  readonly cellIds: readonly number[];
+}
+
+/** 待答复的交易报价（turnPhase === 'awaiting_trade_response' 时必定非 null）。 */
+export interface PendingTrade {
+  readonly proposerId: string;
+  readonly targetId: string;
+  /** 发起方付出的东西。 */
+  readonly offer: TradeSide;
+  /** 发起方索取的东西。 */
+  readonly request: TradeSide;
+}
+
+// === 拍卖（#106）===
+/** 一次进行中的拍卖。轮到的叫价者是 `bidderId`（座次在 decliner 之后的存活玩家依次轮转）。 */
+export interface PendingAuction {
+  readonly cellId: number;
+  /** 轮到谁叫价 / 弃权。 */
+  readonly bidderId: string;
+  /** 当前最高出价者；null = 还没有人出价。 */
+  readonly leaderId: string | null;
+  readonly leaderBid: number;
+  /** 已弃权的玩家（永久退出本轮拍卖）。 */
+  readonly passedIds: readonly string[];
+}
+
 // === 游戏状态 ===
 export interface GameState {
   readonly mapRef: MapRef;                  // exact 地图身份；存档/重连不得 fallback 到其他版本
@@ -58,7 +95,15 @@ export interface GameState {
   debt: DebtState | null;          // 债务状态（01 §11）；同一时刻仅一笔，多笔按座次逐笔进入（E15）
   // 单机真人作弊：抽卡效果结算前的待确认状态；仅 createGame 显式开启时存在（联机/电脑玩家不产生）
   cardChoice?: CardChoiceState;
-  // 未来启用交易时增加 pendingTrade
+  // 交易报价（#105）：可选字段，缺省视为「没有进行中的交易」。
+  // 刻意做成可选：既有存档 / 房间快照都不含这个键，强制必填会把它们一律判成损坏
+  // （与 cardChoice 同一取舍；hydrate 里对「缺键」按 null 处理）。
+  pendingTrade?: PendingTrade | null;
+  // 拍卖（#106）：可选字段，缺省视为「没有进行中的拍卖」。
+  pendingAuction?: PendingAuction | null;
+  // 房规「放弃购买即拍卖」（#106）：可选，缺省 false = 沿用既有「无拍卖」行为。
+  // 与 cashGoal 一样属于对局级选项，不进 GameConfig（那是地图包的一部分，受 contentHash 约束）。
+  auctionOnDecline?: boolean;
   lastDice: number[] | null;
   recentLog: GameEvent[];          // 最近 200 条事件（供重连/刷新重建日志）
   winnerId: string | null;
@@ -145,10 +190,19 @@ export type CoreIntent =
   | { type: 'surrender' }
   // 单机真人作弊：仅当 state.cardChoice.pending 指向该玩家时可用（联机/电脑玩家永不产生 pending）
   | { type: 'redraw_card' }
-  | { type: 'accept_card' };
+  | { type: 'accept_card' }
+  // === 交易（#105）===
+  // 报价由**当前玩家**在 managing 阶段发起（offer=我付出，request=我索取），
+  // 随后暂停回合等 targetId 答复；答复只能由 targetId 本人发出（applyIntent 开了特例）。
+  | { type: 'propose_trade'; targetId: string; offer: TradeSide; request: TradeSide }
+  | { type: 'respond_trade'; accept: boolean }
+  // 发起者本人撤回尚未答复的报价（对手离线 / 改变主意时用，避免回合被无限挂住）。
+  | { type: 'cancel_trade' }
+  // === 拍卖（#106）===
+  | { type: 'place_bid'; amount: number }
+  | { type: 'pass_bid' };
 export type Intent = CoreIntent | ModuleIntent;
-// 未来模块保留（本版不实现）：
-// use_jail_card / jail_roll（监狱）、propose_trade / respond_trade（交易）
+// 未来模块保留（本版不实现）：use_jail_card / jail_roll（监狱）
 
 // === GameEvent（动画与日志驱动源，03 §4.3）===
 // 客户端按顺序播放动画，全部播完后界面应与快照一致
@@ -178,10 +232,30 @@ export type CoreGameEvent =
   // 主动投降出局：现金及资产清零、名下地产转为无主可售；两人对局时 creditorId 指向对手（按破产流程结算）。
   | { type: 'player_surrendered'; playerId: string; creditorId: string | null; transferredCash: number }
   | { type: 'turn_ended'; playerId: string }
+  // === 交易（#105）===
+  // 刻意不带 offer / request 明细：报价全文在 state.pendingTrade 里，事件只负责驱动战报与动画，
+  // 塞进日志会让「最近 200 条」被交易明细挤满（且 hydrate 要为此写一层嵌套校验）。
+  | { type: 'trade_proposed'; proposerId: string; targetId: string }
+  // 结算事件：accepted=false 时后续字段全为 0/空（仅用于战报文案）。
+  | {
+      type: 'trade_resolved';
+      proposerId: string;
+      targetId: string;
+      accepted: boolean;
+      cashFromProposer: number;
+      cashFromTarget: number;
+      cellsToProposer: readonly number[];
+      cellsToTarget: readonly number[];
+    }
+  | { type: 'trade_cancelled'; proposerId: string; targetId: string }
+  // === 拍卖（#106）===
+  | { type: 'auction_started'; cellId: number; firstBidderId: string }
+  | { type: 'auction_bid_placed'; playerId: string; cellId: number; amount: number }
+  | { type: 'auction_passed'; playerId: string; cellId: number }
+  | { type: 'auction_resolved'; cellId: number; winnerId: string | null; amount: number }
   | { type: 'game_over'; winnerId: string; reason: 'last_standing' | 'cash_goal' };
 export type GameEvent = CoreGameEvent | ModuleEvent;
-// 未来模块保留事件（本版不产生）：
-// sent_to_jail / jail_roll_failed / jail_exited（监狱）、trade_proposed / trade_resolved（交易）
+// 未来模块保留事件（本版不产生）：sent_to_jail / jail_roll_failed / jail_exited（监狱）
 
 // === applyIntent 结果（03 §4）===
 export type ApplyResult =

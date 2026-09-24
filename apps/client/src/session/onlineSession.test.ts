@@ -39,6 +39,10 @@ function createPublicSnapshot(overrides: Partial<PublicGameSnapshot> = {}): Publ
       chance: state.decks.chance.length,
       destiny: state.decks.destiny.length,
     },
+    // 议价（#105/#106）三个新字段：`?? null` / `=== true` 归一，与 publicGameSnapshot 的服务端投影同源。
+    pendingTrade: state.pendingTrade ?? null,
+    pendingAuction: state.pendingAuction ?? null,
+    auctionOnDecline: state.auctionOnDecline === true,
     ...overrides,
   };
 }
@@ -104,7 +108,9 @@ describe('online session', () => {
     const session = createOnlineSession({ storage, socketFactory: () => socket as never });
 
     expect([...listeners.keys()]).toEqual([
-      'room:state', 'player:connection', 'room:closed', 'game:events', 'game:snapshot', 'room:chat_broadcast', 'room:chat_history', 'room:settings', 'connect', 'disconnect', 'connect_error',
+      'room:state', 'player:connection', 'room:closed', 'game:events', 'game:snapshot', 'room:chat_broadcast', 'room:chat_history', 'room:settings',
+      'room:undo_request', 'room:undo_result', 'room:undo_available',
+      'connect', 'disconnect', 'connect_error',
     ]);
     const staleRoomState = listeners.get('room:state');
     void session.create('房主', 'china-tour');
@@ -2824,5 +2830,208 @@ describe('online session spectators', () => {
       { id: 'spec-1', nickname: '观众甲', online: false },
     ]);
     expect(session.room.value?.players.every((player) => player.online)).toBe(true);
+  });
+});
+
+describe('online session minimal undo', () => {
+  const flush = async (): Promise<void> => { await Promise.resolve(); await Promise.resolve(); };
+
+  function undoRoom() {
+    return {
+      roomCode: '000007',
+      status: 'playing',
+      hostId: 'player-1',
+      players: [
+        { id: 'player-1', nickname: '房主', isBot: false, online: true },
+        { id: 'player-2', nickname: '客人', isBot: false, online: true },
+      ],
+      spectators: [],
+      takeoverPlayerId: null,
+      map: CHINA_ROOM_MAP,
+    };
+  }
+
+  function undoRequest(overrides: Record<string, unknown> = {}) {
+    return {
+      requestId: 'req-1',
+      requesterId: 'player-1',
+      requesterNickname: '房主',
+      voterIds: ['player-2'],
+      approvals: [],
+      expiresAt: 1_800_000_000_000,
+      ...overrides,
+    };
+  }
+
+  async function connectUndoSession(localPlayerId = 'player-1', snapshot: PublicGameSnapshot | null = null) {
+    const emissions: unknown[][] = [];
+    const listeners = new Map<string, (...args: unknown[]) => void>();
+    const storage = new MemoryStorage();
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '000007', playerId: localPlayerId, token: 'tkn' }));
+    const socket = {
+      connected: true,
+      on(event: string, listener: (...args: unknown[]) => void) { listeners.set(event, listener); return this; },
+      off(event: string) { listeners.delete(event); return this; },
+      emit(...args: unknown[]) { emissions.push(args); return this; },
+      disconnect() { return this; },
+    };
+    const session = createOnlineSession({ storage, socketFactory: () => socket as never });
+    const resumeEmit = emissions.find((emission) => emission[0] === 'session:resume');
+    (resumeEmit?.at(-1) as (ack: unknown) => void)({
+      ok: true,
+      room: undoRoom(),
+      ...(snapshot === null ? {} : { snapshot }),
+    });
+    await flush();
+    return { session, emissions, listeners };
+  }
+
+  it('只把可悔权交给服务端指名的那个人', async () => {
+    const { session, listeners } = await connectUndoSession('player-1');
+    expect(session.undoAvailability.value).toBeNull();
+    expect(session.canRequestUndo.value).toBe(false);
+
+    listeners.get('room:undo_available')?.({ playerId: 'player-1' });
+    expect(session.undoAvailability.value).toBe('player-1');
+    expect(session.canRequestUndo.value).toBe(true);
+
+    // 可悔权在别人手上（对手刚走完一步）：本机不该出现任何按钮。
+    listeners.get('room:undo_available')?.({ playerId: 'player-2' });
+    expect(session.canRequestUndo.value).toBe(false);
+
+    // 没人可悔。
+    listeners.get('room:undo_available')?.({ playerId: null });
+    expect(session.canRequestUndo.value).toBe(false);
+    session.dispose();
+  });
+
+  it('按请求内容派生「我该不该投票」与「是不是我在等确认」', async () => {
+    const voter = await connectUndoSession('player-2');
+    voter.listeners.get('room:undo_request')?.(undoRequest());
+    expect(voter.session.undoRequest.value?.requestId).toBe('req-1');
+    expect(voter.session.canVoteUndo.value).toBe(true);
+    expect(voter.session.isUndoRequester.value).toBe(false);
+
+    // 已经表态过的人不再显示投票按钮（重复同意是幂等的，UI 也不该留一个能重复点的按钮）。
+    voter.listeners.get('room:undo_request')?.(undoRequest({ approvals: ['player-2'] }));
+    expect(voter.session.canVoteUndo.value).toBe(false);
+    voter.session.dispose();
+
+    const requester = await connectUndoSession('player-1');
+    requester.listeners.get('room:undo_request')?.(undoRequest());
+    expect(requester.session.isUndoRequester.value).toBe(true);
+    expect(requester.session.canVoteUndo.value).toBe(false);
+    requester.session.dispose();
+  });
+
+  it('等待请求存在时不能再发起，收到结果后立刻恢复', async () => {
+    const { session, listeners } = await connectUndoSession('player-1');
+    listeners.get('room:undo_available')?.({ playerId: 'player-1' });
+    expect(session.canRequestUndo.value).toBe(true);
+
+    listeners.get('room:undo_request')?.(undoRequest());
+    expect(session.canRequestUndo.value).toBe(false);
+
+    listeners.get('room:undo_result')?.({ requestId: 'req-1', outcome: 'rejected' });
+    expect(session.undoRequest.value).toBeNull();
+    expect(session.canRequestUndo.value).toBe(true);
+    session.dispose();
+  });
+
+  it('四种结局各给一句即时提示', async () => {
+    const { session, listeners } = await connectUndoSession('player-1');
+
+    for (const [outcome, message] of [
+      ['applied', '悔棋已通过，退回上一步'],
+      ['rejected', '悔棋被拒绝'],
+      ['cancelled', '悔棋请求已撤回'],
+      ['expired', '悔棋请求超时，未获全部确认'],
+    ] as const) {
+      listeners.get('room:undo_result')?.({ requestId: `req-${outcome}`, outcome });
+      expect(session.transientNotice.value?.message).toBe(message);
+    }
+    session.dispose();
+  });
+
+  it('applied 之后的快照按硬重置同步落地，不留动画尾巴', async () => {
+    const initial = createPublicSnapshot();
+    const { session, listeners } = await connectUndoSession('player-1', initial);
+    // 重连时带下来的快照同样是硬重置路径，位置应当已经就位。
+    expect(session.displayPositions.value['player-1']).toBe(initial.players[0]?.position);
+
+    const jumped = createPublicSnapshot({
+      players: initial.players.map((player, index) => (index === 0 ? { ...player, position: 9 } : player)),
+    });
+    listeners.get('game:snapshot')?.({ state: jumped });
+    listeners.get('room:undo_result')?.({ requestId: 'req-applied', outcome: 'applied' });
+    listeners.get('game:snapshot')?.({ state: initial });
+
+    // 时间线倒退了，不能拿增量动画播：位置必须同步回到快照值，也不能留下动画态。
+    expect(session.displayPositions.value['player-1']).toBe(initial.players[0]?.position);
+    expect(session.isAnimating.value).toBe(false);
+    expect(session.state.value?.players.find((player) => player.id === 'player-1')?.position)
+      .toBe(initial.players[0]?.position);
+    session.dispose();
+  });
+
+  it('迟到的结果不会抹掉刚发起的新请求', async () => {
+    const { session, listeners } = await connectUndoSession('player-1');
+
+    listeners.get('room:undo_request')?.(undoRequest({ requestId: 'req-new' }));
+    listeners.get('room:undo_result')?.({ requestId: 'req-old', outcome: 'expired' });
+    expect(session.undoRequest.value?.requestId).toBe('req-new');
+
+    listeners.get('room:undo_result')?.({ requestId: 'req-new', outcome: 'cancelled' });
+    expect(session.undoRequest.value).toBeNull();
+    session.dispose();
+  });
+
+  it('发起 / 表决 / 撤回各发一条事件，且身份不随载荷传递', async () => {
+    const { session, emissions } = await connectUndoSession('player-1');
+    const before = emissions.length;
+
+    void session.requestUndo();
+    void session.voteUndo('req-1', true);
+    void session.cancelUndo();
+    await flush();
+
+    const sent = emissions.slice(before);
+    expect(sent.map((row) => row[0])).toEqual(['room:undo_request', 'room:undo_vote', 'room:undo_cancel']);
+    expect(sent[1]?.[1]).toEqual({ requestId: 'req-1', approve: true });
+    // 请求体里不带「我是谁」：服务端从连接绑定里取身份，客户端没有伪造入口。
+    expect(typeof sent[0]?.[1]).toBe('function');
+    expect(typeof sent[2]?.[1]).toBe('function');
+    session.dispose();
+  });
+
+  it('悔棋开关只认服务端给的 room:settings，缺字段按关闭处理', async () => {
+    const { session, listeners } = await connectUndoSession('player-1');
+
+    listeners.get('room:settings')?.({ botDifficulty: 'normal', ruleConfig: null, minimalUndoEnabled: true });
+    expect(session.roomSettings.value?.minimalUndoEnabled).toBe(true);
+
+    listeners.get('room:settings')?.({ botDifficulty: 'normal', ruleConfig: null });
+    expect(session.roomSettings.value?.minimalUndoEnabled).toBe(false);
+    session.dispose();
+  });
+
+  it('观战者不能发起 / 表决 / 撤回悔棋', async () => {
+    const harness = await connectUndoSession('player-1');
+    // 房间广播把我从成员名单挪进观众名单：身份是派生的，一切悔棋操作随之失效。
+    harness.listeners.get('room:state')?.({
+      ...undoRoom(),
+      players: [{ id: 'player-2', nickname: '客人', isBot: false, online: true }],
+      spectators: [{ id: 'player-1', nickname: '房主', online: true }],
+    });
+    expect(harness.session.isSpectator.value).toBe(true);
+
+    const before = harness.emissions.length;
+    void harness.session.requestUndo();
+    void harness.session.voteUndo('req-1', true);
+    void harness.session.cancelUndo();
+    await flush();
+
+    expect(harness.emissions.slice(before)).toEqual([]);
+    harness.session.dispose();
   });
 });

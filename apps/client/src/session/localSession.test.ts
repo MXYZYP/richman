@@ -55,6 +55,14 @@ function selectDebtSequenceAction(
     case 'managing':
       intentType = 'end_turn';
       break;
+    // 议价阶段（#105 交易 / #106 拍卖）当前玩家只能收尾：交易由目标答复、拍卖由叫价者出价，
+    // 这里只是为了让 switch 穷尽，正常债务流程不会走到这两个阶段。
+    case 'awaiting_trade_response':
+      intentType = 'cancel_trade';
+      break;
+    case 'awaiting_auction_bid':
+      intentType = 'pass_bid';
+      break;
   }
   const action = actions.find((candidate) => candidate.intent.type === intentType);
   if (!action) throw new Error(`No ${intentType} action for debt sequence phase ${phase}`);

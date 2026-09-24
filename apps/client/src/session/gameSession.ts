@@ -1,7 +1,7 @@
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import type { GameState, Intent } from '@richman/engine';
 import type { MapPresentation } from '@richman/board-data';
-import type { ChatMessage, PublicRoomState } from '@richman/protocol';
+import type { ChatMessage, PublicRoomState, RoomSettings, UndoRequestInfo } from '@richman/protocol';
 import type { ClientAction, DisplayCard } from '../game/clientGame';
 
 /** Display-safe game state: no engine seed or private deck queues. */
@@ -74,4 +74,28 @@ export interface GameSession {
   undo?(): Promise<void>;
   /** 重新动画播放本局（仅本地热座对局提供）。 */
   replay?(): Promise<void>;
+  /**
+   * 房间设置（#4 / #6 / #101）：仅联机提供，由服务端 `room:settings` 广播驱动。
+   * 本地热座没有房间概念，因此不提供这个字段。
+   */
+  readonly roomSettings?: Ref<RoomSettings | null>;
+  /**
+   * 联机最小悔棋（#101）——与上面的本地悔棋是**两套机制**，不要混：
+   * 本地没有别人，回退就是本地回退；联机的回退要经在场对手逐一确认，由服务端裁决。
+   */
+  readonly undoRequest?: Ref<UndoRequestInfo | null>;
+  /** 「此刻谁可以发起悔棋」的玩家 id（服务端算好广播的），`null` = 没人可悔。 */
+  readonly undoAvailability?: Ref<string | null>;
+  /** 本机玩家此刻能否发起联机悔棋。 */
+  readonly canRequestUndo?: ComputedRef<boolean>;
+  /** 本机玩家是否需要对当前这次联机悔棋表态。 */
+  readonly canVoteUndo?: ComputedRef<boolean>;
+  /** 当前联机悔棋请求是否由我发起。 */
+  readonly isUndoRequester?: ComputedRef<boolean>;
+  /** 发起联机悔棋（需房主开启；真正回退要全部对手同意）。 */
+  requestUndo?(): Promise<void>;
+  /** 对联机悔棋请求表决：同意 / 拒绝。 */
+  voteUndo?(requestId: string, approve: boolean): Promise<void>;
+  /** 撤回自己尚未有结果的联机悔棋请求。 */
+  cancelUndo?(): Promise<void>;
 }

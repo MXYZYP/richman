@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
-import GameSetup from './components/GameSetup.vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import HomeView from './views/HomeView.vue';
 import RestoreView from './views/RestoreView.vue';
-import LobbyView from './views/LobbyView.vue';
-import GameView from './views/GameView.vue';
+// 首屏分包（待-10）：首页只做「创建/加入/本机同乐」这一层，不需要对局 UI 与音频。
+// 三个页面级视图改为异步组件后，它们各自的代码与独占依赖（棋盘/资产面板/结算弹层/
+// 音效与 BGM/MobileSheet…）会切到独立 chunk，进入对应流程时才加载。
+const GameSetup = defineAsyncComponent(() => import('./components/GameSetup.vue'));
+const LobbyView = defineAsyncComponent(() => import('./views/LobbyView.vue'));
+const GameView = defineAsyncComponent(() => import('./views/GameView.vue'));
 import {
   createInitialLocalGameState,
   createLocalSession,

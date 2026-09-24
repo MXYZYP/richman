@@ -1,6 +1,6 @@
 import type { BotDifficulty, GameEvent, GameState } from '@richman/engine';
 import type { MapPack, MapRef } from '@richman/board-data';
-import type { PublicRoomPlayer, PublicRoomSpectator, PublicRoomState, RoomRuleConfig, RoomSettings, RoomStatus } from '@richman/protocol';
+import type { PublicRoomPlayer, PublicRoomSpectator, PublicRoomState, RoomRuleConfig, RoomSettings, RoomStatus, UndoRequestInfo, UndoResultInfo } from '@richman/protocol';
 import type { GameRuntimeGateway } from '../game/gameRuntime';
 import type { RoomFailure, WireFailure } from './roomErrors';
 import type { RoomSnapshotStore } from './roomSnapshotStore';
@@ -17,6 +17,13 @@ export type RoomDomainEvent =
    * 设置是低频、独立的一类数据，单独一条事件更诚实。
    */
   | { type: 'room_settings'; roomCode: string; settings: RoomSettings }
+  /**
+   * 悔棋请求 / 结果 / 可悔权（#101）。三条都走独立事件，理由同上：
+   * 它们是围绕「某一步」的旁路信息，不属于房间成员投影，也不该动 PublicRoomState 的形状。
+   */
+  | { type: 'undo_request'; roomCode: string; request: UndoRequestInfo }
+  | { type: 'undo_result'; roomCode: string; result: UndoResultInfo }
+  | { type: 'undo_available'; roomCode: string; playerId: string | null }
   | { type: 'player_connection'; roomCode: string; playerId: string; online: boolean }
   | { type: 'room_closed'; roomCode: string; reason: 'empty_lobby' | 'lobby_idle_timeout' }
   | { type: 'game_events'; roomCode: string; events: GameEvent[] }
@@ -102,6 +109,10 @@ export interface Room {
   /** 房主自定义规则（#4）：只覆盖 initialCash / maxHouseLevel / mortgageInterestRate；
    *  null = 完全使用地图 game-config 的默认值。 */
   ruleConfig: RoomRuleConfig | null;
+  /** 联机最小悔棋开关（#101）：房主在大厅设定，开局后生效。 */
+  minimalUndoEnabled: boolean;
+  /** 房规「放弃购买即拍卖」（#106）：房主在大厅设定，开局时写进 createGame 的 auctionOnDecline。 */
+  auctionOnDecline: boolean;
   players: RoomPlayer[];
   spectators: RoomSpectator[];
   gameState: GameState | null;

@@ -203,6 +203,11 @@ export const CORE_INTENT_HANDLER_TYPES = Object.freeze({
   surrender: true,
   redraw_card: true,
   accept_card: true,
+  propose_trade: true,
+  respond_trade: true,
+  cancel_trade: true,
+  place_bid: true,
+  pass_bid: true,
 } satisfies Record<CoreIntent['type'], true>);
 
 function moduleKey(ref: RuleModuleRef): string {

@@ -109,11 +109,25 @@ function createHarness(seed: string, gameGateway?: GameRuntimeGateway): Harness 
 /**
  * 建房 → 补满电脑 → 开局 → 房主掉线。
  * 房主掉线后由服务端自动托管，于是所有座位都由自动化驱动，整局可以无人干预地跑完。
+ *
+ * `options.auctionOnDecline` 在开局前通过房间设置打开（#106）：它必须在 `startRoom` 之前写进去，
+ * 因为 `createInitialGame` 只在开局那一刻把房规固化进引擎状态。
  */
-function startAutomatedRoom(harness: Harness, mapId: string): StartedRoom {
+function startAutomatedRoom(
+  harness: Harness,
+  mapId: string,
+  options: { auctionOnDecline?: boolean } = {},
+): StartedRoom {
   const created = harness.manager.createRoom('房主', mapId);
   if (!created.ok) throw new Error(`createRoom 失败：${created.code} ${created.message}`);
   const { roomCode, playerId: hostId } = created.value;
+
+  if (options.auctionOnDecline !== undefined) {
+    const updated = harness.manager.updateRoomSettings(roomCode, hostId, {
+      auctionOnDecline: options.auctionOnDecline,
+    });
+    if (!updated.ok) throw new Error(`updateRoomSettings 失败：${updated.code} ${updated.message}`);
+  }
 
   for (let seat = 1; seat < SEATS; seat += 1) {
     const added = harness.manager.addBot(roomCode, hostId);
@@ -211,6 +225,33 @@ describe('服务端整局冒烟：真实网关 + 真实地图', () => {
       SMOKE_TIMEOUT_MS,
     );
   }
+
+  test(
+    '开启「放弃购买即拍卖」后整局依然无人干预跑到终局，且拍卖确实发生过（#106）',
+    () => {
+      const harness = createHarness('smoke-auction-on-decline');
+      const room = startAutomatedRoom(harness, 'china-tour', { auctionOnDecline: true });
+
+      const result = driveAutomation(harness, room.roomCode);
+
+      // 这一段同时兜住两件事：
+      //  1) 拍卖能收敛（不会因为「没人再加价」而卡在 awaiting_auction_bid）；
+      //  2) `#engineActor` 在拍卖阶段返回的是叫价者——否则服务端根本不会为下一位叫价者
+      //     排期自动化，driveAutomation 会当场报 stalledAtStep，而不是安静地跑到终局。
+      expect(harness.serverErrors).toEqual([]);
+      expect(result.stalledAtStep).toBeNull();
+      expect(result.state?.phase).toBe('game_over');
+
+      // 电脑在现金不够留底时会放弃购买，因此这条房规下必然出现真实拍卖。
+      // 若一条都没出现，说明房规没有真正传到引擎（而不是「恰好没触发」）。
+      const auctionEvents = harness.asyncEvents
+        .filter((event) => event.type === 'game_events')
+        .flatMap((event) => (event.type === 'game_events' ? event.events : []))
+        .filter((event) => event.type === 'auction_started');
+      expect(auctionEvents.length).toBeGreaterThan(0);
+    },
+    SMOKE_TIMEOUT_MS,
+  );
 
   test(
     'bot 决策异常后有界自愈：恢复后仍能跑到终局，不再永久冻结',

@@ -17,6 +17,8 @@ import type {
   RoomSettings,
   RoomSettingsPatch,
   ServerToClientEvents,
+  UndoOutcome,
+  UndoRequestInfo,
 } from '@richman/protocol';
 import { CHAT_TEXT_MAX_LENGTH } from '@richman/protocol';
 import type { ClientAction, DisplayCard } from '../game/clientGame';
@@ -55,7 +57,7 @@ const browserGlobals = globalThis as typeof globalThis & {
   localStorage?: StorageLike;
   location?: { origin: string };
 };
-type Operation = 'create' | 'join' | 'resume' | 'start' | 'addBot' | 'removeBot' | 'renameBot' | 'updateSettings' | 'leave' | 'intent' | 'skip' | 'kick';
+type Operation = 'create' | 'join' | 'resume' | 'start' | 'addBot' | 'removeBot' | 'renameBot' | 'updateSettings' | 'leave' | 'intent' | 'skip' | 'kick' | 'undoRequest' | 'undoVote' | 'undoCancel';
 type LastErrorKind = 'derived' | 'operation' | 'blocking' | 'terminal';
 type ReconciliationMarker = {
   readonly generation: number;
@@ -145,6 +147,25 @@ export interface OnlineGameSession extends GameSession {
   readonly roomSettings: Ref<RoomSettings | null>;
   /** 房主修改房间设置（仅大厅阶段生效；服务端会拒绝非房主与已开局房间）。 */
   updateRoomSettings(patch: RoomSettingsPatch): Promise<void>;
+  /**
+   * 悔棋（#101）：当前悬而未决的悔棋请求（服务端权威副本），`null` = 没有。
+   * 发起者据此显示「等待对手确认」，对手据此显示「同意 / 拒绝」。
+   */
+  readonly undoRequest: Ref<UndoRequestInfo | null>;
+  /** 「此刻谁可以发起悔棋」的玩家 id（服务端算好广播下来的），`null` = 没人可悔。 */
+  readonly undoAvailability: Ref<string | null>;
+  /** 本机玩家此刻能否发起悔棋（房主已开启 + 上一手真人就是我 + 无在途请求 + 连接可用）。 */
+  readonly canRequestUndo: ComputedRef<boolean>;
+  /** 本机玩家是否需要对当前这次悔棋表态。 */
+  readonly canVoteUndo: ComputedRef<boolean>;
+  /** 当前悔棋请求是否由我发起。 */
+  readonly isUndoRequester: ComputedRef<boolean>;
+  /** 发起悔棋（只有服务端认可的「上一手行动者」能成功）。 */
+  requestUndo(): Promise<void>;
+  /** 对手对悔棋请求表决：全部同意才回退，任一人拒绝即作废。 */
+  voteUndo(requestId: string, approve: boolean): Promise<void>;
+  /** 撤回自己尚未有结果的悔棋请求。 */
+  cancelUndo(): Promise<void>;
   start(): Promise<void>;
   addBot(): Promise<void>;
   removeBot(playerId: string): Promise<void>;
@@ -170,6 +191,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   SESSION_NOT_RECOVERED: '会话尚未恢复，请重试',
   STORAGE_UNAVAILABLE: '无法更新本地存档，请稍后重试',
   CONNECT_ERROR: '无法连接服务器，请重试',
+  // 悔棋（#101）的三个码正常情况下走即时提示（见 INTENT_REJECTION_MESSAGES）；
+  // 这里留一份兜底文案，免得它们万一从别的路径落到持久错误位上显示成原始英文码。
+  UNDO_DISABLED: '当前房间没有开启悔棋',
+  UNDO_UNAVAILABLE: '现在没有可悔的一步',
+  UNDO_PENDING: '已经有一个悔棋请求在处理中',
 };
 const INTENT_REJECTION_MESSAGES: Readonly<Record<string, string>> = {
   OPERATION_IN_PROGRESS: '操作过快，请稍候重试',
@@ -177,6 +203,11 @@ const INTENT_REJECTION_MESSAGES: Readonly<Record<string, string>> = {
   WRONG_PHASE: '当前阶段不能执行这个操作',
   NOT_YOUR_TURN: '还没轮到你行动',
   ILLEGAL_INTENT: '这个操作现在不可用',
+  // 悔棋（#101）：这三条都是「点一下才发现不行」的即时反馈，不该占住持久错误位——
+  // 否则玩家会看到一个再也消不掉的错误条，而问题本身早就过去了。
+  UNDO_DISABLED: '本房间没有开启悔棋',
+  UNDO_UNAVAILABLE: '现在没有可悔的一步',
+  UNDO_PENDING: '已经有一个悔棋请求在处理中',
 };
 const TRANSIENT_NOTICE_MS = 2_500;
 const ERROR_PRIORITY: Readonly<Record<LastErrorKind, number>> = {
@@ -286,6 +317,24 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
   const chatLog = ref<ChatMessage[]>([]);
   /** 房间设置（#4 / #6）：服务端广播的权威副本，仅大厅期间有意义。 */
   const roomSettings = ref<RoomSettings | null>(null);
+  /**
+   * 悔棋（#101）：当前悬而未决的悔棋请求；`null` = 没有。
+   * 服务端广播的权威副本——发起者与每个需要表态的对手读的是同一份，
+   * 「谁在等 / 谁还没确认」不会各端各说各话。
+   */
+  const undoRequest = ref<UndoRequestInfo | null>(null);
+  /**
+   * 「此刻谁可以发起悔棋」：服务端给出的玩家 id，`null` = 没人可悔。
+   * 由 `room:undo_available` 驱动（进入房间 / 重连时服务端还会单播一次），
+   * 因此刷新页面不会把按钮弄丢。
+   */
+  const undoAvailability = ref<string | null>(null);
+  /**
+   * 悔棋回退后紧接着到达的那份 `game:snapshot` 必须按**硬重置**处理：
+   * 对局时间线倒退了，当成增量去播会把动画播歪。
+   * `room:undo_result`(applied) 恒先于那份快照到达，靠它立这个标记。
+   */
+  let pendingUndoReset = false;
   let transientNoticeTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
   type Attempt<T extends object> = {
     settled: boolean;
@@ -328,18 +377,32 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     }
     transientNotice.value = null;
   };
-  const showTransientNotice = (code: string): boolean => {
-    const message = INTENT_REJECTION_MESSAGES[code];
-    if (message === undefined || disposed) return false;
+  /**
+   * 直接给一句提示（不查错误码表）：用于「服务端已经把事情定了、只是告知一声」的场景，
+   * 比如悔棋的四种结局。文案由调用方给，因为那里才知道该说什么。
+   */
+  const showTransientMessage = (message: string): void => {
+    if (disposed) return;
     clearLastError((current) => current.kind === 'operation' || current.kind === 'derived');
     clearTransientFeedback();
     const id = ++transientNoticeId;
     transientNotice.value = { id, message };
     transientNoticeTimer = globalThis.setTimeout(() => clearTransientNotice(id), TRANSIENT_NOTICE_MS);
+  };
+  const showTransientNotice = (code: string): boolean => {
+    const message = INTENT_REJECTION_MESSAGES[code];
+    if (message === undefined || disposed) return false;
+    showTransientMessage(message);
     return true;
   };
+  /**
+   * 「点一下才发现不行」是常态的操作（现金不足、还没轮到你、这一步没得悔…）：
+   * 一律走即时提示，不占持久错误位——否则界面会挂一条再也消不掉的错误，
+   * 而引发它的那次点击早就过去了。其它操作（建房 / 加入 / 踢人…）的失败仍要留下来。
+   */
+  const TRANSIENT_OPERATIONS: ReadonlySet<Operation> = new Set<Operation>(['intent', 'undoRequest', 'undoVote', 'undoCancel']);
   const handleFailure = (operation: Operation, code: string, marker?: ReconciliationMarker): void => {
-    if (operation === 'intent' && showTransientNotice(code)) return;
+    if (TRANSIENT_OPERATIONS.has(operation) && showTransientNotice(code)) return;
     fail(code, operation, marker);
   };
   let generation = 0;
@@ -409,6 +472,9 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     compatibilityError.value = null;
     room.value = null;
     roomSettings.value = null;
+    undoRequest.value = null;
+    undoAvailability.value = null;
+    pendingUndoReset = false;
     chatLog.value = [];
     clearTransientFeedback();
   };
@@ -587,6 +653,34 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
       && !actor.isBot
       && !actor.online;
   });
+  /**
+   * 悔棋（#101）：本机玩家此刻能否发起悔棋。
+   *
+   * 判据（房主开了、还在 playing、没有未清债务、上一手是真人、且那名真人就是我）
+   * 全部由服务端算好，通过 `room:undo_available` 广播「谁可悔」——客户端只判断
+   * 「那个人是不是我 + 我没有正在等待的请求 + 连接可用」。
+   * 在客户端复刻一遍服务端规则只会制造两边不一致的分歧，而按钮的真假从来由服务端说了算。
+   */
+  const canRequestUndo = computed(() =>
+    undoRequest.value === null
+    && undoAvailability.value !== null
+    && undoAvailability.value === localPlayerId.value
+    && socket.connected
+    && connectionStatus.value === 'connected',
+  );
+  /** 本机玩家是否需要对当前这次悔棋表态（= 请求创建时快照下来的对手之一，且尚未表态）。 */
+  const canVoteUndo = computed(() => {
+    const pending = undoRequest.value;
+    const memberId = localPlayerId.value;
+    if (pending === null || memberId === null) return false;
+    if (pending.requesterId === memberId) return false;
+    if (pending.approvals.includes(memberId)) return false;
+    return pending.voterIds.includes(memberId);
+  });
+  /** 当前请求是否由我发起：界面据此在「等待对手确认」与「同意 / 拒绝」之间切换。 */
+  const isUndoRequester = computed(() =>
+    undoRequest.value !== null && undoRequest.value.requesterId === localPlayerId.value,
+  );
   const emitAck = async <T extends object>(operation: Operation, event: keyof ClientToServerEvents, ...args: unknown[]): Promise<Ack<T>> => {
     const commandGeneration = generation;
     const noticeIdAtStart = transientNotice.value?.id;
@@ -793,7 +887,12 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     }
     const eventRevision = pendingTransitionRevisions.shift();
     reconcileTransition(eventRevision, payload.state);
-    if (hasActiveSession) applySnapshot(payload.state);
+    if (hasActiveSession) {
+      // 悔棋回退的那份快照按硬重置处理；标记只用一次，用掉即清（见 pendingUndoReset 的说明）。
+      const reset = pendingUndoReset;
+      pendingUndoReset = false;
+      applySnapshot(payload.state, reset);
+    }
   };
   const resumeStoredSession = (): Promise<void> => {
     if (resumePromise !== null) return resumePromise;
@@ -854,7 +953,36 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     roomSettings.value = {
       botDifficulty: settings.botDifficulty,
       ruleConfig: settings.ruleConfig ?? null,
+      minimalUndoEnabled: settings.minimalUndoEnabled === true,
+      auctionOnDecline: settings.auctionOnDecline === true,
     };
+  };
+  // 悔棋（#101）三条广播：请求本身 / 谁可悔 / 结果。同样整体覆盖（低频、幂等）。
+  const onUndoRequest = (payload: UndoRequestInfo): void => {
+    if (disposed || payload === null || typeof payload !== 'object') return;
+    undoRequest.value = payload;
+  };
+  const onUndoAvailable = (payload: { playerId: string | null }): void => {
+    if (disposed) return;
+    undoAvailability.value = payload?.playerId ?? null;
+  };
+  /** 四种结局各给一句人话。对全房间广播，所以措辞是「中立叙述」而非「针对你」。 */
+  const UNDO_OUTCOME_MESSAGES: Readonly<Record<UndoOutcome, string>> = {
+    applied: '悔棋已通过，退回上一步',
+    rejected: '悔棋被拒绝',
+    cancelled: '悔棋请求已撤回',
+    expired: '悔棋请求超时，未获全部确认',
+  };
+  const onUndoResult = (payload: { requestId: string; outcome: UndoOutcome }): void => {
+    if (disposed || payload === null || typeof payload !== 'object') return;
+    // 只清「就是这一次」的等待态：一条迟到的结果不该把刚发起的新请求抹掉。
+    if (undoRequest.value !== null && undoRequest.value.requestId === payload.requestId) {
+      undoRequest.value = null;
+    }
+    // applied 时服务端紧跟着推一份回退后的快照，那份必须按硬重置播（见 pendingUndoReset）。
+    if (payload.outcome === 'applied') pendingUndoReset = true;
+    const message = UNDO_OUTCOME_MESSAGES[payload.outcome];
+    if (message !== undefined) showTransientMessage(message);
   };
   const onConnect = (): void => {
     connectionReady.resolve();
@@ -892,6 +1020,9 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
   socket.on('room:chat_broadcast', onChat);
   socket.on('room:chat_history', onChatHistory);
   socket.on('room:settings', onRoomSettings);
+  socket.on('room:undo_request', onUndoRequest);
+  socket.on('room:undo_result', onUndoResult);
+  socket.on('room:undo_available', onUndoAvailable);
   socket.on('connect', onConnect);
   socket.on('disconnect', onDisconnect);
   socket.on('connect_error', onConnectError);
@@ -1103,6 +1234,8 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
       roomSettings.value = {
         botDifficulty: response.botDifficulty,
         ruleConfig: response.ruleConfig ?? null,
+        minimalUndoEnabled: response.minimalUndoEnabled === true,
+        auctionOnDecline: response.auctionOnDecline === true,
       };
       return { ok: true };
     });
@@ -1142,6 +1275,25 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
       return;
     }
     await emitAck<Record<string, never>>('skip', 'room:skip_offline_turn');
+  };
+  /**
+   * 发起悔棋（#101）。**不预判**「我是不是上一手行动者」——那是服务端的判断，
+   * 这里直接发；不行就由服务端回一个 `UNDO_*`，走即时提示告诉玩家为什么不行。
+   * 结果本身不在这里落地：服务端会向全房间广播 `room:undo_request`，等待态由那份广播驱动。
+   */
+  const requestUndo = async (): Promise<void> => {
+    if (isSpectator.value) return;
+    await emitAck<UndoRequestInfo>('undoRequest', 'room:undo_request');
+  };
+  /** 对手对悔棋请求表决（#101）：**全部同意**才真正回退，任一人拒绝立即作废。 */
+  const voteUndo = async (requestId: string, approve: boolean): Promise<void> => {
+    if (isSpectator.value) return;
+    await emitAck<Record<string, never>>('undoVote', 'room:undo_vote', { requestId, approve });
+  };
+  /** 撤回自己尚未有结果的悔棋请求（#101）。 */
+  const cancelUndo = async (): Promise<void> => {
+    if (isSpectator.value) return;
+    await emitAck<Record<string, never>>('undoCancel', 'room:undo_cancel');
   };
   const leave = async (): Promise<void> => runLobbyCommand('leave', async () => {
     const ack = await emitAck<Record<string, never>>('leave', 'room:leave');
@@ -1194,6 +1346,9 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     socket.off('room:chat_broadcast', onChat);
     socket.off('room:chat_history', onChatHistory);
     socket.off('room:settings', onRoomSettings);
+    socket.off('room:undo_request', onUndoRequest);
+    socket.off('room:undo_result', onUndoResult);
+    socket.off('room:undo_available', onUndoAvailable);
     socket.off('connect', onConnect);
     socket.off('disconnect', onDisconnect);
     socket.off('connect_error', onConnectError);
@@ -1206,6 +1361,7 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
       canControlActiveActor.value && state.value !== null ? getAvailableActions(state.value) : []
     )),
     chatLog, sendChat, create, retryPending, retryResume, deferResume, join, start, addBot, removeBot, renameBot, roomSettings, updateRoomSettings, kickPlayer, sendIntent, skipOfflineTurn, leave, dispose,
+    undoRequest, undoAvailability, canRequestUndo, canVoteUndo, isUndoRequester, requestUndo, voteUndo, cancelUndo,
     abortEntry, discardStoredSession, abandon, isHost, isSpectator, isLobbyCommandReady, pendingCommand, startBlockedReason,
   };
 }

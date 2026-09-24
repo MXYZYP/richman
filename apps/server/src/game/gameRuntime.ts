@@ -1,4 +1,12 @@
-import { applyIntent, chooseBotIntent, createGame, defaultRuleModuleRegistry, skipCurrentTurn } from '@richman/engine';
+import {
+  applyIntent,
+  chooseBotIntent,
+  createGame,
+  currentPendingAuction,
+  currentPendingTrade,
+  defaultRuleModuleRegistry,
+  skipCurrentTurn,
+} from '@richman/engine';
 import type { BotDifficulty } from '@richman/engine';
 import type { BoardData, CardsData, DeepReadonly, GameConfig, MapRef, RuleModuleRef } from '@richman/board-data';
 import type {
@@ -40,6 +48,66 @@ const CELL_ID_INTENTS = new Set<Intent['type']>([
   'mortgage_property',
   'redeem_property',
 ]);
+
+/**
+ * 交易 / 拍卖（#105 / #106）的意图：都带参数，且参数形状比 cellId 复杂（含嵌套的出价侧），
+ * 所以不走上面两张集合，单独严格校验（见 isValidBargainIntent）。
+ */
+const BARGAIN_INTENTS = new Set<Intent['type']>([
+  'propose_trade',
+  'respond_trade',
+  'cancel_trade',
+  'place_bid',
+  'pass_bid',
+]);
+
+/** 一次交易出价侧的最大地产数量：只为挡住畸形大数组，正常报价远小于它。 */
+const TRADE_SIDE_MAX_CELLS = 64;
+const TRADE_SIDE_KEYS = ['cash', 'cellIds'] as const;
+
+/** 交易出价的一侧：`{cash, cellIds}`，现金为非负安全整数、cellIds 为非负整数数组。 */
+function isValidTradeSideValue(value: unknown): boolean {
+  if (value === null || typeof value !== 'object' || Array.isArray(value) || !hasPlainPrototype(value)) return false;
+  const side = value as Record<string, unknown>;
+  if (!hasExactKeys(side, TRADE_SIDE_KEYS)) return false;
+  const cash = dataValue(side, 'cash');
+  if (!Number.isSafeInteger(cash) || (cash as number) < 0) return false;
+  const cellIds = dataValue(side, 'cellIds');
+  return Array.isArray(cellIds)
+    && cellIds.length <= TRADE_SIDE_MAX_CELLS
+    && cellIds.every((cellId) => Number.isSafeInteger(cellId) && (cellId as number) >= 0);
+}
+
+/**
+ * 精确形状校验（不含语义）：越权/越界一律由引擎的 handler 判定。
+ * 传输层只保证「形状正确、且不会变成畸形大对象」，语义判断集中在引擎一处，避免两处规则漂移。
+ */
+function isValidBargainIntent(record: Record<string, unknown>, type: string): boolean {
+  if (!hasPlainPrototype(record)) return false;
+  switch (type) {
+    case 'propose_trade': {
+      if (!hasExactKeys(record, ['type', 'targetId', 'offer', 'request'])) return false;
+      const targetId = dataValue(record, 'targetId');
+      return typeof targetId === 'string'
+        && targetId.length > 0
+        && targetId.length <= 64
+        && isValidTradeSideValue(dataValue(record, 'offer'))
+        && isValidTradeSideValue(dataValue(record, 'request'));
+    }
+    case 'respond_trade':
+      return hasExactKeys(record, ['type', 'accept']) && typeof dataValue(record, 'accept') === 'boolean';
+    case 'place_bid': {
+      if (!hasExactKeys(record, ['type', 'amount'])) return false;
+      const amount = dataValue(record, 'amount');
+      return Number.isSafeInteger(amount) && (amount as number) > 0;
+    }
+    case 'cancel_trade':
+    case 'pass_bid':
+      return hasExactKeys(record, ['type']);
+    default:
+      return false;
+  }
+}
 
 const MODULE_INTENT_MAX_BYTES = 16 * 1024;
 
@@ -178,12 +246,18 @@ export function isValidIntent(value: unknown): value is Intent {
   if (type === 'module') return isValidModuleIntent(record);
   if (NO_ARG_INTENTS.has(type as Intent['type'])) return true;
   if (CELL_ID_INTENTS.has(type as Intent['type'])) return Number.isInteger(dataValue(record, 'cellId'));
+  if (BARGAIN_INTENTS.has(type as Intent['type'])) return isValidBargainIntent(record, type);
   return false;
 }
 
 export type CreateInitialGameResult =
   | { ok: true; state: GameState }
   | { ok: false; message: string; error: unknown };
+
+export interface CreateInitialGameOptions {
+  /** 房规「放弃购买即拍卖」（#106）；不传 = false = 沿用既有「放弃即流拍」。 */
+  auctionOnDecline?: boolean;
+}
 
 export function createInitialGame(
   gateway: GameRuntimeGateway,
@@ -194,11 +268,22 @@ export function createInitialGame(
   config: DeepReadonly<GameConfig>,
   mapRef: MapRef,
   ruleModules: readonly RuleModuleRef[],
+  options: CreateInitialGameOptions = {},
 ): CreateInitialGameResult {
   try {
     return {
       ok: true,
-      state: gateway.createGame({ board, cards, config, mapRef, ruleModules, players, seed, cashGoal: null }),
+      state: gateway.createGame({
+        board,
+        cards,
+        config,
+        mapRef,
+        ruleModules,
+        players,
+        seed,
+        cashGoal: null,
+        auctionOnDecline: options.auctionOnDecline ?? false,
+      }),
     };
   } catch (error) {
     return { ok: false, message: 'Unable to start the game with the current room players.', error };
@@ -246,9 +331,35 @@ const TAKEOVER_POLICY: Record<GameState['turnPhase'], Intent> = {
   awaiting_buy_decision: { type: 'skip_buy' },
   awaiting_build_decision: { type: 'skip_build' },
   managing: { type: 'end_turn' },
+  // 议价阶段由 chooseTakeoverIntent 提前交给 bot 策略处理（见那里的说明），下面两条只是
+  // 兜底：`Record<TurnPhase, Intent>` 必须穷尽，这样将来再加阶段时编译器会当场拦住我们。
+  awaiting_trade_response: { type: 'cancel_trade' },
+  awaiting_auction_bid: { type: 'pass_bid' },
 };
 
 export function chooseTakeoverIntent(state: GameState, difficulty: BotDifficulty = 'normal'): Intent | null {
+  // 债务阶段：`turnPhase` 此时通常仍是 `managing`，但按阶段查表会发出 `end_turn`，
+  // 而欠债时的 end_turn 必然吃 WRONG_PHASE。清偿（卖房 → 抵押 → 卖地 → 宣告破产）
+  // 只有 bot 策略会做，所以这里必须提前交给它。
+  // 不处理的话，离线真人一旦欠债就再也没人推进——房间停在「零计时器、零服务端错误」，
+  // 正是本项目最熟悉的那类静默冻结（整局冒烟已复现：拍卖把电脑现金掏空后立刻欠租）。
+  if (state.debt !== null) {
+    return chooseBotIntent(state, state.debt.debtorId, defaultRuleModuleRegistry, difficulty);
+  }
+
+  // 议价阶段（#105 / #106）：合法行动者不是 currentPlayerId（交易 = 报价目标、拍卖 = 轮到的叫价者），
+  // 所以按阶段查表的 TAKEOVER_POLICY 模型在这里不成立。一律交给 bot 策略 ——
+  // 它对这两个阶段一定产出明确答复（同意/拒绝、撤回；出价/弃权），保证回合必然收敛。
+  // 与「世界巡游机场等待」那次事故同理：这里绝不能返回 null（null 会被当作离线跳过）。
+  if (state.turnPhase === 'awaiting_trade_response' || state.turnPhase === 'awaiting_auction_bid') {
+    const trade = currentPendingTrade(state);
+    const auction = currentPendingAuction(state);
+    const actorId = state.turnPhase === 'awaiting_trade_response'
+      ? trade?.targetId ?? state.currentPlayerId
+      : auction?.bidderId ?? state.currentPlayerId;
+    return chooseBotIntent(state, actorId, defaultRuleModuleRegistry, difficulty);
+  }
+
   // 待选动作只可能由规则模块产生（core 从不产生 pendingActions），所以这里按「当前玩家 +
   // 当前阶段」筛选**任何模块**的待选动作，而不是只认某一个模块 id。
   //

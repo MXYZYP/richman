@@ -1287,8 +1287,16 @@ describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
     const create = await emitAckRecordingOrder(host, 'room:create', { mapId: 'china-tour', nickname: '房主' }, order);
     expectCreateRoomSuccess(create);
 
-    // 默认难度 normal；没自定义任何规则时 ruleConfig 为 null（客户端据此显示「地图默认」）。
-    expect(await settingsPromise).toEqual({ botDifficulty: 'normal', ruleConfig: null });
+    // 默认难度 normal；没自定义任何规则时 ruleConfig 为 null（客户端据此显示「地图默认」）；
+    // 悔棋（#101）默认关闭——它是房主在大厅显式选择加入的能力，不是默认项；
+    // 拍卖（#106）同理默认关闭——「放弃购买即拍卖」是房规，不默认开启，
+    // 否则会改变所有人对「不买这块地」的既有预期。
+    expect(await settingsPromise).toEqual({
+      botDifficulty: 'normal',
+      ruleConfig: null,
+      minimalUndoEnabled: false,
+      auctionOnDecline: false,
+    });
     // 顺序是硬要求：ack 之后才发，才不会被客户端 ack 处理里的 resetSession() 清掉。
     expect(order).toEqual(['ack', 'settings']);
   });
@@ -1305,7 +1313,12 @@ describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
     });
     expectCreateRoomSuccess(create);
 
-    expect(await settingsPromise).toEqual({ botDifficulty: 'hard', ruleConfig: null });
+    expect(await settingsPromise).toEqual({
+      botDifficulty: 'hard',
+      ruleConfig: null,
+      minimalUndoEnabled: false,
+      auctionOnDecline: false,
+    });
   });
 
   test('a joining member receives the room settings right after the join ack', async () => {
@@ -1333,6 +1346,8 @@ describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
     expect(await settingsPromise).toEqual({
       botDifficulty: 'normal',
       ruleConfig: { initialCash: 25_000, maxHouseLevel: 3, mortgageInterestRate: 0.12 },
+      minimalUndoEnabled: false,
+      auctionOnDecline: false,
     });
     expect(order).toEqual(['ack', 'settings']);
   });
@@ -1358,7 +1373,49 @@ describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
     });
     expect(resume.ok).toBe(true);
 
-    expect(await settingsPromise).toEqual({ botDifficulty: 'easy', ruleConfig: null });
+    expect(await settingsPromise).toEqual({
+      botDifficulty: 'easy',
+      ruleConfig: null,
+      minimalUndoEnabled: false,
+      auctionOnDecline: false,
+    });
+  });
+
+  // #106 拍卖房规：它是房间级设置（不走 ruleConfig / 不参与 contentHash），
+  // 因此必须和 botDifficulty / minimalUndoEnabled 一样能被房间设置广播带到每个成员。
+  test('the host can switch on the decline-triggers-auction rule and every seat sees the same value (#106)', async () => {
+    const { url } = await startTestServer();
+    const host = await connectClient(url);
+    const create = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' });
+    expectCreateRoomSuccess(create);
+
+    const guest = await connectClient(url);
+    const join = await emitAck(guest, 'room:join', { roomCode: create.roomCode, nickname: '玩家二' });
+    expectJoinRoomSuccess(join);
+
+    // 广播打在房间频道上：房主改完后两端拿到的必须是同一份设置，不能只 ack 给房主。
+    const hostSees = nextRoomSettings(host, 'host settings after enabling auction');
+    const guestSees = nextRoomSettings(guest, 'guest settings after enabling auction');
+    const updated = await emitUpdateSettings(host, { auctionOnDecline: true });
+    expect(updated.ok).toBe(true);
+    if (!updated.ok) throw new Error('expected room:update_settings to succeed');
+    // `Ack<RoomSettings>` 的字段是平铺的：成功态 = `{ ok: true } & RoomSettings`，没有再套一层 settings。
+    expect(updated.auctionOnDecline).toBe(true);
+
+    expect((await hostSees).auctionOnDecline).toBe(true);
+    expect((await guestSees).auctionOnDecline).toBe(true);
+
+    // 非房主不能改房规（既有权限闸门对新字段同样生效，不能被它绕过）。
+    const nonHost = await emitUpdateSettings(guest, { auctionOnDecline: false });
+    expect(nonHost.ok).toBe(false);
+    if (nonHost.ok) throw new Error('expected a non-host update to be rejected');
+    expect(nonHost.code).toBe('NOT_HOST');
+
+    // 形状不对的布尔字段在适配器层就被挡下，回到通用 INVALID_ROOM_ACTION。
+    const malformed = await emitUpdateSettings(host, { auctionOnDecline: 'yes' } as unknown as RoomSettingsPatch);
+    expect(malformed.ok).toBe(false);
+    if (malformed.ok) throw new Error('expected a malformed update to be rejected');
+    expect(malformed.code).toBe('INVALID_ROOM_ACTION');
   });
 });
 
