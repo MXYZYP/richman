@@ -30,11 +30,22 @@ pnpm-debug.log*
 .omp/
 .superpowers/
 
+# AI 协作工具的项目级数据（含工作日志与长期笔记），不入 git
+.workbuddy/
+
 # 系统噪声
 Thumbs.db
 
 # 运行期存档（如后续实现持久化，不应入库）
 saves/
+
+# 服务端房间快照（C-③）：运行期数据，含玩家 token，绝不入库
+.runtime/
+
+# 端到端测试（Playwright）运行期产物：trace / 截图 / 报告，绝不入库
+e2e/.artifacts/
+playwright-report/
+test-results/
 
 # 密钥/证书，绝不入库
 *.pem

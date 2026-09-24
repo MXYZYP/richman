@@ -1,0 +1,1774 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大富翁 · 地图编辑器</title>
+<style>
+  :root {
+    --bg: #f6f1e7;
+    --panel: #fffdf8;
+    --line: #d9c9a8;
+    --ink: #4a3520;
+    --ink-soft: #7d6a52;
+    --accent: #b5651d;
+    --warn: #b3261e;
+    --ok: #2e7d32;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 13px/1.6 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  header {
+    padding: 12px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  header h1 { font-size: 15px; margin: 0 12px 0 0; }
+  header .spacer { flex: 1; }
+  button {
+    font: inherit;
+    padding: 5px 11px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { color: #fff; opacity: .9; }
+  button.tiny { padding: 1px 6px; font-size: 12px; }
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 14px;
+    padding: 14px;
+    align-items: start;
+  }
+  @media (max-width: 1080px) { main { grid-template-columns: minmax(0, 1fr); } }
+  section.panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 14px;
+  }
+  section.panel > h2 {
+    font-size: 13px;
+    margin: 0 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--line);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  section.panel > h2 .hint { font-weight: 400; color: var(--ink-soft); font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px; }
+  label.field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink-soft); }
+  input, select, textarea {
+    font: inherit;
+    padding: 4px 6px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #fff;
+    color: var(--ink);
+    min-width: 0;
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid rgba(181,101,29,.35); }
+  textarea { font-family: ui-monospace, Consolas, monospace; font-size: 12px; width: 100%; }
+  .table-wrap { overflow: auto; max-height: 460px; border: 1px solid var(--line); border-radius: 4px; }
+  /* 13 列的表格在窄屏下会被挤到「名称只剩一个字宽」，所以给整表一个最小宽度，
+     由 .table-wrap 横向滚动兜住，而不是让输入框互相压扁。 */
+  table { border-collapse: collapse; width: 100%; font-size: 12px; min-width: 1240px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 3px 5px; text-align: left; white-space: nowrap; }
+  th { position: sticky; top: 0; background: #f3ead9; z-index: 2; }
+  tbody tr:nth-child(even) { background: #fbf7ef; }
+  tbody tr.corner { background: #f6e7cd; }
+  tbody tr.dragging { opacity: .4; }
+  td input[type="text"], td input[type="number"] { width: 100%; padding: 2px 4px; }
+  td.num input { width: 62px; }
+  td input.wide { width: 110px; }
+  /* 租金是一格一个逗号分隔的整体（不是每级一个输入框），所以给足宽度，别让它被截成 "140,7(" */
+  td.rents input { width: 196px; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; border: 1px solid rgba(0,0,0,.2); vertical-align: -1px; }
+  .svg-box { background: #fff; border: 1px solid var(--line); border-radius: 4px; padding: 4px; }
+  .svg-box svg { width: 100%; height: auto; display: block; }
+  #issues { margin: 0; padding-left: 18px; max-height: 220px; overflow: auto; font-size: 12px; }
+  #issues li.err { color: var(--warn); }
+  #issues li.ok { color: var(--ok); }
+  code.hash { display: block; word-break: break-all; font-size: 11px; background: #f3ead9; padding: 6px; border-radius: 4px; margin-top: 6px; }
+  .band-row { display: flex; gap: 6px; align-items: center; margin-bottom: 5px; }
+  .band-row input[type="text"] { flex: 1; }
+  details summary { cursor: pointer; color: var(--accent); }
+  .row-actions { display: flex; gap: 3px; }
+  .muted { color: var(--ink-soft); font-size: 12px; }
+  pre.integration { white-space: pre; overflow-x: auto; background: #1f2933; color: #e8eef4;
+    padding: 10px; border-radius: 6px; font-size: 11.5px; line-height: 1.55; max-height: 420px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏯 大富翁 · 地图编辑器</h1>
+  <button id="btn-skeleton" class="primary">生成新地图骨架</button>
+  <button id="btn-load-sample">载入「丝路之旅」结构示例</button>
+  <label class="muted" style="display:inline-flex;align-items:center;gap:5px">
+    导入 JSON：
+    <input type="file" id="file-import" multiple accept=".json" style="padding:0">
+  </label>
+  <span class="spacer"></span>
+  <button id="btn-validate">校验</button>
+  <button id="btn-hash">重算 contentHash</button>
+  <button id="btn-export">导出 4 个 JSON</button>
+  <button id="btn-export-bundle" class="primary">导出 bundle.json（一键落地）</button>
+</header>
+
+<main>
+  <div>
+    <section class="panel">
+      <h2>① 地图元信息 <span class="hint">ref / metadata / 棋盘</span></h2>
+      <div class="grid">
+        <label class="field">地图 id（英文小写与连字符）
+          <input type="text" id="m-id" placeholder="my-map">
+        </label>
+        <label class="field">版本 version
+          <input type="number" id="m-version" min="1" step="1" value="1">
+        </label>
+        <label class="field">标题 title
+          <input type="text" id="m-title" placeholder="我的地图">
+        </label>
+        <label class="field">棋盘名 boardName
+          <input type="text" id="m-boardname" placeholder="大富翁·我的地图">
+        </label>
+        <label class="field">行进方向 direction
+          <select id="m-direction">
+            <option value="clockwise">clockwise（顺时针）</option>
+            <option value="counterclockwise">counterclockwise（逆时针）</option>
+          </select>
+        </label>
+        <label class="field">画布尺寸 canvas.size
+          <input type="number" id="m-canvas" min="20" max="1000" step="1" value="100">
+        </label>
+      </div>
+      <label class="field" style="margin-top:8px">描述 description
+        <textarea id="m-description" rows="2" placeholder="一句话说明这张地图的几何特色"></textarea>
+      </label>
+    </section>
+
+    <section class="panel">
+      <h2>② 格子 <span class="hint">数组顺序 = 行走顺序（最后一格自动补 nextId 指回起点）</span>
+        <span class="spacer"></span>
+        <button class="tiny" id="btn-regen-layout">重新生成坐标</button>
+      </h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>id</th><th>类型</th><th>子类型</th><th>名称</th><th>副标题</th>
+              <th>价格</th><th>建房费</th><th>抵押</th><th>租金（逗号分隔）</th><th>税/效果</th><th>色带</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="cell-rows"></tbody>
+        </table>
+      </div>
+      <p class="muted" style="margin:8px 0 0">
+        行底色偏黄 = 环形四角格。改类型后该行字段会自动切换（地产才有价格/租金；税格填金额；特殊格选效果）。
+      </p>
+    </section>
+
+    <section class="panel">
+      <h2>③ 色带与主题 <span class="hint">presentation.theme.propertyBands</span></h2>
+      <div id="band-rows"></div>
+      <button class="tiny" id="btn-add-band">+ 新增色带</button>
+      <div class="grid" style="margin-top:10px">
+        <label class="field">棋盘底色 board
+          <input type="text" id="t-board"></label>
+        <label class="field">格子底色 cell
+          <input type="text" id="t-cell"></label>
+        <label class="field">描边 border
+          <input type="text" id="t-border"></label>
+        <label class="field">路径 route
+          <input type="text" id="t-route"></label>
+        <label class="field">标题 title
+          <input type="text" id="t-title"></label>
+        <label class="field">中心区 center
+          <input type="text" id="t-center"></label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>④ 机会 / 命运卡 <span class="hint">直接编辑 JSON 数组</span></h2>
+      <details open>
+        <summary>chance（机会）</summary>
+        <textarea id="cards-chance" rows="6" spellcheck="false"></textarea>
+      </details>
+      <details>
+        <summary>destiny（命运）</summary>
+        <textarea id="cards-destiny" rows="6" spellcheck="false"></textarea>
+      </details>
+      <p class="muted">效果类型只能是核心集合：move_to / move_steps / pay_bank / receive_bank / pay_each_player /
+        receive_from_each_player / repairs / skip_turn / draw_card / none。</p>
+    </section>
+
+    <section class="panel">
+      <h2>⑤ 房规 <span class="hint">game-config.json</span></h2>
+      <div class="grid">
+        <label class="field">初始资金 initialCash<input type="number" id="c-cash" step="100"></label>
+        <label class="field">过起点工资 passStartSalary<input type="number" id="c-salary" step="100"></label>
+        <label class="field">最高房级 maxHouseLevel<input type="number" id="c-maxlevel" min="1" max="5"></label>
+        <label class="field">卖房退款率 sellHouseRefundRate<input type="number" id="c-sellhouse" step="0.05"></label>
+        <label class="field">卖地比例 sellLandRate<input type="number" id="c-sellland" step="0.05"></label>
+        <label class="field">抵押利率 mortgageInterestRate<input type="number" id="c-mortgage" step="0.01"></label>
+        <label class="field">骰子模式 diceMode
+          <select id="c-dicemode"><option value="two_dice">two_dice</option><option value="one_die">one_die</option></select>
+        </label>
+        <label class="field">驿站分岔骰 airportBranchDice<input type="number" id="c-branchdice" min="1"></label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>⑥ 接入仓库 <span class="hint">导出一个 bundle.json + 一条命令</span></h2>
+      <p class="muted" style="margin:0 0 8px">点右上角「导出 bundle.json（一键落地）」，把它和下面的命令一起用：
+        命令会自动放置四份 JSON、生成 <code>&lt;id&gt;Map.ts</code>、注册进 registry 与 index、
+        补齐部署清单和测试清单。下方片段仍可生成，用于人工核对脚本到底改了什么。</p>
+      <div class="row-actions" style="margin-bottom:8px">
+        <button class="tiny" id="btn-gen-integration">生成接入片段</button>
+        <button class="tiny" id="btn-copy-integration">复制</button>
+      </div>
+      <pre class="integration" id="integration-out">点「生成接入片段」按当前 id / version 生成。</pre>
+    </section>
+  </div>
+
+  <aside>
+    <section class="panel">
+      <h2>预览</h2>
+      <div class="svg-box" id="preview"></div>
+      <p class="muted" id="preview-meta"></p>
+    </section>
+
+    <section class="panel">
+      <h2>校验</h2>
+      <ul id="issues"><li class="muted">点上方「校验」运行检查。</li></ul>
+    </section>
+
+    <section class="panel">
+      <h2>contentHash</h2>
+      <p class="muted" style="margin:0">由本页内嵌的 canonicalStringify + sha256 计算，与
+        <code>packages/board-data/src/hash.ts</code> 逐位一致。</p>
+      <code class="hash" id="hash-out">（未计算）</code>
+    </section>
+  </aside>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  // ==========================================================================
+  // 1) contentHash：从 packages/board-data/src/hash.ts 逐行移植（纯 JS，无 Node 依赖）
+  //    改动这里必须同步改 hash.ts，否则导出的地图会因 contentHash 不匹配被注册表拒绝。
+  // ==========================================================================
+  var SHA256_INITIAL_STATE = new Uint32Array([
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+  ]);
+
+  var SHA256_ROUND_CONSTANTS = new Uint32Array([
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
+    0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+    0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+    0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+    0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+    0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
+    0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
+    0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+  ]);
+
+  function rotateRight(value, shift) {
+    return (value >>> shift) | (value << (32 - shift));
+  }
+
+  function assertSerializableObject(value, path) {
+    if (Object.getOwnPropertySymbols(value).length > 0) {
+      throw new Error('Cannot canonicalize symbol key at ' + path);
+    }
+    var descriptors = Object.getOwnPropertyDescriptors(value);
+    if (Object.values(descriptors).some(function (d) { return 'get' in d || 'set' in d; })) {
+      throw new Error('Cannot canonicalize accessor property at ' + path);
+    }
+    return descriptors;
+  }
+
+  function stringifyValue(value, active, path) {
+    if (value === null || typeof value === 'boolean' || typeof value === 'string') {
+      return JSON.stringify(value);
+    }
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) {
+        throw new Error('Canonical JSON requires a finite number at ' + path);
+      }
+      return JSON.stringify(value);
+    }
+    if (typeof value !== 'object') {
+      throw new Error('Unsupported value of type ' + typeof value + ' at ' + path);
+    }
+    if (active.has(value)) {
+      throw new Error('Cannot canonicalize cycle at ' + path);
+    }
+    var isArray = Array.isArray(value);
+    var prototype = Object.getPrototypeOf(value);
+    if (!isArray && prototype !== Object.prototype && prototype !== null) {
+      throw new Error('Canonical JSON requires a plain object at ' + path);
+    }
+    var descriptors = assertSerializableObject(value, path);
+    var propertyNames = Object.keys(descriptors);
+    if (isArray) {
+      var unexpectedProperty = propertyNames.find(function (name) {
+        if (name === 'length') return false;
+        var index = Number(name);
+        return !Number.isInteger(index) || index < 0 || index >= value.length || String(index) !== name;
+      });
+      if (unexpectedProperty !== undefined) {
+        throw new Error('Cannot canonicalize unexpected array property ' + unexpectedProperty + ' at ' + path);
+      }
+    } else {
+      var nonEnumerable = propertyNames.find(function (name) { return !descriptors[name].enumerable; });
+      if (nonEnumerable !== undefined) {
+        throw new Error('Cannot canonicalize non-enumerable property ' + nonEnumerable + ' at ' + path);
+      }
+    }
+    active.add(value);
+    try {
+      if (isArray) {
+        var items = [];
+        for (var index = 0; index < value.length; index += 1) {
+          var descriptor = descriptors[index];
+          if (descriptor === undefined) {
+            throw new Error('Cannot canonicalize sparse array at ' + path + '[' + index + ']');
+          }
+          items.push(stringifyValue(descriptor.value, active, path + '[' + index + ']'));
+        }
+        return '[' + items.join(',') + ']';
+      }
+      var properties = propertyNames.sort().map(function (key) {
+        var serializedKey = JSON.stringify(key);
+        var serializedValue = stringifyValue(descriptors[key].value, active, path + '.' + key);
+        return serializedKey + ':' + serializedValue;
+      });
+      return '{' + properties.join(',') + '}';
+    } finally {
+      active.delete(value);
+    }
+  }
+
+  function canonicalStringify(value) {
+    return stringifyValue(value, new WeakSet(), '$');
+  }
+
+  function sha256Hex(input) {
+    var inputBytes = new TextEncoder().encode(input);
+    var paddedLength = Math.ceil((inputBytes.length + 9) / 64) * 64;
+    var padded = new Uint8Array(paddedLength);
+    padded.set(inputBytes);
+    padded[inputBytes.length] = 0x80;
+
+    var bitLengthHigh = Math.floor(inputBytes.length / 0x20000000);
+    var bitLengthLow = (inputBytes.length << 3) >>> 0;
+    var lengthView = new DataView(padded.buffer);
+    lengthView.setUint32(paddedLength - 8, bitLengthHigh);
+    lengthView.setUint32(paddedLength - 4, bitLengthLow);
+
+    var hash = new Uint32Array(SHA256_INITIAL_STATE);
+    var words = new Uint32Array(64);
+    var offset, index;
+
+    for (offset = 0; offset < padded.length; offset += 64) {
+      for (index = 0; index < 16; index += 1) {
+        var wordOffset = offset + index * 4;
+        words[index] = ((padded[wordOffset] << 24) | (padded[wordOffset + 1] << 16)
+          | (padded[wordOffset + 2] << 8) | padded[wordOffset + 3]) >>> 0;
+      }
+      for (index = 16; index < 64; index += 1) {
+        var previous15 = words[index - 15];
+        var previous2 = words[index - 2];
+        var sigma0 = rotateRight(previous15, 7) ^ rotateRight(previous15, 18) ^ (previous15 >>> 3);
+        var sigma1 = rotateRight(previous2, 17) ^ rotateRight(previous2, 19) ^ (previous2 >>> 10);
+        words[index] = (words[index - 16] + sigma0 + words[index - 7] + sigma1) >>> 0;
+      }
+
+      var a = hash[0], b = hash[1], c = hash[2], d = hash[3];
+      var e = hash[4], f = hash[5], g = hash[6], h = hash[7];
+
+      for (index = 0; index < 64; index += 1) {
+        var sum1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25);
+        var choose = (e & f) ^ (~e & g);
+        var temp1 = (h + sum1 + choose + SHA256_ROUND_CONSTANTS[index] + words[index]) >>> 0;
+        var sum0 = rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22);
+        var majority = (a & b) ^ (a & c) ^ (b & c);
+        var temp2 = (sum0 + majority) >>> 0;
+
+        h = g; g = f; f = e;
+        e = (d + temp1) >>> 0;
+        d = c; c = b; b = a;
+        a = (temp1 + temp2) >>> 0;
+      }
+
+      hash[0] = (hash[0] + a) >>> 0;
+      hash[1] = (hash[1] + b) >>> 0;
+      hash[2] = (hash[2] + c) >>> 0;
+      hash[3] = (hash[3] + d) >>> 0;
+      hash[4] = (hash[4] + e) >>> 0;
+      hash[5] = (hash[5] + f) >>> 0;
+      hash[6] = (hash[6] + g) >>> 0;
+      hash[7] = (hash[7] + h) >>> 0;
+    }
+
+    return Array.prototype.map.call(hash, function (word) {
+      return word.toString(16).padStart(8, '0');
+    }).join('');
+  }
+
+  function computeContentHash(pack) {
+    return sha256Hex(canonicalStringify({
+      ref: { id: pack.ref.id, version: pack.ref.version },
+      metadata: pack.metadata,
+      game: pack.game,
+      presentation: pack.presentation
+    }));
+  }
+
+  // ==========================================================================
+  // 2) 常量
+  // ==========================================================================
+  var CORE_CELL_TYPES = ['start', 'property', 'chance', 'destiny', 'tax', 'airport', 'special', 'world'];
+  var PROPERTY_SUBTYPES = ['normal', 'station', 'utility'];
+  var EFFECT_TYPES = ['move_to', 'move_steps', 'pay_bank', 'receive_bank', 'pay_each_player',
+    'receive_from_each_player', 'repairs', 'skip_turn', 'draw_card', 'none'];
+  var CELL_ICONS = { start: 'start', chance: 'chance', destiny: 'destiny', tax: 'tax', world: 'world', special: 'world' };
+  var NORMAL_RENT_RATIOS = [0.08, 0.39, 1.11, 3.06, 4.17, 5.28];
+  var STATION_RENT_RATIOS = [0.125, 0.25, 0.5, 1.0];
+
+  var DEFAULT_THEME_COLORS = {
+    board: '#F2E3C4', cell: '#FFFBF0', border: '#8A6A3B',
+    route: '#B07A3C', title: '#6B4318', decoration: '#D9B77E', center: '#FBF0D9'
+  };
+
+  var DEFAULT_BANDS = [
+    { key: 'band:a', color: '#C9A227' },
+    { key: 'band:b', color: '#B5651D' },
+    { key: 'band:c', color: '#6B8E23' },
+    { key: 'band:d', color: '#2E8B9E' },
+    { key: 'band:station', color: '#6D4C41' },
+    { key: 'band:utility', color: '#7E57C2' }
+  ];
+
+  var DEFAULT_CONFIG = {
+    initialCash: 15000,
+    passStartSalary: 2000,
+    maxHouseLevel: 5,
+    sellHouseRefundRate: 0.5,
+    sellLandRate: 0.5,
+    mortgageInterestRate: 0.1,
+    utilityMultipliers: [10, 100],
+    jailExitMinRoll: 10,
+    jailMaxAttempts: 3,
+    cashGoalPresets: [30000, 50000],
+    diceMode: 'two_dice',
+    airportBranchDice: 1,
+    jailEnabled: false
+  };
+
+  // ==========================================================================
+  // 3) 状态
+  // ==========================================================================
+  var state = {
+    ref: { id: 'my-map', version: 1, contentHash: '' },
+    metadata: { title: '我的地图', description: '' },
+    boardName: '大富翁·我的地图',
+    direction: 'clockwise',
+    canvasSize: 100,
+    cells: [],           // { id, type, subtype, name, subtitle, price, houseCost, rents[], mortgageValue, taxAmount, effect, band }
+    bands: DEFAULT_BANDS.slice(),
+    themeColors: Object.assign({}, DEFAULT_THEME_COLORS),
+    cards: { chance: [], destiny: [] },
+    config: Object.assign({}, DEFAULT_CONFIG),
+    // layoutMode = 'imported' 时原样保留导入地图的 presentation（坐标/路由/中心区/图形），
+    // 这样「导入 → 直接导出」能逐位还原（contentHash 不变）。
+    // 一旦改动格数、画布尺寸或点「重新生成坐标」，就切回 'generated' 由本页按行走顺序重算几何。
+    layoutMode: 'generated',
+    importedPresentation: null
+  };
+
+  var lastPack = null;
+
+  function $(id) { return document.getElementById(id); }
+  function clampPositiveInt(value, fallback) {
+    var n = Math.floor(Number(value));
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+  }
+  function round100(n) { return Math.round(n / 100) * 100; }
+  function deepCopy(value) { return JSON.parse(JSON.stringify(value)); }
+
+  // ==========================================================================
+  // 4) 生成器
+  // ==========================================================================
+  function buildSkeleton(cellCount, id, title) {
+    var count = clampPositiveInt(cellCount, 28);
+    var perSide = Math.ceil(count / 4);
+    var cells = [];
+    var bandKeys = state.bands.map(function (b) { return b.key; });
+    var normalBands = bandKeys.filter(function (k) { return k !== 'band:station' && k !== 'band:utility'; });
+    if (normalBands.length === 0) normalBands = ['band:a'];
+
+    var normalIndex = 0;
+    for (var i = 0; i < count; i += 1) {
+      if (i === 0) {
+        cells.push({ id: 0, type: 'start', name: '起点' });
+        continue;
+      }
+      var isCorner = (i % perSide === 0);
+      if (isCorner) {
+        cells.push({ id: i, type: 'tax', name: '税收', taxAmount: 1000 });
+        continue;
+      }
+      var slot = i % 6;
+      if (slot === 2) {
+        cells.push({ id: i, type: 'chance', name: '机会' });
+        continue;
+      }
+      if (slot === 4) {
+        cells.push({ id: i, type: 'destiny', name: '命运' });
+        continue;
+      }
+      if (i % 7 === 3) {
+        cells.push(makeStation(i, cellCount, normalIndex, 'band:station'));
+        normalIndex += 1;
+        continue;
+      }
+      cells.push(makeNormalProperty(i, cellCount, normalIndex, normalBands));
+      normalIndex += 1;
+    }
+    return cells;
+  }
+
+  function makeNormalProperty(index, total, order, bandKeys) {
+    var price = round100(1200 + Math.floor(order * (6600 / Math.max(1, total))) / 100 * 100);
+    var rents = NORMAL_RENT_RATIOS.map(function (r) { return round100(price * r); });
+    return {
+      id: index,
+      type: 'property',
+      subtype: 'normal',
+      name: '地产' + (order + 1),
+      price: price,
+      houseCost: round100(price * 0.55),
+      rents: rents,
+      mortgageValue: round100(price * 0.5),
+      band: bandKeys[order % bandKeys.length]
+    };
+  }
+
+  function makeStation(index, total, order, bandKey) {
+    var price = round100(1600 + Math.floor(order * (2400 / Math.max(1, total)) / 100 * 100));
+    return {
+      id: index,
+      type: 'property',
+      subtype: 'station',
+      name: '驿站' + (order + 1),
+      price: price,
+      rents: STATION_RENT_RATIOS.map(function (r) { return round100(price * r); }),
+      mortgageValue: round100(price * 0.5),
+      band: bandKey
+    };
+  }
+
+  function defaultCards() {
+    return {
+      chance: [
+        { id: 'c01', text: '捡到钱袋：获得 800 元', effect: { type: 'receive_bank', amount: 800 } },
+        { id: 'c02', text: '车辆抛锚维修：支付 500 元', effect: { type: 'pay_bank', amount: 500 } },
+        { id: 'c03', text: '抄近路：前进三步', effect: { type: 'move_steps', steps: 3 } }
+      ],
+      destiny: [
+        { id: 'd01', text: '老友请客：获得 1200 元', effect: { type: 'receive_bank', amount: 1200 } },
+        { id: 'd02', text: '交税：支付 900 元', effect: { type: 'pay_bank', amount: 900 } },
+        { id: 'd03', text: '被同行请去喝茶：暂停一回合', effect: { type: 'skip_turn', turns: 1 } }
+      ]
+    };
+  }
+
+  // ==========================================================================
+  // 5) 布局：按行走顺序把格子摊到外环（与既有地图同构的几何）
+  // ==========================================================================
+  function ringRects(count, size) {
+    var thickness = Math.round((size / 11) * 1000) / 1000;
+    var perSide = Math.max(1, Math.ceil(count / 4));
+    var span = size - thickness;
+    var edge = span / perSide;
+    var round3 = function (n) { return Math.round(n * 1000) / 1000; };
+    var rects = [];
+    for (var i = 0; i < count; i += 1) {
+      var rect;
+      if (i === 0) {
+        rect = { x: span, y: span, width: thickness, height: thickness };
+      } else if (i === perSide) {
+        rect = { x: 0, y: span, width: thickness, height: thickness };
+      } else if (i === 2 * perSide) {
+        rect = { x: 0, y: 0, width: thickness, height: thickness };
+      } else if (i === 3 * perSide) {
+        rect = { x: span, y: 0, width: thickness, height: thickness };
+      } else if (i < perSide) {
+        rect = { x: span - i * edge, y: span, width: edge, height: thickness };
+      } else if (i < 2 * perSide) {
+        rect = { x: 0, y: span - (i - perSide) * edge, width: thickness, height: edge };
+      } else if (i < 3 * perSide) {
+        rect = { x: (i - 2 * perSide) * edge, y: 0, width: edge, height: thickness };
+      } else {
+        rect = { x: span, y: (i - 3 * perSide) * edge, width: thickness, height: edge };
+      }
+      rects.push({
+        x: round3(rect.x), y: round3(rect.y),
+        width: round3(rect.width), height: round3(rect.height),
+        isCorner: (i % perSide === 0)
+      });
+    }
+    return rects;
+  }
+
+  function bandColor(key) {
+    for (var i = 0; i < state.bands.length; i += 1) {
+      if (state.bands[i].key === key) return state.bands[i].color;
+    }
+    return '#cccccc';
+  }
+
+  function buildPresentation() {
+    var propertyBands = {};
+    state.bands.forEach(function (band) { propertyBands[band.key] = band.color; });
+
+    if (state.layoutMode === 'imported' && state.importedPresentation) {
+      var imported = deepCopy(state.importedPresentation);
+      imported.canvas = { size: state.canvasSize };
+      imported.theme = {
+        colors: Object.assign({}, state.themeColors),
+        propertyBands: propertyBands
+      };
+      return imported;
+    }
+
+    var count = state.cells.length;
+    var rects = ringRects(count, state.canvasSize);
+    var cellsOut = {};
+    var half = Math.round((state.canvasSize / 11) * 500) / 1000;
+    for (var i = 0; i < count; i += 1) {
+      var cell = state.cells[i];
+      var rect = rects[i];
+      var out = {
+        x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+        shortLabel: String(cell.name || '').slice(0, 5)
+      };
+      var icon = CELL_ICONS[cell.type];
+      if (icon) {
+        out.artwork = { type: 'built-in-icon', icon: icon };
+      } else if (cell.type === 'property' && cell.band) {
+        out.propertyBand = cell.band;
+      }
+      cellsOut[String(cell.id)] = out;
+    }
+
+    var span = state.canvasSize - half * 2;
+
+    return {
+      canvas: { size: state.canvasSize },
+      cells: cellsOut,
+      routes: [{
+        type: 'polyline',
+        role: 'route',
+        strokeWidth: 0.9,
+        dashPattern: [1.8, 1.2],
+        lineCap: 'round',
+        opacity: 0.8,
+        zIndex: 0,
+        points: [
+          { x: state.canvasSize - half, y: state.canvasSize - half },
+          { x: half, y: state.canvasSize - half },
+          { x: half, y: half },
+          { x: state.canvasSize - half, y: half },
+          { x: state.canvasSize - half, y: state.canvasSize - half }
+        ]
+      }],
+      center: [
+        {
+          type: 'panel', x: span * 0.36, y: span * 0.36, width: span * 0.5, height: span * 0.24,
+          role: 'center', zIndex: -1
+        },
+        {
+          type: 'text', x: span * 0.36, y: span * 0.36, width: span * 0.5, height: span * 0.24,
+          role: 'center', text: state.metadata.title || state.ref.id, fitContent: true, zIndex: -1
+        }
+      ],
+      theme: {
+        colors: Object.assign({}, state.themeColors),
+        propertyBands: propertyBands
+      }
+    };
+  }
+
+  function buildBoard() {
+    var cells = state.cells.map(function (cell, index, all) {
+      var out = { id: cell.id, type: cell.type };
+      if (cell.type === 'property') {
+        out.subtype = cell.subtype || 'normal';
+      }
+      out.name = cell.name;
+      // subtitle 是可选展示字段（真实地图用它写地名副标题）。漏掉它会让「导入→导出」
+      // 与源文件不一致，contentHash 也随之变化，所以有就必须带上。
+      if (typeof cell.subtitle === 'string' && cell.subtitle.trim() !== '') {
+        out.subtitle = cell.subtitle;
+      }
+      if (cell.type === 'property') {
+        // 仓库校验（mapValidation.assertBoard）要求**所有**地产格都有 price 与 mortgageValue，
+        // 公共事业格也不例外：它只是不定义 rents / houseCost。
+        out.price = cell.price;
+        if (cell.subtype === 'normal') out.houseCost = cell.houseCost;
+        if (cell.subtype !== 'utility') out.rents = (cell.rents || []).slice();
+        out.mortgageValue = cell.mortgageValue;
+      }
+      if (cell.type === 'tax') out.amount = cell.taxAmount;
+      if (cell.effect && (cell.type === 'special' || cell.type === 'world' || cell.type === 'airport')) {
+        out.effect = deepCopy(cell.effect);
+      }
+      // 只有最后一格需要显式 nextId 指回起点（其余按数组顺序自动衔接）
+      if (index === all.length - 1) out.nextId = all[0].id;
+      return out;
+    });
+    return { boardName: state.boardName, direction: state.direction, cells: cells };
+  }
+
+  function toPack() {
+    return {
+      ref: { id: state.ref.id, version: state.ref.version, contentHash: state.ref.contentHash || '0'.repeat(64) },
+      metadata: { title: state.metadata.title, description: state.metadata.description },
+      game: {
+        board: buildBoard(),
+        cards: deepCopy(state.cards),
+        config: deepCopy(state.config),
+        requiredRuleModules: [{ id: 'core', version: 1 }]
+      },
+      presentation: buildPresentation()
+    };
+  }
+
+  function exportFiles() {
+    var pack = toPack();
+    return {
+      'manifest.json': {
+        ref: { id: pack.ref.id, version: pack.ref.version, contentHash: pack.ref.contentHash },
+        metadata: pack.metadata,
+        requiredRuleModules: pack.game.requiredRuleModules,
+        presentation: pack.presentation
+      },
+      'board.json': pack.game.board,
+      'cards.json': pack.game.cards,
+      'game-config.json': pack.game.config
+    };
+  }
+
+  // ==========================================================================
+  // 6) 校验
+  // ==========================================================================
+  function validate(pack) {
+    var issues = [];
+    function err(path, message) { issues.push({ level: 'error', path: path, message: message }); }
+    function warn(path, message) { issues.push({ level: 'warn', path: path, message: message }); }
+
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(String(pack.ref.id))) {
+      err('ref.id', '必须是小写字母/数字/连字符，且以字母或数字开头');
+    }
+    if (!Number.isSafeInteger(pack.ref.version) || pack.ref.version <= 0) {
+      err('ref.version', '必须是正整数');
+    }
+
+    var board = pack.game.board;
+    var cells = board.cells;
+    if (!Array.isArray(cells) || cells.length < 4) {
+      err('game.board.cells', '至少 4 格');
+      return issues;
+    }
+
+    var ids = {};
+    var duplicate = false;
+    cells.forEach(function (cell, index) {
+      if (!Number.isInteger(cell.id) || cell.id < 0) {
+        err('cells[' + index + '].id', '必须是非负整数');
+      }
+      if (Object.prototype.hasOwnProperty.call(ids, String(cell.id))) {
+        err('cells[' + index + '].id', '与前面的格子重复：' + cell.id);
+        duplicate = true;
+      }
+      ids[String(cell.id)] = index;
+      if (!CORE_CELL_TYPES.includes(cell.type)) {
+        err('cells[' + index + '].type', '未知类型：' + cell.type);
+      }
+      if (cell.type === 'property' && !PROPERTY_SUBTYPES.includes(cell.subtype)) {
+        err('cells[' + index + '].subtype', '地产子类型必须是 ' + PROPERTY_SUBTYPES.join(' / '));
+      }
+      if (cell.type === 'property') {
+        // 与 mapValidation.assertBoard 保持一致：price / mortgageValue 对三种子类型都是必需项，
+        // 只有 rents / houseCost 的取舍按子类型区分。这里偏严是有意的 —— 让编辑器在导出前
+        // 就拦住服务器注册表一定会拒绝的地图。
+        if (!(cell.price > 0)) err('cells[' + index + '].price', '价格必须为正');
+        if (!(cell.mortgageValue > 0)) err('cells[' + index + '].mortgageValue', '抵押价必须为正');
+        if (cell.mortgageValue > cell.price) {
+          err('cells[' + index + '].mortgageValue', '抵押价不能高于价格');
+        }
+        if (cell.subtype === 'normal') {
+          var expectedRents = pack.game.config.maxHouseLevel + 1;
+          if (!Array.isArray(cell.rents) || cell.rents.length !== expectedRents) {
+            err('cells[' + index + '].rents', '租金数组长度应为 ' + expectedRents + '（当前 ' +
+              (Array.isArray(cell.rents) ? cell.rents.length : '非数组') + '）');
+          }
+          if (!(cell.houseCost > 0)) {
+            err('cells[' + index + '].houseCost', '普通地产必须有建房费');
+          }
+        } else if (cell.subtype === 'station') {
+          if (!Array.isArray(cell.rents) || cell.rents.length !== 4) {
+            err('cells[' + index + '].rents', '驿站租金数组长度应为 4（当前 ' +
+              (Array.isArray(cell.rents) ? cell.rents.length : '非数组') + '）');
+          }
+          if (cell.houseCost) err('cells[' + index + '].houseCost', '驿站不应定义建房费');
+        } else if (cell.subtype === 'utility') {
+          if (Array.isArray(cell.rents) && cell.rents.length) {
+            err('cells[' + index + '].rents', '公共事业格不应定义租金');
+          }
+          if (cell.houseCost) err('cells[' + index + '].houseCost', '公共事业格不应定义建房费');
+        }
+      }
+      if (cell.type === 'tax' && !(cell.amount > 0)) {
+        err('cells[' + index + '].amount', '税格金额必须为正');
+      }
+      if (cell.effect && !EFFECT_TYPES.includes(cell.effect.type)) {
+        err('cells[' + index + '].effect.type', '未知效果类型：' + cell.effect.type);
+      }
+      if (!cell.name) warn('cells[' + index + '].name', '名称为空，棋盘上会显示空白');
+    });
+
+    // 仓库校验要求全盘恰好一个起点格，且 boardName 非空、direction 只能是 clockwise。
+    if (cells.filter(function (cell) { return cell.type === 'start'; }).length !== 1) {
+      err('game.board.cells', '必须恰好有一个起点格（start）');
+    }
+    if (!board.boardName || String(board.boardName).trim() === '') {
+      err('game.board.boardName', '棋盘名称不能为空');
+    }
+    if (board.direction !== undefined && board.direction !== 'clockwise') {
+      err('game.board.direction', '目前只支持 clockwise');
+    }
+
+    if (!duplicate) {
+      var lastIndex = cells.length - 1;
+      if (cells[lastIndex].nextId === undefined) {
+        err('cells[' + lastIndex + '].nextId', '最后一格必须显式写出 nextId');
+      } else if (cells[lastIndex].nextId !== cells[0].id) {
+        err('cells[' + lastIndex + '].nextId', '最后一格的 nextId 应指回起点 ' + cells[0].id);
+      } else {
+        var byId = {};
+        cells.forEach(function (cell, index) { byId[String(cell.id)] = { cell: cell, index: index }; });
+        var visited = {};
+        var current = cells[0].id;
+        var okWalk = true;
+        for (var step = 0; step < cells.length; step += 1) {
+          if (visited[String(current)]) { err('cells', '行走链出现重复访问：' + current); okWalk = false; break; }
+          visited[String(current)] = true;
+          var entry = byId[String(current)];
+          if (!entry) { err('cells', '行走链指向不存在的格子：' + current); okWalk = false; break; }
+          current = entry.cell.nextId !== undefined ? entry.cell.nextId : cells[entry.index + 1].id;
+        }
+        if (okWalk && Object.keys(visited).length !== cells.length) {
+          err('cells', '行走链没有覆盖全部格子（仅 ' + Object.keys(visited).length + '/' + cells.length +
+            '）—— 数组顺序必须等于行进顺序');
+        }
+      }
+    }
+
+    var presentation = pack.presentation;
+    var presentationCells = presentation && presentation.cells ? presentation.cells : {};
+    cells.forEach(function (cell) {
+      if (!Object.prototype.hasOwnProperty.call(presentationCells, String(cell.id))) {
+        err('presentation.cells', '缺少格子的坐标：' + cell.id);
+      }
+    });
+    var bandKeys = Object.keys((presentation.theme && presentation.theme.propertyBands) || {});
+    Object.keys(presentationCells).forEach(function (key) {
+      var entry = presentationCells[key];
+      if (entry.propertyBand && !bandKeys.includes(entry.propertyBand)) {
+        err('presentation.cells[' + key + '].propertyBand', '色带未在 theme.propertyBands 中定义：' + entry.propertyBand);
+      }
+    });
+
+    ['chance', 'destiny'].forEach(function (deck) {
+      var list = pack.game.cards[deck];
+      if (!Array.isArray(list)) { err('cards.' + deck, '必须是数组'); return; }
+      var seen = {};
+      list.forEach(function (card, index) {
+        if (!card.id) err('cards.' + deck + '[' + index + '].id', '缺少 id');
+        if (seen[card.id]) err('cards.' + deck + '[' + index + '].id', '卡 id 重复：' + card.id);
+        seen[card.id] = true;
+        if (!card.text) err('cards.' + deck + '[' + index + '].text', '缺少文案');
+        if (!card.effect || !EFFECT_TYPES.includes(card.effect.type)) {
+          err('cards.' + deck + '[' + index + '].effect.type', '未知效果类型');
+        }
+      });
+    });
+
+    var config = pack.game.config;
+    if (!(config.initialCash > 0)) err('game.config.initialCash', '初始资金必须为正');
+    if (!(config.maxHouseLevel >= 1 && config.maxHouseLevel <= 5)) {
+      err('game.config.maxHouseLevel', '最高房级需在 1..5');
+    }
+    if (!(config.sellHouseRefundRate > 0 && config.sellHouseRefundRate <= 1)) {
+      err('game.config.sellHouseRefundRate', '退款率需在 (0,1]');
+    }
+
+    return issues;
+  }
+
+  // ==========================================================================
+  // 7) 渲染
+  // ==========================================================================
+  function syncMetaInputs() {
+    $('m-id').value = state.ref.id;
+    $('m-version').value = state.ref.version;
+    $('m-title').value = state.metadata.title;
+    $('m-description').value = state.metadata.description;
+    $('m-boardname').value = state.boardName;
+    $('m-direction').value = state.direction;
+    $('m-canvas').value = state.canvasSize;
+    $('c-cash').value = state.config.initialCash;
+    $('c-salary').value = state.config.passStartSalary;
+    $('c-maxlevel').value = state.config.maxHouseLevel;
+    $('c-sellhouse').value = state.config.sellHouseRefundRate;
+    $('c-sellland').value = state.config.sellLandRate;
+    $('c-mortgage').value = state.config.mortgageInterestRate;
+    $('c-dicemode').value = state.config.diceMode;
+    $('c-branchdice').value = state.config.airportBranchDice;
+    $('t-board').value = state.themeColors.board;
+    $('t-cell').value = state.themeColors.cell;
+    $('t-border').value = state.themeColors.border;
+    $('t-route').value = state.themeColors.route;
+    $('t-title').value = state.themeColors.title;
+    $('t-center').value = state.themeColors.center;
+    $('cards-chance').value = JSON.stringify(state.cards.chance, null, 2);
+    $('cards-destiny').value = JSON.stringify(state.cards.destiny, null, 2);
+  }
+
+  function renderBands() {
+    var box = $('band-rows');
+    box.textContent = '';
+    state.bands.forEach(function (band, index) {
+      var row = document.createElement('div');
+      row.className = 'band-row';
+      var colorInput = document.createElement('input');
+      colorInput.type = 'text';
+      colorInput.value = band.color;
+      colorInput.style.flex = '0 0 92px';
+      colorInput.dataset.bandIndex = String(index);
+      colorInput.dataset.bandField = 'color';
+      var keyInput = document.createElement('input');
+      keyInput.type = 'text';
+      keyInput.value = band.key;
+      keyInput.dataset.bandIndex = String(index);
+      keyInput.dataset.bandField = 'key';
+      var swatch = document.createElement('span');
+      swatch.className = 'swatch';
+      swatch.style.background = band.color;
+      var del = document.createElement('button');
+      del.className = 'tiny';
+      del.textContent = '删除';
+      del.dataset.bandDelete = String(index);
+      row.appendChild(swatch);
+      row.appendChild(keyInput);
+      row.appendChild(colorInput);
+      row.appendChild(del);
+      box.appendChild(row);
+    });
+  }
+
+  function renderCells() {
+    var tbody = $('cell-rows');
+    tbody.textContent = '';
+    var perSide = Math.max(1, Math.ceil(state.cells.length / 4));
+    state.cells.forEach(function (cell, index) {
+      var tr = document.createElement('tr');
+      tr.dataset.index = String(index);
+      if (index % perSide === 0) tr.className = 'corner';
+
+      function addCell(node, className) {
+        var td = document.createElement('td');
+        if (className) td.className = className;
+        td.appendChild(node);
+        tr.appendChild(td);
+        return td;
+      }
+      function textInput(field, value, extraClass) {
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.value = value === undefined || value === null ? '' : String(value);
+        input.dataset.index = String(index);
+        input.dataset.field = field;
+        if (extraClass) input.className = extraClass;
+        return input;
+      }
+      function selectInput(field, value, options) {
+        var select = document.createElement('select');
+        select.dataset.index = String(index);
+        select.dataset.field = field;
+        options.forEach(function (option) {
+          var opt = document.createElement('option');
+          opt.value = option;
+          opt.textContent = option;
+          select.appendChild(opt);
+        });
+        select.value = value;
+        return select;
+      }
+
+      var order = document.createElement('span');
+      order.textContent = String(index + 1);
+      addCell(order);
+
+      var idField = document.createElement('span');
+      idField.textContent = String(cell.id);
+      addCell(idField);
+
+      addCell(selectInput('type', cell.type, CORE_CELL_TYPES));
+      // 只有地产格才有子类型。非地产格给一个不可编辑的占位符，避免出现「起点格写着 normal」
+      // 这种看着像数据错误的显示（实际不会写进 JSON，但很容易让人误判）。
+      if (cell.type === 'property') {
+        addCell(selectInput('subtype', cell.subtype || 'normal', PROPERTY_SUBTYPES));
+      } else {
+        var noSubtype = document.createElement('span');
+        noSubtype.className = 'muted';
+        noSubtype.textContent = '—';
+        addCell(noSubtype);
+      }
+      addCell(textInput('name', cell.name, 'wide'));
+      addCell(textInput('subtitle', cell.subtitle, 'wide'));
+      addCell(textInput('price', cell.price), 'num');
+      addCell(textInput('houseCost', cell.houseCost), 'num');
+      addCell(textInput('mortgageValue', cell.mortgageValue), 'num');
+      addCell(textInput('rents', (cell.rents || []).join(',')), 'rents');
+
+      var effectCell = document.createElement('td');
+      if (cell.type === 'tax') {
+        effectCell.appendChild(textInput('taxAmount', cell.taxAmount));
+      } else if (cell.type === 'special' || cell.type === 'world' || cell.type === 'airport') {
+        var select = selectInput('effectType', (cell.effect && cell.effect.type) || 'none', EFFECT_TYPES);
+        effectCell.appendChild(select);
+        effectCell.appendChild(textInput('effectAmount', cell.effect && (cell.effect.amount || cell.effect.steps || cell.effect.turns)));
+      } else {
+        effectCell.innerHTML = '<span class="muted">—</span>';
+      }
+      tr.appendChild(effectCell);
+
+      var bandCell = document.createElement('td');
+      if (cell.type === 'property') {
+        var bandSelect = document.createElement('select');
+        bandSelect.dataset.index = String(index);
+        bandSelect.dataset.field = 'band';
+        var emptyOpt = document.createElement('option');
+        emptyOpt.value = '';
+        emptyOpt.textContent = '（无色带）';
+        bandSelect.appendChild(emptyOpt);
+        state.bands.forEach(function (band) {
+          var opt = document.createElement('option');
+          opt.value = band.key;
+          opt.textContent = band.key;
+          bandSelect.appendChild(opt);
+        });
+        bandSelect.value = cell.band || '';
+        var swatch = document.createElement('span');
+        swatch.className = 'swatch';
+        swatch.style.background = bandColor(cell.band);
+        bandCell.appendChild(bandSelect);
+        bandCell.appendChild(swatch);
+      } else {
+        bandCell.innerHTML = '<span class="muted">—</span>';
+      }
+      tr.appendChild(bandCell);
+
+      var actions = document.createElement('td');
+      actions.innerHTML =
+        '<div class="row-actions">' +
+        '<button class="tiny" data-move="up" data-index="' + index + '">↑</button>' +
+        '<button class="tiny" data-move="down" data-index="' + index + '">↓</button>' +
+        '<button class="tiny" data-insert="' + index + '">+</button>' +
+        '<button class="tiny" data-delete="' + index + '">✕</button>' +
+        '</div>';
+      tr.appendChild(actions);
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderPreview() {
+    var rects = ringRects(state.cells.length, state.canvasSize);
+    var size = state.canvasSize;
+    var parts = [];
+    parts.push('<svg viewBox="0 0 ' + size + ' ' + size + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="地图预览">');
+    parts.push('<rect x="0" y="0" width="' + size + '" height="' + size + '" fill="' + state.themeColors.board + '"/>');
+    parts.push('<rect x="' + (size / 2 - size * 0.24) + '" y="' + (size / 2 - size * 0.06) + '" width="' +
+      size * 0.48 + '" height="' + size * 0.12 + '" fill="' + state.themeColors.center + '" stroke="' +
+      state.themeColors.border + '" stroke-width="0.2"/>');
+    state.cells.forEach(function (cell, index) {
+      var rect = rects[index];
+      var fill = state.themeColors.cell;
+      if (cell.type === 'property') fill = bandColor(cell.band);
+      else if (cell.type === 'start') fill = '#f6d365';
+      else if (cell.type === 'tax') fill = '#e8b4b8';
+      else if (cell.type === 'chance' || cell.type === 'destiny') fill = '#dfe7f5';
+      parts.push('<rect x="' + rect.x + '" y="' + rect.y + '" width="' + rect.width + '" height="' +
+        rect.height + '" fill="' + fill + '" stroke="' + state.themeColors.border + '" stroke-width="0.25"/>');
+      var cx = rect.x + rect.width / 2;
+      var cy = rect.y + rect.height / 2;
+      var label = String(cell.name || '').slice(0, 4);
+      if (rect.width > rect.height) {
+        parts.push('<text x="' + cx + '" y="' + cy + '" font-size="' + Math.min(2.4, rect.height * 0.42) +
+          '" fill="' + state.themeColors.title + '" text-anchor="middle" dominant-baseline="middle">' + escapeXml(label) + '</text>');
+      } else {
+        parts.push('<text x="' + cx + '" y="' + cy + '" font-size="' + Math.min(2.4, rect.width * 0.42) +
+          '" fill="' + state.themeColors.title + '" text-anchor="middle" dominant-baseline="middle" ' +
+          'transform="rotate(-90 ' + cx + ' ' + cy + ')">' + escapeXml(label) + '</text>');
+      }
+      parts.push('<text x="' + (rect.x + rect.width - 0.6) + '" y="' + (rect.y + 1.6) +
+        '" font-size="1.5" fill="' + state.themeColors.title + '" text-anchor="end" opacity="0.6">' +
+        index + '</text>');
+    });
+    parts.push('</svg>');
+    $('preview').innerHTML = parts.join('');
+    var corners = Math.ceil(state.cells.length / 4);
+    $('preview-meta').textContent = '共 ' + state.cells.length + ' 格 · 每边约 ' + corners + ' 格 · 行走顺序即序号 1→' +
+      state.cells.length + '（末格 nextId 指回 id ' + (state.cells.length ? state.cells[0].id : '-') + '）';
+  }
+
+  function escapeXml(text) {
+    return String(text).replace(/[&<>"']/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[ch];
+    });
+  }
+
+  function renderIssues(issues) {
+    var list = $('issues');
+    list.textContent = '';
+    if (issues.length === 0) {
+      var ok = document.createElement('li');
+      ok.className = 'ok';
+      ok.textContent = '全部检查通过 ✅';
+      list.appendChild(ok);
+      return;
+    }
+    issues.forEach(function (issue) {
+      var li = document.createElement('li');
+      li.className = issue.level === 'error' ? 'err' : '';
+      li.textContent = '[' + issue.path + '] ' + issue.message;
+      list.appendChild(li);
+    });
+  }
+
+  function refreshHash() {
+    try {
+      state.ref.contentHash = computeContentHash(toPack());
+      $('hash-out').textContent = state.ref.contentHash;
+    } catch (error) {
+      $('hash-out').textContent = '计算失败：' + error.message;
+    }
+  }
+
+  function renderAll() {
+    syncMetaInputs();
+    renderBands();
+    renderCells();
+    renderPreview();
+    refreshHash();
+    renderIntegration();
+  }
+
+  /** `silk-road` -> `silkRoad`，用于生成 `silkRoadMap.ts` 这类文件名与变量名。 */
+  function camelCase(id) {
+    var parts = String(id).split(/[^a-z0-9]+/i).filter(Boolean);
+    return parts.map(function (part, index) {
+      var lower = part.toLowerCase();
+      return index === 0 ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
+    }).join('') || 'newMap';
+  }
+
+  /**
+   * 生成「接入仓库」片段。
+   *
+   * 新增一张地图在仓库里要同步 6 处（4 份 JSON / 入口导出 / registry 注册 / 硬编码测试清单 /
+   * 部署清单），漏任何一处**都不会在本地报错**——服务器上只是安静地少一个文件，表现为
+   * 「地图在本地能选，线上却没有」。所以片段以「一条命令」打头，把机器能做的部分交给
+   * tools/apply-map-pack.ts；后面的手工片段保留下来，是为了让人能核对脚本到底改了什么。
+   */
+  function renderIntegration() {
+    var id = state.ref.id || 'my-map';
+    var camel = camelCase(id);
+    var lines = [];
+    lines.push('# ---- 0) 一条命令落地（推荐）----');
+    lines.push('# 先用右上角「导出 bundle.json（一键落地）」，把它存到仓库根目录，然后：');
+    lines.push('node node_modules/tsx/dist/cli.mjs tools/apply-map-pack.ts bundle.json --dry-run');
+    lines.push('# 确认输出无误后去掉 --dry-run 真正写盘（已存在的图要覆盖时再加 --force）：');
+    lines.push('node node_modules/tsx/dist/cli.mjs tools/apply-map-pack.ts bundle.json');
+    lines.push('');
+    lines.push('# ---- 以下为脚本会自动完成的改动，仅作人工核对参考 ----');
+    lines.push('');
+    lines.push('# 1) 放置导出的四个 JSON');
+    lines.push('packages/board-data/maps/' + id + '/v1/manifest.json');
+    lines.push('packages/board-data/maps/' + id + '/v1/board.json');
+    lines.push('packages/board-data/maps/' + id + '/v1/cards.json');
+    lines.push('packages/board-data/maps/' + id + '/v1/game-config.json');
+    lines.push('');
+    lines.push('# ---- 2) 新建 packages/board-data/src/' + camel + 'Map.ts ----');
+    lines.push("import board from '../maps/" + id + '/v1/board.json\';');
+    lines.push("import cards from '../maps/" + id + '/v1/cards.json\';');
+    lines.push("import config from '../maps/" + id + '/v1/game-config.json\';');
+    lines.push("import manifest from '../maps/" + id + '/v1/manifest.json\';');
+    lines.push("import type { MapPack } from './mapTypes';");
+    lines.push("import type { BoardData, CardsData, GameConfig } from './types';");
+    lines.push('');
+    lines.push('const mapManifest = manifest as unknown as Pick<MapPack, \'ref\' | \'metadata\' | \'presentation\'> & {');
+    lines.push("  readonly requiredRuleModules: MapPack['game']['requiredRuleModules'];");
+    lines.push('};');
+    lines.push('');
+    lines.push('const mapPack = {');
+    lines.push('  ref: mapManifest.ref,');
+    lines.push('  metadata: mapManifest.metadata,');
+    lines.push('  game: {');
+    lines.push('    board: board as BoardData,');
+    lines.push('    cards: cards as CardsData,');
+    lines.push('    config: config as GameConfig,');
+    lines.push('    requiredRuleModules: mapManifest.requiredRuleModules,');
+    lines.push('  },');
+    lines.push('  presentation: mapManifest.presentation,');
+    lines.push('} satisfies MapPack;');
+    lines.push('');
+    lines.push('export const ' + camel + 'Map: Readonly<MapPack> = mapPack;');
+    lines.push('');
+    lines.push('# ---- 3) registry.ts 与 index.ts：import / 注册 / 导出 ----');
+    lines.push("import { " + camel + "Map } from './" + camel + "Map';   // registry.ts");
+    lines.push('productionRegistry.registerMapPack(' + camel + 'Map);   // registry.ts');
+    lines.push("export { " + camel + "Map } from './" + camel + "Map';   // index.ts");
+    lines.push('');
+    lines.push('# ---- 4) deploy-manual.ps1 的 $files 数组（漏一项线上就没有这张地图） ----');
+    lines.push('"packages/board-data/maps/' + id + '/v1/manifest.json",');
+    lines.push('"packages/board-data/maps/' + id + '/v1/board.json",');
+    lines.push('"packages/board-data/maps/' + id + '/v1/cards.json",');
+    lines.push('"packages/board-data/maps/' + id + '/v1/game-config.json",');
+    lines.push('\'packages/board-data/src/' + camel + 'Map.ts\',');
+    lines.push('');
+    lines.push('# ---- 5) 脚本不会自动改的测试期望值（漏了会在 pnpm test 里红） ----');
+    lines.push('#   packages/board-data/src/__tests__/registry.test.ts     期望地图数量与 id 列表');
+    lines.push('#   packages/board-data/src/__tests__/testMap.test.ts      listActiveMaps() 期望数组');
+    lines.push('#   apps/client/src/components/MapThumbnail.test.ts        maps.map(e => e.ref.id) 期望数组');
+    lines.push('#   新建 packages/board-data/src/__tests__/' + camel + 'Map.test.ts（照 greatWallMap.test.ts 抄）');
+    lines.push('#   apps/server/src/__tests__/fullGameSmoke.test.ts        遍历清单可加入本图（真实网关跑整局）');
+    lines.push('');
+    lines.push('# 最后跑门禁：corepack pnpm test 与 corepack pnpm typecheck');
+    lines.push('');
+    lines.push('# contentHash = ' + (state.ref.contentHash || '（尚未计算）'));
+    $('integration-out').textContent = lines.join('\n');
+  }
+
+  // ==========================================================================
+  // 8) 事件
+  // ==========================================================================
+  function bindMeta() {
+    $('m-id').addEventListener('input', function () { state.ref.id = this.value.trim(); refreshHash(); });
+    $('m-version').addEventListener('input', function () { state.ref.version = clampPositiveInt(this.value, 1); refreshHash(); });
+    $('m-title').addEventListener('input', function () { state.metadata.title = this.value; renderPreview(); refreshHash(); });
+    $('m-description').addEventListener('input', function () { state.metadata.description = this.value; refreshHash(); });
+    $('m-boardname').addEventListener('input', function () { state.boardName = this.value; refreshHash(); });
+    $('m-direction').addEventListener('change', function () { state.direction = this.value; refreshHash(); });
+    $('m-canvas').addEventListener('input', function () {
+      state.canvasSize = Math.max(20, clampPositiveInt(this.value, 100));
+      renderPreview();
+      refreshHash();
+    });
+
+    var configBindings = [
+      ['c-cash', 'initialCash', Number], ['c-salary', 'passStartSalary', Number],
+      ['c-maxlevel', 'maxHouseLevel', function (v) { return clampPositiveInt(v, 5); }],
+      ['c-sellhouse', 'sellHouseRefundRate', Number], ['c-sellland', 'sellLandRate', Number],
+      ['c-mortgage', 'mortgageInterestRate', Number], ['c-dicemode', 'diceMode', String],
+      ['c-branchdice', 'airportBranchDice', function (v) { return clampPositiveInt(v, 1); }]
+    ];
+    configBindings.forEach(function (binding) {
+      var element = $(binding[0]);
+      element.addEventListener('change', function () {
+        state.config[binding[1]] = binding[2](this.value);
+        refreshHash();
+      });
+    });
+
+    var themeBindings = [
+      ['t-board', 'board'], ['t-cell', 'cell'], ['t-border', 'border'],
+      ['t-route', 'route'], ['t-title', 'title'], ['t-center', 'center']
+    ];
+    themeBindings.forEach(function (binding) {
+      $(binding[0]).addEventListener('input', function () {
+        state.themeColors[binding[1]] = this.value;
+        renderPreview();
+        refreshHash();
+      });
+    });
+
+    ['chance', 'destiny'].forEach(function (deck) {
+      $('cards-' + deck).addEventListener('change', function () {
+        try {
+          var parsed = JSON.parse(this.value);
+          if (!Array.isArray(parsed)) throw new Error('必须是数组');
+          state.cards[deck] = parsed;
+          refreshHash();
+        } catch (error) {
+          alert(deck + ' 卡 JSON 解析失败：' + error.message);
+        }
+      });
+    });
+  }
+
+  function bindCells() {
+    $('cell-rows').addEventListener('input', function (event) {
+      var target = event.target;
+      if (!target.dataset || target.dataset.index === undefined || !target.dataset.field) return;
+      var cell = state.cells[Number(target.dataset.index)];
+      var field = target.dataset.field;
+      var value = target.value;
+      if (field === 'price' || field === 'houseCost' || field === 'mortgageValue' || field === 'taxAmount') {
+        cell[field] = Number(value) || 0;
+      } else if (field === 'rents') {
+        cell.rents = value.split(',').map(function (part) { return Number(part.trim()) || 0; })
+          .filter(function (n, index, all) { return !(n === 0 && all.length === 1); });
+      } else if (field === 'effectType') {
+        cell.effect = Object.assign({}, cell.effect, { type: value });
+      } else if (field === 'effectAmount') {
+        var numeric = Number(value) || 0;
+        if (!cell.effect) cell.effect = { type: 'none' };
+        if (cell.effect.type === 'move_steps') cell.effect.steps = numeric;
+        else if (cell.effect.type === 'skip_turn') cell.effect.turns = numeric;
+        else cell.effect.amount = numeric;
+      } else {
+        cell[field] = value;
+      }
+      renderPreview();
+      refreshHash();
+    });
+
+    $('cell-rows').addEventListener('change', function (event) {
+      var target = event.target;
+      if (!target.dataset || target.dataset.index === undefined || !target.dataset.field) return;
+      if (target.dataset.field === 'type' || target.dataset.field === 'subtype') {
+        var cell = state.cells[Number(target.dataset.index)];
+        if (target.dataset.field === 'type') {
+          cell.type = target.value;
+          if (cell.type === 'property' && !cell.subtype) cell.subtype = 'normal';
+          if (cell.type === 'property') applySuggestedNumbers(cell);
+          if (cell.type === 'tax' && !cell.taxAmount) cell.taxAmount = 1000;
+          if ((cell.type === 'special' || cell.type === 'world') && !cell.effect) {
+            cell.effect = { type: 'skip_turn', turns: 1 };
+          }
+        } else {
+          cell.subtype = target.value;
+          applySuggestedNumbers(cell);
+        }
+        renderCells();
+        renderPreview();
+        refreshHash();
+      }
+    });
+
+    $('cell-rows').addEventListener('click', function (event) {
+      var target = event.target;
+      if (!target.dataset) return;
+      if (target.dataset.move) {
+        var from = Number(target.dataset.index);
+        var to = target.dataset.move === 'up' ? from - 1 : from + 1;
+        if (to < 0 || to >= state.cells.length) return;
+        var moved = state.cells.splice(from, 1)[0];
+        state.cells.splice(to, 0, moved);
+        renderCells();
+        renderPreview();
+        refreshHash();
+      } else if (target.dataset.insert !== undefined) {
+        var at = Number(target.dataset.insert) + 1;
+        var newId = 0;
+        state.cells.forEach(function (cell) { newId = Math.max(newId, cell.id + 1); });
+        state.cells.splice(at, 0, {
+          id: newId, type: 'property', subtype: 'normal', name: '新地产',
+          price: 2000, houseCost: 1000, rents: NORMAL_RENT_RATIOS.map(function (r) { return round100(2000 * r); }),
+          mortgageValue: 1000, band: state.bands[0] ? state.bands[0].key : ''
+        });
+        renderCells();
+        renderPreview();
+        refreshHash();
+      } else if (target.dataset.delete !== undefined) {
+        if (state.cells.length <= 4) { alert('至少保留 4 格'); return; }
+        state.cells.splice(Number(target.dataset.delete), 1);
+        renderCells();
+        renderPreview();
+        refreshHash();
+      }
+    });
+  }
+
+  function applySuggestedNumbers(cell) {
+    if (cell.type !== 'property') return;
+    if (cell.subtype === 'station') {
+      if (!cell.price) cell.price = 2000;
+      if (!cell.rents || cell.rents.length !== 4) {
+        cell.rents = STATION_RENT_RATIOS.map(function (r) { return round100(cell.price * r); });
+      }
+      if (!cell.mortgageValue) cell.mortgageValue = round100(cell.price * 0.5);
+      delete cell.houseCost;
+      if (!cell.band) cell.band = 'band:station';
+      return;
+    }
+    if (cell.subtype === 'utility') {
+      if (!cell.price) cell.price = 1500;
+      if (!cell.mortgageValue) cell.mortgageValue = round100(cell.price * 0.5);
+      delete cell.houseCost;
+      delete cell.rents;
+      if (!cell.band) cell.band = 'band:utility';
+      return;
+    }
+    if (!cell.price) cell.price = 2000;
+    if (!cell.houseCost) cell.houseCost = round100(cell.price * 0.55);
+    if (!cell.rents || cell.rents.length !== state.config.maxHouseLevel + 1) {
+      cell.rents = NORMAL_RENT_RATIOS.map(function (r) { return round100(cell.price * r); });
+    }
+    if (!cell.mortgageValue) cell.mortgageValue = round100(cell.price * 0.5);
+  }
+
+  function bindBands() {
+    $('band-rows').addEventListener('input', function (event) {
+      var target = event.target;
+      if (!target.dataset || target.dataset.bandIndex === undefined) return;
+      var band = state.bands[Number(target.dataset.bandIndex)];
+      band[target.dataset.bandField] = target.value;
+      renderCells();
+      renderPreview();
+      refreshHash();
+    });
+    $('band-rows').addEventListener('click', function (event) {
+      if (!event.target.dataset || event.target.dataset.bandDelete === undefined) return;
+      state.bands.splice(Number(event.target.dataset.bandDelete), 1);
+      renderBands();
+      renderCells();
+      renderPreview();
+      refreshHash();
+    });
+    $('btn-add-band').addEventListener('click', function () {
+      var index = state.bands.length + 1;
+      state.bands.push({ key: 'band:new' + index, color: '#' + Math.floor(Math.random() * 0xdddddd + 0x111111).toString(16).padStart(6, '0') });
+      renderBands();
+      renderCells();
+      renderPreview();
+      refreshHash();
+    });
+  }
+
+  function bindToolbar() {
+    $('btn-skeleton').addEventListener('click', function () {
+      var answer = window.prompt('新地图的格子总数（4 的倍数为佳），以及地图 id：', '28,my-map');
+      if (answer === null) return;
+      var parts = String(answer).split(',');
+      var count = clampPositiveInt(parts[0], 28);
+      var id = (parts[1] || 'my-map').trim();
+      state.ref = { id: id, version: 1, contentHash: '' };
+      state.metadata = { title: id, description: '' };
+      state.boardName = '大富翁·' + id;
+      state.cells = buildSkeleton(count, id, id);
+      state.cards = defaultCards();
+      state.config = Object.assign({}, DEFAULT_CONFIG);
+      state.bands = DEFAULT_BANDS.slice();
+      state.themeColors = Object.assign({}, DEFAULT_THEME_COLORS);
+      renderAll();
+      renderIssues(validate(toPack()));
+    });
+
+    $('btn-load-sample').addEventListener('click', function () {
+      importPack(buildSamplePack());
+    });
+
+    $('btn-regen-layout').addEventListener('click', function () {
+      renderPreview();
+      refreshHash();
+      renderIssues(validate(toPack()));
+    });
+
+    $('btn-validate').addEventListener('click', function () {
+      var issues = validate(toPack());
+      renderIssues(issues);
+      var errors = issues.filter(function (issue) { return issue.level === 'error'; });
+      if (errors.length === 0) refreshHash();
+    });
+
+    $('btn-hash').addEventListener('click', function () {
+      refreshHash();
+    });
+
+    /** 下载一个 JSON 文件。导出与 bundle 导出共用，避免两处 blob 代码漂移。 */
+    function downloadJson(name, value) {
+      var blob = new Blob([JSON.stringify(value, null, 2) + '\n'], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    }
+
+    /** 校验通过才返回导出内容；有 error 时弹提示并返回 null。 */
+    function prepareExport(what) {
+      var pack = toPack();
+      var issues = validate(pack);
+      renderIssues(issues);
+      var errors = issues.filter(function (issue) { return issue.level === 'error'; });
+      if (errors.length > 0) {
+        alert('还有 ' + errors.length + ' 个错误，先修好再' + what + '（详见右侧校验面板）');
+        return null;
+      }
+      refreshHash();
+      return exportFiles();
+    }
+
+    $('btn-export').addEventListener('click', function () {
+      var files = prepareExport('导出');
+      if (!files) return;
+      Object.keys(files).forEach(function (name) { downloadJson(name, files[name]); });
+    });
+
+    /**
+     * 导出单个 bundle.json —— 直接喂给 tools/apply-map-pack.ts 做一键落地。
+     * bundle 结构就是 exportFiles() 的返回值（{ 'manifest.json', 'board.json', ... }），
+     * 所以这里不需要另建一份序列化逻辑，只是把四份内容打进一个文件。
+     */
+    $('btn-export-bundle').addEventListener('click', function () {
+      var files = prepareExport('导出');
+      if (!files) return;
+      downloadJson('bundle.json', files);
+    });
+
+    $('file-import').addEventListener('change', function (event) {
+      var files = Array.prototype.slice.call(event.target.files || []);
+      if (files.length === 0) return;
+      var pending = files.length;
+      var loaded = {};
+      files.forEach(function (file) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          try {
+            loaded[file.name] = JSON.parse(String(reader.result));
+          } catch (error) {
+            alert(file.name + ' 解析失败：' + error.message);
+          }
+          pending -= 1;
+          if (pending === 0) importFiles(loaded);
+        };
+        reader.readAsText(file, 'utf-8');
+      });
+      event.target.value = '';
+    });
+
+    // 「接入仓库」区：片段本身在 renderAll 里实时刷新，这里只补「重新生成」与「复制」。
+    $('btn-gen-integration').addEventListener('click', function () { renderIntegration(); });
+    $('btn-copy-integration').addEventListener('click', function () {
+      var text = $('integration-out').textContent;
+      var fallback = function () {
+        var area = document.createElement('textarea');
+        area.value = text;
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand('copy');
+        document.body.removeChild(area);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(fallback);
+      } else {
+        fallback();
+      }
+    });
+  }
+
+  function importFiles(files) {
+    var manifest = files['manifest.json'];
+    var board = files['board.json'] || files['board'];
+    var cards = files['cards.json'] || files['cards'];
+    var config = files['game-config.json'] || files['game-config'];
+
+    if (!manifest && files['pack.json']) manifest = files['pack.json'];
+
+    if (!manifest) {
+      // 允许只导入 board.json：其它部分沿用当前状态
+      if (!board) { alert('需要至少提供 manifest.json 或 board.json'); return; }
+      state.boardName = board.boardName || state.boardName;
+      state.direction = board.direction || state.direction;
+      state.cells = board.cells.map(convertBoardCell);
+      if (cards) state.cards = { chance: cards.chance || [], destiny: cards.destiny || [] };
+      if (config) state.config = Object.assign({}, DEFAULT_CONFIG, config);
+      renderAll();
+      return;
+    }
+
+    var pack = {
+      ref: manifest.ref,
+      metadata: manifest.metadata,
+      game: {
+        board: board || (manifest.game && manifest.game.board),
+        cards: cards || (manifest.game && manifest.game.cards),
+        config: config || (manifest.game && manifest.game.config),
+        requiredRuleModules: manifest.requiredRuleModules || [{ id: 'core', version: 1 }]
+      },
+      presentation: manifest.presentation
+    };
+    importPack(pack);
+  }
+
+  function convertBoardCell(cell) {
+    var out = {
+      id: cell.id,
+      type: cell.type,
+      subtype: cell.subtype,
+      name: cell.name,
+      subtitle: cell.subtitle,
+      price: cell.price,
+      houseCost: cell.houseCost,
+      rents: cell.rents ? cell.rents.slice() : undefined,
+      mortgageValue: cell.mortgageValue,
+      taxAmount: cell.amount,
+      effect: cell.effect ? deepCopy(cell.effect) : undefined
+    };
+    return out;
+  }
+
+  function importPack(pack) {
+    var board = pack.game.board;
+    state.ref = { id: pack.ref.id, version: pack.ref.version, contentHash: pack.ref.contentHash };
+    state.metadata = Object.assign({ title: '', description: '' }, pack.metadata || {});
+    state.boardName = board.boardName || state.boardName;
+    state.direction = board.direction || 'clockwise';
+    state.cells = board.cells.map(convertBoardCell);
+    state.cards = deepCopy(pack.game.cards);
+    state.config = Object.assign({}, DEFAULT_CONFIG, deepCopy(pack.game.config));
+
+    var presentation = pack.presentation || {};
+    state.canvasSize = (presentation.canvas && presentation.canvas.size) || 100;
+    var theme = presentation.theme || {};
+    if (theme.colors) state.themeColors = Object.assign({}, DEFAULT_THEME_COLORS, theme.colors);
+    if (theme.propertyBands) {
+      state.bands = Object.keys(theme.propertyBands).map(function (key) {
+        return { key: key, color: theme.propertyBands[key] };
+      });
+    }
+    // 从 presentation 回填每格的色带
+    var presentationCells = presentation.cells || {};
+    state.cells.forEach(function (cell, index) {
+      var visual = presentationCells[String(cell.id)];
+      if (visual && visual.propertyBand) cell.band = visual.propertyBand;
+      else if (!cell.band && cell.type === 'property') cell.band = state.bands[index % state.bands.length]
+        ? state.bands[index % state.bands.length].key : '';
+    });
+
+    state.importedPresentation = presentation && presentation.cells ? deepCopy(presentation) : null;
+    state.layoutMode = state.importedPresentation ? 'imported' : 'generated';
+
+    renderAll();
+    renderIssues(validate(toPack()));
+  }
+
+  function buildSamplePack() {
+    // 结构示例：只借用「丝路之旅」的双环思路，不复制其数据；用于演示导入/编辑流程
+    var cells = [];
+    cells.push({ id: 0, type: 'start', name: '起点' });
+    cells.push({ id: 1, type: 'property', subtype: 'normal', name: '长安', price: 1800, houseCost: 1000, rents: [140, 700, 2000, 5500, 7500, 9500], mortgageValue: 900 });
+    cells.push({ id: 2, type: 'property', subtype: 'normal', name: '咸阳', price: 1800, houseCost: 1000, rents: [140, 700, 2000, 5500, 7500, 9500], mortgageValue: 900 });
+    cells.push({ id: 3, type: 'chance', name: '机会' });
+    cells.push({ id: 4, type: 'property', subtype: 'station', name: '长安驿站', price: 2000, rents: [250, 500, 1000, 2000], mortgageValue: 1000 });
+    cells.push({ id: 5, type: 'tax', name: '关税', amount: 1000 });
+    cells.push({ id: 6, type: 'property', subtype: 'normal', name: '天水', price: 2200, houseCost: 1100, rents: [170, 850, 2400, 6500, 8800, 11000], mortgageValue: 1100 });
+    cells.push({ id: 7, type: 'destiny', name: '命运' });
+    cells.push({ id: 8, type: 'special', name: '迷路', effect: { type: 'skip_turn', turns: 1 } });
+    cells.push({ id: 9, type: 'property', subtype: 'utility', name: '水车', price: 1500, mortgageValue: 750 });
+    cells.push({ id: 10, type: 'property', subtype: 'normal', name: '敦煌', price: 2400, houseCost: 1200, rents: [190, 950, 2600, 7000, 9500, 12000], mortgageValue: 1200 });
+    cells.push({ id: 11, type: 'chance', name: '机会' });
+    cells.push({ id: 12, type: 'property', subtype: 'normal', name: '楼兰', price: 2600, houseCost: 1300, rents: [200, 1000, 2800, 7500, 10000, 13000], mortgageValue: 1300 });
+    cells.push({ id: 13, type: 'tax', name: '通行费', amount: 1200 });
+    cells.push({ id: 14, type: 'destiny', name: '命运' });
+    cells.push({ id: 15, type: 'property', subtype: 'normal', name: '撒马尔罕', price: 2800, houseCost: 1400, rents: [220, 1100, 3000, 8000, 11000, 14000], mortgageValue: 1400 });
+
+    return {
+      ref: { id: 'structure-sample', version: 1, contentHash: '' },
+      metadata: { title: '结构示例', description: '编辑器内置的结构示例地图，用于演示导入与编辑流程。' },
+      game: {
+        board: { boardName: '大富翁·结构示例', direction: 'clockwise', cells: cells },
+        cards: defaultCards(),
+        config: Object.assign({}, DEFAULT_CONFIG),
+        requiredRuleModules: [{ id: 'core', version: 1 }]
+      },
+      presentation: null
+    };
+  }
+
+  // ==========================================================================
+  // 9) 对外 API（自动化测试与脚本用）
+  // ==========================================================================
+  window.MapEditor = {
+    loadPack: function (pack) { importPack(pack); return true; },
+    toPack: toPack,
+    computeHash: function () { return computeContentHash(toPack()); },
+    computeHashOfPack: function (pack) { return computeContentHash(pack); },
+    exportFiles: exportFiles,
+    validate: function () { return validate(toPack()); },
+    loadSkeleton: function (cellCount, id) {
+      state.ref = { id: id, version: 1, contentHash: '' };
+      state.metadata.title = id;
+      state.cells = buildSkeleton(cellCount, id, id);
+      renderAll();
+      return state.cells.length;
+    },
+    state: function () { return JSON.parse(JSON.stringify({
+      ref: state.ref, cells: state.cells, bands: state.bands, canvasSize: state.canvasSize
+    })); }
+  };
+
+  // ==========================================================================
+  // 10) 启动
+  // ==========================================================================
+  bindMeta();
+  bindCells();
+  bindBands();
+  bindToolbar();
+  state.cells = buildSkeleton(28, 'my-map', '我的地图');
+  state.cards = defaultCards();
+  renderAll();
+})();
+</script>
+</body>
+</html>

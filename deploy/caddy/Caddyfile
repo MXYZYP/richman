@@ -1,0 +1,12 @@
+# 大富翁游戏：正式域名反代配置
+# 域名已 ICP 备案（新ICP备2026008728号），备案通过日期 2026-09-18
+# 作用：game.mxyzyp.xyz :443 -> 本机 127.0.0.1:3000（pm2 richman 托管的客户端 dist）
+# Caddy 自动向 Let's Encrypt 申请并续期 HTTPS；reverse_proxy 默认透传 WebSocket Upgrade 头，
+# 因此前端 Socket.IO 自动走 wss://game.mxyzyp.xyz，无需改任何联机代码。
+#
+# 部署：替换服务器 /etc/caddy/Caddyfile 为本文件内容，然后 `sudo systemctl reload caddy`
+# 前置：① DNS 已加 A 记录 game.mxyzyp.xyz -> 101.200.189.252；② 阿里云安全组已开放 80/443 入站。
+
+game.mxyzyp.xyz {
+    reverse_proxy 127.0.0.1:3000
+}
