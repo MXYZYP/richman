@@ -71,8 +71,8 @@ export function resolvePage(snapshot: AppFlowSnapshot): AppPage {
   return { kind: 'home', resume: snapshot.pending, canResumeActive: snapshot.storedActive };
 }
 
-const ROOM_CODE_PATTERN = /^\d{4}$/;
-const ROOM_CODE_LENGTH = 4;
+const ROOM_CODE_PATTERN = /^\d{6}$/;
+const ROOM_CODE_LENGTH = 6;
 const ASCII_WHITESPACE = /[ \t\r\n\f\v]+/g;
 
 /** Strip ASCII whitespace so pasted / autofilled codes normalize before validation. */
@@ -89,7 +89,7 @@ export function capRoomCode(raw: string): string {
   return normalizeRoomCode(raw).slice(0, ROOM_CODE_LENGTH);
 }
 
-/** A room code is exactly four ASCII digits (full-width digits are rejected). */
+/** A room code is exactly six ASCII digits (full-width digits are rejected). */
 export function isValidRoomCode(code: string): boolean {
   return ROOM_CODE_PATTERN.test(code);
 }

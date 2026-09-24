@@ -19,7 +19,7 @@ function player(id: string, over: Partial<PublicRoomPlayer> = {}): PublicRoomPla
 
 function room(over: Partial<PublicRoomState> = {}): PublicRoomState {
   return {
-    roomCode: '1234',
+    roomCode: '123456',
     status: 'playing',
     hostId: ME,
     takeoverPlayerId: null,

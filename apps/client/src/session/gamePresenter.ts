@@ -86,6 +86,7 @@ const STEP_DURATIONS_MS: Record<string, number> = {
   debt_entered: 900,
   debt_resolved: 700,
   player_bankrupt: 1_500,
+  player_surrendered: 1_500,
   turn_ended: 300,
   game_over: 1_200,
 };
@@ -132,6 +133,7 @@ function cashDeltasOf(event: GameEvent): Array<{ playerId: string; delta: number
             { playerId: event.to, delta: event.amount },
           ];
     case 'player_bankrupt':
+    case 'player_surrendered':
       return event.creditorId !== null && event.transferredCash > 0
         ? [
             { playerId: event.playerId, delta: -event.transferredCash },

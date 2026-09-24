@@ -79,15 +79,19 @@ describe('local resume UI', () => {
     }));
     expect(worldHtml).toContain('aria-label="地图"');
     expect(worldHtml).toContain('世界之旅');
-    expect(worldHtml.match(/<select/g)).toHaveLength(3);
-    expect(worldHtml).toContain('<select aria-label="地图" value="world-tour"');
+    // 地图选择已从原生 <select> 换成自定义 MapPicker（跨平台观感一致）；
+    // 这里只剩「真人数量」「电脑数量」两个 <select>。
+    expect(worldHtml.match(/<select/g)).toHaveLength(2);
+    // MapPicker 的 span 会被 scoped CSS 追加 data-v-xxx 属性，故分两段断言。
+    expect(worldHtml).toContain('map-picker-value');
+    expect(worldHtml).toContain('世界之旅');
 
     const chinaSetup = createDefaultGameSetup();
     const chinaHtml = await renderToString(createSSRApp({
       render: () => h(GameSetup, { initialSetup: chinaSetup }),
     }));
     expect(chinaHtml).toContain(getActiveMapPack('china-tour').metadata.title);
-    expect(chinaHtml.match(/<select/g)).toHaveLength(3);
+    expect(chinaHtml.match(/<select/g)).toHaveLength(2);
   });
 
   it('HomeView 保留创建房间地图入口，并恢复首页原本选择的地图', async () => {
@@ -97,9 +101,10 @@ describe('local resume UI', () => {
         initialMapId: 'world-tour',
       }),
     }));
-    expect(html.match(/<select/g)).toHaveLength(1);
+    // 首页本身不再使用原生 <select>（地图入口是 MapPicker），因此一个 <select> 都不应有。
+    expect(html.match(/<select/g)).toBeNull();
     expect(html).toContain('世界之旅');
-    expect(html).toMatch(/<option value="world-tour"[^>]*selected>世界之旅<\/option>/);
+    expect(html).toContain('map-picker-value');
     expect(html).toContain('创建房间');
   });
 

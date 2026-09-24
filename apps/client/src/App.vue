@@ -24,7 +24,7 @@ import {
 } from './session/sessionStorage';
 import { createDefaultGameSetup, gameSetupToCreateOptions, updateGameSetupMapId, type GameSetupForm } from './game/gameSetup';
 import { getMapPack, listActiveMaps } from '@richman/board-data';
-import type { RoomRole } from '@richman/protocol';
+import type { RoomRole, RoomSettingsPatch } from '@richman/protocol';
 import {
   LOCAL_GAME_SAVE_KEYS,
   createBrowserLocalSaveMutationLock,
@@ -46,9 +46,14 @@ import {
   type LocalSaveSummary,
 } from './session/localGameSave';
 import type { GameState } from '@richman/engine';
+import { applyAppearancePreferences } from './ui/themeManager';
 
 // Exactly one OnlineSession for the app's lifetime — constructed before any operation.
 const onlineSession: OnlineGameSession = createOnlineSession();
+
+// 应用已保存的深色模式与对局皮肤（#11 / P2-9）：模块顶层设置 <html data-appearance> 与
+// <html data-theme>，避免首屏闪烁。深浅两轴一起算，因为 'auto' 皮肤要按深色模式解析。
+applyAppearancePreferences();
 const activeMaps = listActiveMaps();
 function browserStorage(): StorageLike | undefined {
   try { return globalThis.localStorage; } catch { return undefined; }
@@ -186,6 +191,8 @@ async function handleCreate(nickname: string, mapId: string) {
   homeMapId.value = mapId;
   submitting.value = true;
   try {
+    // 电脑难度不再随建房一次性传走：房间是「先建房、后加电脑」，难度由房主在大厅里设
+    // （room:update_settings），所以建房只发昵称与地图。
     await onlineSession.create(nickname, mapId);
   } finally {
     submitting.value = false;
@@ -264,6 +271,14 @@ function handleRemoveBot(playerId: string) {
 
 function handleRenameBot(playerId: string, nickname: string) {
   void onlineSession.renameBot(playerId, nickname);
+}
+
+function handleKick(playerId: string) {
+  void onlineSession.kickPlayer(playerId);
+}
+
+function handleUpdateRoomSettings(patch: RoomSettingsPatch) {
+  void onlineSession.updateRoomSettings(patch);
 }
 
 function handleStartRoom() {
@@ -597,9 +612,14 @@ onBeforeUnmount(() => {
     :invite-url="inviteUrl"
     :connection-label="connectionLabel"
     :show-map-title="activeMaps.length > 1"
+    :chat-log="onlineSession.chatLog.value"
+    :chat-send="onlineSession.sendChat"
+    :room-settings="onlineSession.roomSettings.value"
+    @update-settings="handleUpdateRoomSettings"
     @add-bot="handleAddBot"
     @remove-bot="handleRemoveBot"
     @rename-bot="handleRenameBot"
+    @kick="handleKick"
     @start="handleStartRoom"
     @leave="handleLeaveRoom"
   />

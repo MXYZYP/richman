@@ -1,16 +1,36 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 import { currentRelease, releaseCatalog } from '../releaseCatalog';
 
+/**
+ * 默认（defer=false）把整份更新说明渲染进 DOM：首页那颗入口就在首屏，整段文本一起
+ * 出来最省事，SSR 渲染出的 HTML 也自带完整版本记录。
+ *
+ * defer=true 改成「首次点击才渲染正文」：嵌在设置面板这类深处时，如果照旧预先渲染，
+ * 大厅与对局两个视图的已渲染文本里都会多出一整份更新说明 —— 既白白增重 DOM，也会让
+ * 那些「观战者不该看到某某字样」的按文本断言被**无关的历史条目**误伤。关闭后再把正文
+ * 释放掉，保持占用是临时的。
+ */
+const props = withDefaults(defineProps<{ defer?: boolean }>(), { defer: false });
+
 const dialog = ref<HTMLDialogElement | null>(null);
+const opened = ref(!props.defer);
 const releases = releaseCatalog.releases;
 
 function show(): void {
-  if (dialog.value !== null && !dialog.value.open) dialog.value.showModal();
+  opened.value = true;
+  void nextTick(() => {
+    if (dialog.value !== null && !dialog.value.open) dialog.value.showModal();
+  });
 }
 
 function close(): void {
   dialog.value?.close();
+}
+
+/** 原生 Esc 关闭同样会触发 close：defer 模式下顺手把正文释放掉。 */
+function handleClosed(): void {
+  if (props.defer) opened.value = false;
 }
 
 function closeFromBackdrop(event: MouseEvent): void {
@@ -28,8 +48,9 @@ function closeFromBackdrop(event: MouseEvent): void {
     class="release-notes-dialog"
     aria-labelledby="release-notes-title"
     @click="closeFromBackdrop"
+    @close="handleClosed"
   >
-    <article class="release-notes-sheet">
+    <article v-if="opened" class="release-notes-sheet">
       <header class="release-notes-header">
         <div>
           <p class="release-notes-eyebrow">当前版本 v{{ currentRelease.version }}</p>

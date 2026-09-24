@@ -79,4 +79,34 @@ describe('playbackPace', () => {
       else Object.defineProperty(globalThis, 'localStorage', original);
     }
   });
+
+  it('只持久化本机偏好键，且不触发任何网络请求（#55：人人可调、各自生效、不同步）', () => {
+    const store: Record<string, string> = {};
+    const writtenKeys: string[] = [];
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+    const originalFetch = globalThis.fetch;
+    const fetchSpy = vi.fn();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store[key] ?? null,
+        setItem: (key: string, value: string) => { writtenKeys.push(key); store[key] = value; },
+      },
+    });
+    globalThis.fetch = fetchSpy as unknown as typeof globalThis.fetch;
+    try {
+      setPlaybackSpeed('fast');
+      // 只写自己的偏好键 —— 不写房间状态、不写他人偏好。
+      expect(writtenKeys).toEqual(['richman.playback-speed']);
+      // 调速是纯本机行为，任何网络调用都意味着「同步给了别人」，此处必须为零。
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(getPlaybackSpeedRef().value).toBe('fast');
+      expect(paceMultiplier()).toBe(0.2);
+    } finally {
+      setPlaybackSpeed('standard');
+      globalThis.fetch = originalFetch;
+      if (original === undefined) Reflect.deleteProperty(globalThis, 'localStorage');
+      else Object.defineProperty(globalThis, 'localStorage', original);
+    }
+  });
 });

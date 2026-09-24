@@ -11,7 +11,7 @@ const CHINA_ROOM_MAP = { ref: chinaMapPack.ref, title: chinaMapPack.metadata.tit
 
 function buildRoom(overrides: Partial<PublicRoomState> = {}): PublicRoomState {
   return {
-    roomCode: '0007',
+    roomCode: '000007',
     status: 'lobby',
     hostId: 'player-host',
     players: [

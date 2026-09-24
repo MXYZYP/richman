@@ -1,5 +1,5 @@
 import { getMapPack, type MapPack, type MapRef } from '@richman/board-data';
-import { hydrateGameState, type GameState } from '@richman/engine';
+import { hydrateGameState, resolveOverriddenGameConfig, type GameState } from '@richman/engine';
 import type { StorageLike } from './sessionStorage';
 
 export type { StorageLike } from './sessionStorage';
@@ -199,7 +199,12 @@ export function readLocalSaveSlot(
   } catch {
     return { kind: 'incompatible', slot, reason: MAP_REASON, recordToken: read.raw };
   }
-  const hydrated = hydrateGameState(save.state, pack);
+  // 规则自定义（P2-10）：存档里写的是**本局生效的 config**，房主调过初始资金/最高房级时
+  // 它不等于地图默认值。hydrate 默认按地图默认值全等比对，不把这份 config 传进去，
+  // 自定义过规则的单机存档一律会被判成「损坏」。认不出来（返回 null）就退回默认路径，
+  // 保持与引入 override 之前完全一致的行为。
+  const configOverride = resolveOverriddenGameConfig(save.state.config, pack) ?? undefined;
+  const hydrated = hydrateGameState(save.state, pack, configOverride);
   if (!hydrated.ok) return { kind: 'corrupt', slot, reason: CORRUPT_REASON, recordToken: read.raw };
   if (hydrated.state.phase === 'game_over') {
     return {

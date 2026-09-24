@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
 import { getActiveMapPack, listActiveMaps } from '@richman/board-data';
+import type { BotDifficulty } from '@richman/engine';
+import MapPicker from './MapPicker.vue';
 import {
+  BOT_DIFFICULTY_OPTIONS,
   createDefaultGameSetup,
   resolveGameSetupMap,
+  updateGameSetupBotDifficulty,
   updateGameSetupMapId,
   updateGameSetupCounts,
   validateGameSetup,
@@ -36,12 +40,22 @@ const emit = defineEmits<{
 const setup = ref(cloneSetup(props.initialSetup ?? createDefaultGameSetup(setupDependencies)));
 const validation = computed(() => validateGameSetup(setup.value, setupDependencies));
 const totalPlayers = computed(() => setup.value.humanCount + setup.value.botCount);
-const humanOptions = [1, 2, 3, 4];
-const botOptions = [0, 1, 2, 3];
-const minCashGoal = computed(() => {
-  const initialCash = resolveGameSetupMap(setup.value, setupDependencies)?.game.config.initialCash;
-  return initialCash === undefined ? 1 : initialCash + 1;
-});
+// #8：单机热座上限 6 人，与联机（roomManager.MAX_PLAYERS）对齐。
+const MAX_SETUP_PLAYERS = 6;
+const humanOptions = [1, 2, 3, 4, 5, 6];
+const botOptions = [0, 1, 2, 3, 4, 5];
+// #6：电脑难度只在真的有电脑玩家时才出现，所以选项常驻在组件里、由 botCount 控制显隐。
+// 档位文案与联机大厅（LobbyView）共用 gameSetup.ts 里的一份定义，避免两处说岔。
+const botDifficultyOptions = BOT_DIFFICULTY_OPTIONS;
+const botDifficultyHint = computed(
+  () => botDifficultyOptions.find((option) => option.value === setup.value.botDifficulty)?.hint ?? '',
+);
+const minCashGoal = computed(() => setup.value.config.initialCash + 1);
+/** 当前地图自己的最高房级：过路费按 rents[level] 取档，超出地图档位就会收 0 元租金。 */
+const mapMaxHouseLevel = computed(
+  () => resolveGameSetupMap(setup.value, setupDependencies)?.game.config.maxHouseLevel
+    ?? setup.value.config.maxHouseLevel,
+);
 const dialogOpen = computed(() => props.replacementSummary != null || props.storagePrompt === true);
 const replacementCancelButton = ref<HTMLButtonElement | null>(null);
 const storageRetryButton = ref<HTMLButtonElement | null>(null);
@@ -66,8 +80,14 @@ function setBotCount(event: Event) {
   setup.value = updateGameSetupCounts(setup.value, { botCount });
 }
 
-function setMap(event: Event) {
-  setup.value = updateGameSetupMapId(setup.value, (event.target as HTMLSelectElement).value);
+function selectMap(mapId: string) {
+  // 换图后原房级可能超出新图档位（如 world-tour 只有 4 级）：夹取逻辑在 gameSetup.ts 的
+  // updateGameSetupMapId 里，单机表单与联机大厅共用同一份模型行为，界面不再各写一遍。
+  setup.value = updateGameSetupMapId(setup.value, mapId, setupDependencies);
+}
+
+function setBotDifficulty(difficulty: BotDifficulty) {
+  setup.value = updateGameSetupBotDifficulty(setup.value, difficulty);
 }
 
 function updateNickname(index: number, event: Event) {
@@ -78,6 +98,18 @@ function updateCashGoal(event: Event) {
   setup.value.cashGoal = Number((event.target as HTMLInputElement).value);
 }
 
+// 规则自定义（P2-10）：初始资金 / 最高房级直接覆盖；抵押利率以百分比展示、存为小数。
+function updateRuleConfig(field: 'initialCash' | 'maxHouseLevel', event: Event) {
+  const value = Number((event.target as HTMLInputElement).value);
+  setup.value = { ...setup.value, config: { ...setup.value.config, [field]: value } };
+}
+
+function updateMortgageRate(event: Event) {
+  const percent = Number((event.target as HTMLInputElement).value);
+  const rate = Number.isFinite(percent) ? Math.min(100, Math.max(0, percent)) / 100 : 0.1;
+  setup.value = { ...setup.value, config: { ...setup.value.config, mortgageInterestRate: rate } };
+}
+
 function submitSetup() {
   if (!validation.value.ok || dialogOpen.value) return;
   emit('start', cloneSetup(setup.value));
@@ -85,12 +117,12 @@ function submitSetup() {
 
 function isHumanOptionDisabled(humanCount: number): boolean {
   const total = humanCount + setup.value.botCount;
-  return total < 2 || total > 4;
+  return total < 2 || total > MAX_SETUP_PLAYERS;
 }
 
 function isBotOptionDisabled(botCount: number): boolean {
   const total = setup.value.humanCount + botCount;
-  return total < 2 || total > 4;
+  return total < 2 || total > MAX_SETUP_PLAYERS;
 }
 
 function cloneSetup(value: GameSetupForm): GameSetupForm {
@@ -100,7 +132,9 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
     botCount: value.botCount,
     cashGoalEnabled: value.cashGoalEnabled,
     cashGoal: value.cashGoal,
+    config: { ...value.config },
     players: value.players.map((player) => ({ ...player })),
+    botDifficulty: value.botDifficulty,
   };
 }
 </script>
@@ -110,17 +144,15 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
     <section class="setup-card" aria-labelledby="setup-title">
       <p class="setup-eyebrow">单机游玩 · 无需联网</p>
       <h1 id="setup-title">开始一局大富翁</h1>
-      <p class="setup-copy">选择真人和电脑数量，确认昵称后进入棋盘。单机游玩，不需要登录。</p>
+      <p class="setup-copy">选择真人和电脑数量（最多 6 人），确认昵称后进入棋盘。单机游玩，不需要登录。</p>
 
       <fieldset class="setup-fields" :disabled="dialogOpen">
-        <label class="setup-map-field">
-          <span>地图</span>
-          <select aria-label="地图" :value="setup.mapId" @change="setMap">
-            <option v-for="entry in setupDependencies.catalog" :key="entry.ref.id" :value="entry.ref.id">
-              {{ entry.title }}
-            </option>
-          </select>
-        </label>
+        <MapPicker
+          :model-value="setup.mapId"
+          :maps="setupDependencies.catalog"
+          label="地图"
+          @update:model-value="selectMap"
+        />
 
         <div class="setup-counts" aria-label="玩家数量">
         <label>
@@ -149,6 +181,23 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
         </label>
         </div>
 
+        <!-- #6：难度只在真的有电脑玩家时才出现 —— 没选电脑就问难度是问不出所以然的。 -->
+        <section v-if="setup.botCount > 0" class="setup-difficulty" aria-label="电脑玩家难度">
+          <span class="setup-difficulty-label">电脑玩家难度</span>
+          <div class="setup-difficulty-options" role="radiogroup" aria-label="电脑玩家难度">
+            <button
+              v-for="option in botDifficultyOptions"
+              :key="option.value"
+              type="button"
+              class="setup-difficulty-option"
+              :class="{ active: setup.botDifficulty === option.value }"
+              :aria-pressed="setup.botDifficulty === option.value"
+              @click="setBotDifficulty(option.value)"
+            >{{ option.label }}</button>
+          </div>
+          <p class="setup-difficulty-hint">{{ botDifficultyHint }}仅影响电脑决策，不影响真人玩家。</p>
+        </section>
+
         <section class="setup-rule-card" aria-label="房规">
         <label class="setup-checkbox">
           <input v-model="setup.cashGoalEnabled" type="checkbox" />
@@ -165,6 +214,22 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
             @input="updateCashGoal"
           />
         </label>
+        </section>
+
+        <section class="setup-rules" aria-label="规则自定义">
+          <h2>规则自定义</h2>
+          <label class="setup-rule-field">
+            <span>初始资金</span>
+            <input type="number" :min="1000" :step="1000" :value="setup.config.initialCash" @input="updateRuleConfig('initialCash', $event)" />
+          </label>
+          <label class="setup-rule-field">
+            <span>最高房级</span>
+            <input type="number" min="1" :max="mapMaxHouseLevel" step="1" :value="setup.config.maxHouseLevel" @input="updateRuleConfig('maxHouseLevel', $event)" />
+          </label>
+          <label class="setup-rule-field">
+            <span>抵押利率（%）</span>
+            <input type="number" min="0" max="100" :step="5" :value="Math.round(setup.config.mortgageInterestRate * 100)" @input="updateMortgageRate" />
+          </label>
         </section>
       </fieldset>
 
@@ -184,7 +249,7 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
 
       <section v-if="storagePrompt" class="setup-confirm" role="dialog" aria-modal="true" aria-labelledby="storage-prompt-title">
         <h2 id="storage-prompt-title">无法保存这局</h2>
-        <p>你可以重试存储，或明确开始一局关闭页面后无法恢复的临时游戏。</p>
+        <p>你可以重试存储，或开始一局仅存在于本机内存的临时游戏（关闭页面即丢失，与在线房间无关）。</p>
         <div class="setup-confirm-actions">
           <button ref="storageRetryButton" type="button" class="setup-start" @click="emit('retryStorage')">重试保存</button>
           <button type="button" class="setup-secondary" @click="emit('startTemporary')">开始临时游戏</button>
@@ -214,7 +279,7 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
   border: 1px solid var(--color-border);
   border-radius: 28px;
   background:
-    linear-gradient(180deg, rgb(255 255 255 / 94%), rgb(247 243 234 / 84%)),
+    var(--surface-card),
     var(--board-surface);
   box-shadow: 0 18px 48px rgb(53 39 20 / 14%);
 }
@@ -290,7 +355,7 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
   border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 8px 10px;
-  background: rgb(255 255 255 / 84%);
+  background: var(--surface-input);
   color: var(--color-text);
   font-weight: 800;
 }
@@ -335,11 +400,38 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
   opacity: 0.56;
 }
 
+.setup-rules {
+  display: grid;
+  gap: 12px;
+  padding: 14px 12px;
+  border-radius: 18px;
+  background: rgb(255 255 255 / 58%);
+}
+
+.setup-rules h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--color-primary);
+}
+
+.setup-rule-field {
+  display: grid;
+  grid-template-columns: 1fr 160px;
+  gap: 12px;
+  align-items: center;
+}
+
+.setup-rule-field span {
+  color: var(--color-muted);
+  font-weight: 800;
+}
+
 .setup-error {
   margin: 0;
   padding: 10px 12px;
   border-radius: 12px;
-  background: #ffe1d8;
+  background: var(--color-error-bg);
   color: var(--color-primary);
   font-weight: 900;
 }
@@ -420,7 +512,8 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
 
   .setup-counts,
   .setup-roster,
-  .setup-rule-card {
+  .setup-rule-card,
+  .setup-rule-field {
     grid-template-columns: 1fr;
   }
 }

@@ -65,6 +65,125 @@ dialog.mobile-sheet.sheet {
   --banner-error-bg: #f7e2da;
 }
 
+/*
+ * 皮肤主题（P2-9）：经典为默认（无 data-theme 或 data-theme="classic" 即生效）。
+ * 海洋 / 暗夜 通过 :root[data-theme="..."] 叠加覆盖同一组变量。
+ * 选择器保持与经典一致，仅作用于对局根容器与对局弹层（含 Teleport 到 body 的弹层），
+ * 不污染首页 / 大厅。切换由 ui/themeManager.ts 设置 document.documentElement.dataset.theme。
+ */
+
+:root[data-theme='ocean'] .game-view,
+:root[data-theme='ocean'] dialog.cell-dialog-layer,
+:root[data-theme='ocean'] dialog.player-dialog-layer,
+:root[data-theme='ocean'] dialog.mobile-sheet.sheet {
+  --game-page: #e3eef2;
+  --game-panel: #f1f7f9;
+  --game-board-base: #d4e6ec;
+  --game-dice-tray: #c4dde6;
+
+  --game-action-bg: linear-gradient(180deg, #7fc8e8, #4aa3cf);
+  --game-action-text: #073047;
+  --game-action-shadow: #2c7fa6;
+
+  --game-panel-raised: #f7fbfc;
+  --game-panel-quiet: #e2eef2;
+  --game-line-soft: #c2dbe4;
+  --game-shadow-panel: 0 1px 0 #c2dbe4, 0 5px 12px rgb(20 60 80 / 10%);
+  --game-shadow-dialog: 0 20px 48px rgb(20 60 80 / 28%);
+  --game-focus: #1f7fa6;
+  --game-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --game-radius-panel: 12px;
+  --game-radius-control: 9px;
+
+  --color-bg: var(--game-page);
+  --color-cell: #f7fbfc;
+  --color-border: #aacfdb;
+  --color-text: #1c3a47;
+  --color-muted: #4a6f7d;
+  --color-primary: #1f6f93;
+  --color-accent: #3a9ec4;
+
+  --board-bg: #dbeaf0;
+  --board-surface: var(--game-panel);
+  --board-shadow: 0 14px 40px rgb(20 60 80 / 18%);
+  --center-bg: linear-gradient(135deg, #f7fbfc, #e3eef3);
+  --center-border: #a7c9d6;
+  --title-color: #15596f;
+  --event-bg: #e0f1f7;
+  --event-text: #14566b;
+  --overlay-scrim: rgb(15 45 60 / 46%);
+  --branch-track: #6fa6bd;
+  --price-color: #1f6f93;
+  --cell-function-bg: linear-gradient(180deg, #f7fbfc, #e3eef3);
+
+  --button-enabled-bg: #5bb0d6;
+  --button-enabled-text: #073047;
+  --button-disabled-bg: #dbe7ec;
+  --button-disabled-text: #5d7884;
+
+  --token-ring: #f7fbfc;
+  --token-shadow: 0 2px 6px rgb(15 45 60 / 30%);
+
+  --banner-warning-bg: #e6f3f8;
+  --banner-error-bg: #f7e2da;
+}
+
+:root[data-theme='midnight'] .game-view,
+:root[data-theme='midnight'] dialog.cell-dialog-layer,
+:root[data-theme='midnight'] dialog.player-dialog-layer,
+:root[data-theme='midnight'] dialog.mobile-sheet.sheet {
+  --game-page: #1b2030;
+  --game-panel: #232a3d;
+  --game-board-base: #2a3247;
+  --game-dice-tray: #313a52;
+
+  --game-action-bg: linear-gradient(180deg, #f0b860, #d99a3a);
+  --game-action-text: #2a1c08;
+  --game-action-shadow: #9c6c1f;
+
+  --game-panel-raised: #2b3346;
+  --game-panel-quiet: #1f2536;
+  --game-line-soft: #3a4358;
+  --game-shadow-panel: 0 1px 0 #11151f, 0 6px 16px rgb(0 0 0 / 36%);
+  --game-shadow-dialog: 0 24px 60px rgb(0 0 0 / 60%);
+  --game-focus: #f0b860;
+  --game-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --game-radius-panel: 12px;
+  --game-radius-control: 9px;
+
+  --color-bg: var(--game-page);
+  --color-cell: #2b3346;
+  --color-border: #3c4660;
+  --color-text: #e8edf5;
+  --color-muted: #9aa6bd;
+  --color-primary: #f0b860;
+  --color-accent: #7fb0d8;
+
+  --board-bg: #232a3d;
+  --board-surface: var(--game-panel);
+  --board-shadow: 0 16px 44px rgb(0 0 0 / 40%);
+  --center-bg: linear-gradient(135deg, #2b3346, #1f2536);
+  --center-border: #3c4660;
+  --title-color: #f0c878;
+  --event-bg: #2a3142;
+  --event-text: #f0d49a;
+  --overlay-scrim: rgb(5 8 14 / 62%);
+  --branch-track: #566187;
+  --price-color: #f0b860;
+  --cell-function-bg: linear-gradient(180deg, #2b3346, #232a3d);
+
+  --button-enabled-bg: #e0a74e;
+  --button-enabled-text: #1c1408;
+  --button-disabled-bg: #2a3142;
+  --button-disabled-text: #7886a0;
+
+  --token-ring: #2b3346;
+  --token-shadow: 0 2px 6px rgb(0 0 0 / 50%);
+
+  --banner-warning-bg: #2f3550;
+  --banner-error-bg: #3a2730;
+}
+
 /* 弹层动效：260ms 跟手进场 / 160ms 快速退场；不支持的浏览器瞬开瞬关 */
 @media (prefers-reduced-motion: no-preference) {
   dialog.cell-dialog-layer,

@@ -70,6 +70,16 @@
   --banner-warning-bg: #fdf1d8;
   --banner-error-bg: #fbe0d8;
 
+  /* 页面级表面色（首页 / 大厅 / 单机建房 / 设置等）：浅色下是「半透明白叠在暖纸底上」，
+     靠透明度叠出卡片与输入框的层次。集中在这里是为了让深色模式（ui/darkMode.css）
+     只覆盖这一组就能整站换肤，组件不必各写一套深色分支。 */
+  --surface-card: linear-gradient(180deg, rgb(255 255 255 / 94%), rgb(247 243 234 / 84%));
+  --surface-raised: rgb(255 255 255 / 88%);
+  --surface-soft: rgb(255 255 255 / 72%);
+  --surface-quiet: rgb(255 255 255 / 62%);
+  --surface-input: rgb(255 255 255 / 84%);
+  --color-error-bg: #ffe1d8;
+
   /* 功能格背景（机会/命运/税/机场/起点/特殊/支线）*/
   --cell-function-bg: linear-gradient(180deg, #fffdf8, #f4ecdd);
 

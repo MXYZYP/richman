@@ -2,6 +2,7 @@ import { computed, ref, shallowRef } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createGamePresenter, formatRecentLogEvent, getAvailableActions } from './gamePresenter';
 import type { ConnectionStatus, GameSession, RenderableGameState } from './gameSession';
+import type { ChatMessage } from '@richman/protocol';
 import type { GameEvent } from '@richman/engine';
 import { createGame } from '@richman/engine';
 import { getActiveMapPack } from '@richman/board-data';
@@ -137,6 +138,8 @@ describe('GamePresenter', () => {
       displayCash: ref({ p1: 0 }),
       transientNotice: ref(null),
       availableActions: computed(() => []),
+      chatLog: ref<ChatMessage[]>([]),
+      sendChat() {},
       sendIntent: async () => undefined,
       skipOfflineTurn: async () => undefined,
       leave: async () => undefined,
@@ -639,7 +642,9 @@ describe('GamePresenter', () => {
         { type: 'token_moved', playerId: 'p1', path: [3, 4] },
       ], snapshot);
 
-      expect(waits).toEqual([1_400, 300, 300]);
+      // payment_made 基础 700ms × pace2 = 1400ms；token_moved 基础已由 150ms 放慢到 260ms（棋子逐格可见）
+      // → 260 × 2 = 520ms。
+      expect(waits).toEqual([1_400, 520, 520]);
     });
 
     it.each([

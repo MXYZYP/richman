@@ -151,11 +151,14 @@ function dieStyle(index: number) {
 }
 
 const rackLabel = computed(() => {
-  if (diceRolling.value) return '骰子：掷骰中';
   if (props.dice !== null && diceTotal.value !== null) {
-    return `骰子结果 ${props.dice.join(' 与 ')}，总和 ${diceTotal.value}`;
+    // 点数在掷骰动画开始的瞬间就已由引擎定死，动画只负责"看起来在滚"。
+    // 读屏必须立刻拿到真实点数与总和，不能等约 0.8s 动画跑完才播报——因此滚动中同样完整播报，
+    // 只在末尾追加一句状态。
+    const result = `骰子结果 ${props.dice.join(' 与 ')}，总和 ${diceTotal.value}`;
+    return diceRolling.value ? `${result}，掷骰中` : result;
   }
-  return '骰子：等待掷骰';
+  return diceRolling.value ? '骰子：掷骰中' : '骰子：等待掷骰';
 });
 
 /**

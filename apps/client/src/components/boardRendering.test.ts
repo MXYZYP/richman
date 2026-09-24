@@ -13,6 +13,7 @@ import GameSetup from './GameSetup.vue';
 import { createDefaultGameSetup } from '../game/gameSetup';
 import GameView from '../views/GameView.vue';
 import type { GameSession } from '../session/gameSession';
+import type { ChatMessage } from '@richman/protocol';
 
 const harbor = {
   ref: testManifest.ref,
@@ -130,6 +131,8 @@ describe('generic map Vue rendering', () => {
       async skipOfflineTurn() {},
       async leave() {},
       dispose() {},
+      chatLog: ref<ChatMessage[]>([]),
+      sendChat() {},
       async retryResume() {},
     };
     const html = await renderToString(createSSRApp({
@@ -138,5 +141,51 @@ describe('generic map Vue rendering', () => {
 
     expect(html).toContain('当前客户端缺少房间所需地图，请刷新或更新后重试。');
     expect(html).toContain('返回首页');
+  });
+
+  it('对局内提供统一设置入口：桌面侧栏按钮 + modal 变体弹窗（#13）', async () => {
+    const session: GameSession = {
+      mode: 'local',
+      state: shallowRef(harborState()),
+      room: shallowRef(null),
+      localPlayerId: ref('p1'),
+      connectionStatus: ref('connected'),
+      displayPositions: ref({}),
+      dice: ref(null),
+      activeCard: ref(null),
+      eventMessage: ref(''),
+      isAnimating: ref(false),
+      isBotThinking: ref(false),
+      lastError: ref(null),
+      compatibilityError: ref(null),
+      cashNotices: ref([]),
+      displayCash: ref({}),
+      transientNotice: ref(null),
+      availableActions: computed(() => []),
+      canUndo: ref(true),
+      canReplay: ref(true),
+      async sendIntent() {},
+      async skipOfflineTurn() {},
+      async undo() {},
+      async replay() {},
+      async leave() {},
+      dispose() {},
+      chatLog: ref<ChatMessage[]>([]),
+      sendChat() {},
+      async retryResume() {},
+    };
+    const html = await renderToString(createSSRApp({
+      render: () => h(GameView, { session }),
+    }));
+
+    // 桌面侧栏的设置按钮（此前桌面完全没有设置入口，设置行直接摊在侧栏里）。
+    expect(html).toContain('settings-open-button');
+    // 设置弹窗用 modal 变体，桌面保持居中弹窗而不是摊平进侧栏。
+    expect(html).toContain('data-variant="modal"');
+    for (const group of ['外观', '声音', '对局操作', '规则说明', '应用']) {
+      expect(html).toContain(group);
+    }
+    // 资产/战报/聊天这几个抽屉仍是 inline 变体，行为不变。
+    expect(html).toContain('data-variant="inline"');
   });
 });

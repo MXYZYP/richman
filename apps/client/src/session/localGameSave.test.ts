@@ -114,6 +114,25 @@ function pausedCardState(seed: string): GameState {
   };
 }
 
+/**
+ * 房主自定义过规则的存档（P2-10）：config 不等于地图默认值。
+ * 这类存档若按「与地图默认值全等」去校验，会被误判成损坏 —— 恢复时必须把这份 config 传进 hydrate。
+ */
+function customRuleState(seed: string): GameState {
+  return createGame({
+    mapRef: chinaMap.ref,
+    ruleModules: chinaMap.game.requiredRuleModules,
+    board: chinaMap.game.board,
+    cards: chinaMap.game.cards,
+    config: { ...chinaMap.game.config, initialCash: chinaMap.game.config.initialCash + 5000, maxHouseLevel: 3 },
+    players: [
+      { id: 'p1', nickname: '玩家一' },
+      { id: 'p2', nickname: '电脑A', isBot: true },
+    ],
+    seed,
+  });
+}
+
 describe('localGameSave store', () => {
   it('读取 empty、valid 并由 validated state 派生 summary', () => {
     const storage = new MemoryStorage();
@@ -147,6 +166,22 @@ describe('localGameSave store', () => {
     expect(result.save.state.players).toEqual(paused.players);
     expect(result.save.state.decks).toEqual(paused.decks);
     expect(result.save.state.turnPhase).toBe('managing');
+  });
+
+  it('房主自定义规则的存档仍能恢复，不会被误判为损坏', () => {
+    const storage = new MemoryStorage();
+    const customized = customRuleState('custom-rule-save');
+    expect(customized.config.initialCash).not.toBe(chinaMap.game.config.initialCash);
+
+    const created = createLocalSave(storage, customized, 100);
+    expect(created.ok).toBe(true);
+
+    const result = readLocalSaveSlot(storage, 1);
+    expect(result.kind).toBe('valid');
+    if (result.kind !== 'valid') return;
+    // 恢复出来的规则就是存进去的那份，而不是被地图默认值覆盖。
+    expect(result.save.state.config.initialCash).toBe(customized.config.initialCash);
+    expect(result.save.state.config.maxHouseLevel).toBe(3);
   });
 
   it('保留 malformed、unsupported schema、missing exact map 为可见错误且不影响另一槽', () => {

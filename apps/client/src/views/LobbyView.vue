@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import type { PublicRoomState } from '@richman/protocol';
+import type { ChatMessage, PublicRoomState, RoomRuleConfig, RoomSettings, RoomSettingsPatch } from '@richman/protocol';
+import { getActiveMapPack } from '@richman/board-data';
+import type { BotDifficulty } from '@richman/engine';
+import { BOT_DIFFICULTY_OPTIONS } from '../game/gameSetup';
 import type { LobbyCommand } from '../session/onlineSession';
+import ChatPanel from '../components/ChatPanel.vue';
+import SettingsDialog from '../components/SettingsDialog.vue';
 
 // Mirrors the server's room capacity (roomManager MAX_PLAYERS, humans + bots combined).
 // Adding a bot past this is rejected server-side; the client disables the control so the
@@ -28,20 +33,44 @@ const props = withDefaults(defineProps<{
   inviteUrl: string;
   connectionLabel: string;
   showMapTitle?: boolean;
+  /** 房间聊天消息（联机）。 */
+  chatLog?: ChatMessage[];
+  /** 发送聊天消息。 */
+  chatSend?: (text: string) => void;
+  /**
+   * 房间设置（#4 规则自定义 / #6 电脑难度）：服务端 `room:settings` 广播的权威副本。
+   * `null` = 还没收到，此时不渲染规则面板，避免先闪一帧默认值再跳变。
+   */
+  roomSettings?: RoomSettings | null;
 }>(), {
   error: null,
   showMapTitle: false,
+  roomSettings: null,
 });
 
 const emit = defineEmits<{
   addBot: [];
   removeBot: [playerId: string];
   renameBot: [playerId: string, nickname: string];
+  kick: [playerId: string];
+  /** 房主修改房间设置（#4 / #6）：只传要改的字段。 */
+  updateSettings: [patch: RoomSettingsPatch];
   start: [];
   leave: [];
   copy: [];
   showQR: [];
 }>();
+
+// 房间聊天（#50）：改为大厅卡片文档流内的可折叠区块，取代此前的固定浮动按钮——
+// 浮动面板会压住房间卡片底部的操作按钮。折叠态由 isChatOpen 控制。
+const isChatOpen = ref(false);
+const chatMessages = computed<ChatMessage[]>(() => props.chatLog ?? []);
+function handleSendChat(text: string): void {
+  props.chatSend?.(text);
+}
+
+// 统一设置弹窗（#13）：大厅与对局内共用同一个 SettingsDialog。
+const settingsOpen = ref(false);
 
 
 const botDrafts = ref<Record<string, string>>({});
@@ -104,6 +133,119 @@ const waitCopy = computed(() => (
     ? '观战中。你可以在开局后继续查看棋盘、资产与战报。'
     : '等待房主开始游戏，你可以先邀请更多好友加入。'
 ));
+
+// ---- 房间规则（#4 房主自定义 / #6 电脑难度）----
+// 联机是「先建房、后加电脑」：`room:create` 那一刻房间里只有房主，还没有任何电脑玩家，
+// 所以难度根本不可能在建房前问出来——它只能在大厅设定，且只在真的有电脑玩家时才出现。
+const botCount = computed(() => props.room.players.filter((player) => player.isBot).length);
+const hasBot = computed(() => botCount.value > 0);
+
+/** 地图自带的默认规则：房主改之前的取值，也是「恢复默认」的目标。 */
+const ruleDefaults = computed(() => {
+  try {
+    const config = getActiveMapPack(props.room.map.ref.id).game.config;
+    return {
+      initialCash: config.initialCash,
+      maxHouseLevel: config.maxHouseLevel,
+      mortgageInterestRate: config.mortgageInterestRate,
+    };
+  } catch {
+    // 地图解析失败（正常不该发生，房间创建时已锁定地图）。退化成隐藏数值面板。
+    return null;
+  }
+});
+const effectiveRule = computed<RoomRuleConfig | null>(() => props.roomSettings?.ruleConfig ?? ruleDefaults.value);
+const isCustomized = computed(() => props.roomSettings?.ruleConfig != null);
+const maxHouseLevelLimit = computed(() => ruleDefaults.value?.maxHouseLevel ?? 1);
+const rulesReadOnly = computed(() => (
+  !props.isHost || !canMutate.value || props.room.status !== 'lobby' || props.roomSettings === null
+));
+const rulesVisible = computed(() => props.roomSettings !== null && ruleDefaults.value !== null);
+const ruleError = ref<string | null>(null);
+
+// 输入框允许中途处于非法状态（例如清空重打），只在 change / blur 时才校验并提交。
+// 注意：草稿只在「生效规则」变化时同步——用户输入了非法值没提交时，草稿保留，便于继续修改。
+const cashDraft = ref('');
+const interestPercentDraft = ref('');
+watch(effectiveRule, (rule) => {
+  cashDraft.value = rule === null ? '' : String(rule.initialCash);
+  interestPercentDraft.value = rule === null ? '' : String(Math.round(rule.mortgageInterestRate * 1000) / 10);
+}, { immediate: true });
+
+function ruleProblem(rule: RoomRuleConfig): string | null {
+  if (!Number.isFinite(rule.initialCash) || rule.initialCash <= 0) return '初始资金需为正数';
+  if (!Number.isInteger(rule.maxHouseLevel) || rule.maxHouseLevel < 1 || rule.maxHouseLevel > maxHouseLevelLimit.value) {
+    return `最高房级需为 1-${maxHouseLevelLimit.value} 之间的整数`;
+  }
+  if (!Number.isFinite(rule.mortgageInterestRate) || rule.mortgageInterestRate < 0 || rule.mortgageInterestRate > 1) {
+    return '抵押利率需为 0% - 100% 之间';
+  }
+  return null;
+}
+
+/** 用「当前生效规则 + 本次改动」拼出完整三项再提交：服务端的 RoomRuleConfig 是全量三项。 */
+function applyRuleChange(partial: Partial<RoomRuleConfig>): void {
+  if (rulesReadOnly.value) {
+    ruleError.value = null;
+    return;
+  }
+  const base = effectiveRule.value;
+  if (base === null) return;
+  const next: RoomRuleConfig = {
+    initialCash: partial.initialCash ?? base.initialCash,
+    maxHouseLevel: partial.maxHouseLevel ?? base.maxHouseLevel,
+    mortgageInterestRate: partial.mortgageInterestRate ?? base.mortgageInterestRate,
+  };
+  const problem = ruleProblem(next);
+  if (problem !== null) {
+    ruleError.value = problem;
+    return;
+  }
+  ruleError.value = null;
+  if (next.initialCash === base.initialCash
+    && next.maxHouseLevel === base.maxHouseLevel
+    && next.mortgageInterestRate === base.mortgageInterestRate) {
+    return;
+  }
+  emit('updateSettings', { ruleConfig: next });
+}
+
+function handleCashChange(event: Event): void {
+  applyRuleChange({ initialCash: Number((event.target as HTMLInputElement).value) });
+}
+
+function handleHouseLevelChange(event: Event): void {
+  applyRuleChange({ maxHouseLevel: Number((event.target as HTMLInputElement).value) });
+}
+
+/** 界面上按百分数录入（10 表示 10%），提交前换算成 0-1 的比例。 */
+function handleInterestChange(event: Event): void {
+  applyRuleChange({ mortgageInterestRate: Number((event.target as HTMLInputElement).value) / 100 });
+}
+
+function chooseBotDifficulty(difficulty: BotDifficulty): void {
+  if (rulesReadOnly.value) return;
+  if (props.roomSettings?.botDifficulty === difficulty) return;
+  emit('updateSettings', { botDifficulty: difficulty });
+}
+
+function resetRoomRules(): void {
+  if (rulesReadOnly.value || !isCustomized.value) return;
+  ruleError.value = null;
+  emit('updateSettings', { ruleConfig: null });
+}
+
+const botDifficultyHint = computed(
+  () => BOT_DIFFICULTY_OPTIONS.find((option) => option.value === props.roomSettings?.botDifficulty)?.hint ?? '',
+);
+
+/** 规则摘要：非房主（或已开局）也能一眼看到这局用的是哪套规则。 */
+const ruleSummary = computed(() => {
+  const rule = effectiveRule.value;
+  if (rule === null) return '';
+  const percent = Math.round(rule.mortgageInterestRate * 1000) / 10;
+  return `初始资金 ¥${rule.initialCash} · 最高房级 ${rule.maxHouseLevel} 级 · 抵押利率 ${percent}%`;
+});
 
 // Copy feedback is transient and self-describing so a clipboard rejection is never silent.
 const copyFeedback = ref<{ ok: boolean; message: string } | null>(null);
@@ -216,6 +358,16 @@ onBeforeUnmount(() => {
             <span v-if="player.id === room.hostId" class="lobby-flag lobby-flag--host">房主</span>
             <span v-else-if="player.isBot" class="lobby-flag lobby-flag--bot">电脑</span>
             <button
+              v-if="isHost && !player.isBot && player.id !== localPlayerId"
+              type="button"
+              class="lobby-remove lobby-remove--kick"
+              :disabled="!canMutate"
+              :aria-label="`移出 ${player.nickname}`"
+              @click="emit('kick', player.id)"
+            >
+              移出
+            </button>
+            <button
               v-if="isHost && player.isBot"
               type="button"
               class="lobby-remove"
@@ -247,6 +399,89 @@ onBeforeUnmount(() => {
         <p v-else class="lobby-spectators-empty">还没有观众。好友可在首页选择「观战」加入。</p>
       </section>
 
+      <!-- 房间规则（#4 初始资金等 / #6 电脑难度）：房主可改，其他成员只读。
+           规则由服务端 `room:settings` 广播同步，房主改完立刻对全房间生效。 -->
+      <section v-if="rulesVisible" class="lobby-rules" aria-label="房间规则">
+        <header class="lobby-roster-head">
+          <h2>房间规则</h2>
+          <span class="lobby-count">{{ isCustomized ? '已自定义' : '地图默认' }}</span>
+        </header>
+
+        <p class="lobby-rules__summary">{{ ruleSummary }}</p>
+
+        <template v-if="isHost">
+          <div class="lobby-rules__grid">
+            <label class="lobby-rules__field">
+              <span>初始资金</span>
+              <input
+                type="number"
+                inputmode="numeric"
+                min="1"
+                step="1000"
+                :value="cashDraft"
+                :disabled="rulesReadOnly"
+                @change="handleCashChange"
+              />
+            </label>
+            <label class="lobby-rules__field">
+              <span>最高房级</span>
+              <input
+                type="number"
+                inputmode="numeric"
+                min="1"
+                :max="maxHouseLevelLimit"
+                :value="roomSettings?.ruleConfig?.maxHouseLevel ?? ruleDefaults?.maxHouseLevel"
+                :disabled="rulesReadOnly"
+                @change="handleHouseLevelChange"
+              />
+            </label>
+            <label class="lobby-rules__field">
+              <span>抵押利率 %</span>
+              <input
+                type="number"
+                inputmode="decimal"
+                min="0"
+                max="100"
+                step="1"
+                :value="interestPercentDraft"
+                :disabled="rulesReadOnly"
+                @change="handleInterestChange"
+              />
+            </label>
+          </div>
+
+          <p class="lobby-rules__hint">
+            最高房级不得超过 {{ maxHouseLevelLimit }} 级（按地图档位；超出会让顶层房屋收 0 元租金）。
+            <button
+              type="button"
+              class="lobby-rules__reset"
+              :disabled="rulesReadOnly || !isCustomized"
+              @click="resetRoomRules"
+            >恢复地图默认</button>
+          </p>
+
+          <!-- 难度只在房间里确实存在电脑玩家时出现（#6）：没有电脑时它没有任何作用。 -->
+          <div v-if="hasBot" class="lobby-rules__difficulty">
+            <span class="lobby-rules__difficulty-label">电脑难度</span>
+            <div class="lobby-rules__difficulty-options" role="radiogroup" aria-label="电脑难度">
+              <button
+                v-for="option in BOT_DIFFICULTY_OPTIONS"
+                :key="option.value"
+                type="button"
+                class="lobby-rules__difficulty-option"
+                :class="{ active: roomSettings?.botDifficulty === option.value }"
+                :aria-pressed="roomSettings?.botDifficulty === option.value"
+                :disabled="rulesReadOnly"
+                @click="chooseBotDifficulty(option.value)"
+              >{{ option.label }}</button>
+            </div>
+            <p class="lobby-rules__hint">{{ botDifficultyHint }}仅影响电脑决策，不影响真人玩家。</p>
+          </div>
+
+          <p v-if="ruleError" class="lobby-rules__error" role="alert">{{ ruleError }}</p>
+        </template>
+      </section>
+
       <section v-if="isHost" class="lobby-controls" aria-label="房主操作">
         <button type="button" class="lobby-btn lobby-btn--ghost" :disabled="!canAddBot" @click="emit('addBot')">
           {{ isFull ? '房间已满' : '添加电脑玩家' }}
@@ -259,6 +494,43 @@ onBeforeUnmount(() => {
       <section v-else class="lobby-wait" aria-label="等待房主">
         <span class="lobby-wait-spinner" aria-hidden="true"></span>
         <p>{{ waitCopy }}</p>
+      </section>
+
+      <!-- 房间聊天（#50）：内联在大厅卡片内、可折叠，不再悬浮遮挡操作按钮。 -->
+      <section class="lobby-chat" aria-label="房间聊天">
+        <button
+          type="button"
+          class="lobby-chat__toggle"
+          :aria-expanded="isChatOpen"
+          @click="isChatOpen = !isChatOpen"
+        >
+          房间聊天
+          <span v-if="chatMessages.length > 0" class="lobby-chat__badge">{{ chatMessages.length }}</span>
+        </button>
+        <ChatPanel
+          v-if="isChatOpen"
+          class="lobby-chat__panel"
+          :messages="chatMessages"
+          :local-player-id="localPlayerId"
+          @send="handleSendChat"
+        />
+      </section>
+
+      <!-- 设置：统一设置入口（#13）。原先这里只内联「安装应用」一行，现在整块设置
+           （外观 / 声音 / 规则说明 / 安装应用）都收进同一个弹窗，与对局内保持一份实现。 -->
+      <section class="lobby-settings" aria-label="设置">
+        <SettingsDialog
+          :open="settingsOpen"
+          :map-id="room.map.ref.id"
+          @update:open="settingsOpen = $event"
+        />
+        <button
+          type="button"
+          class="lobby-btn lobby-btn--ghost lobby-settings__trigger"
+          aria-haspopup="dialog"
+          :aria-expanded="settingsOpen"
+          @click="settingsOpen = true"
+        >设置</button>
       </section>
 
       <button
@@ -280,6 +552,7 @@ onBeforeUnmount(() => {
         <button ref="qrClose" type="button" class="lobby-btn lobby-btn--ghost" @click="closeQR">关闭</button>
       </section>
     </div>
+
   </main>
 </template>
 
@@ -299,7 +572,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--color-border);
   border-radius: 28px;
   background:
-    linear-gradient(180deg, rgb(255 255 255 / 94%), rgb(247 243 234 / 84%)),
+    var(--surface-card),
     var(--board-surface);
   box-shadow: 0 18px 48px rgb(53 39 20 / 14%);
 }
@@ -356,7 +629,7 @@ onBeforeUnmount(() => {
 .lobby-invite-url {
   padding: 8px 10px;
   border-radius: 10px;
-  background: rgb(255 255 255 / 72%);
+  background: var(--surface-soft);
   color: var(--color-text);
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 13px;
@@ -384,7 +657,7 @@ onBeforeUnmount(() => {
   margin: 0;
   padding: 10px 12px;
   border-radius: 12px;
-  background: #ffe1d8;
+  background: var(--color-error-bg);
   color: var(--color-primary);
   font-weight: 900;
 }
@@ -435,7 +708,7 @@ onBeforeUnmount(() => {
   min-height: 44px;
   padding: 8px 10px;
   border-radius: 12px;
-  background: rgb(255 255 255 / 62%);
+  background: var(--surface-quiet);
 }
 
 .lobby-dot {
@@ -459,7 +732,7 @@ onBeforeUnmount(() => {
   padding: 8px 10px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
-  background: rgb(255 255 255 / 88%);
+  background: var(--surface-input);
   color: var(--color-text);
   font: inherit;
   font-weight: 800;
@@ -521,6 +794,17 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
+.lobby-remove--kick {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.lobby-remove--kick:disabled {
+  color: var(--button-disabled-text);
+  border-color: var(--color-border);
+  cursor: not-allowed;
+}
+
 .lobby-controls {
   display: grid;
   gap: 10px;
@@ -533,7 +817,7 @@ onBeforeUnmount(() => {
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid var(--color-border);
-  background: rgb(255 255 255 / 62%);
+  background: var(--surface-quiet);
 }
 
 .lobby-wait p {
@@ -581,7 +865,7 @@ onBeforeUnmount(() => {
 }
 
 .lobby-btn--ghost {
-  background: rgb(255 255 255 / 72%);
+  background: var(--surface-soft);
   color: var(--color-primary);
   border: 1px solid var(--color-border);
 }
@@ -661,5 +945,185 @@ onBeforeUnmount(() => {
   .lobby-shell {
     padding: 10px;
   }
+}
+
+/* ---- 聊天 + 设置（#50 / #52）----
+   两者都内联在大厅卡片文档流内，不再使用 position:fixed，
+   因此不会与卡片底部的「离开房间」等按钮发生遮挡。 */
+.lobby-chat,
+.lobby-settings {
+  display: grid;
+  gap: 8px;
+}
+
+.lobby-settings__trigger {
+  justify-self: start;
+}
+
+.lobby-chat__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--surface-soft);
+  color: var(--color-text);
+  font-size: 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.lobby-chat__badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* 面板宽度铺满卡片，高度受控在卡片内滚动。 */
+.lobby-chat__panel {
+  width: 100%;
+  max-height: min(320px, 46vh);
+}
+
+/* ---- 房间规则（#4 / #6）---- */
+.lobby-rules {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.lobby-rules__summary {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* 三个数值字段：窄屏一列、宽屏三列，避免把大厅卡片撑得很高。 */
+.lobby-rules__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.lobby-rules__field {
+  display: grid;
+  gap: 4px;
+}
+
+.lobby-rules__field span {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.lobby-rules__field input {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--surface-input);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 800;
+}
+
+.lobby-rules__field input:disabled {
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
+  cursor: not-allowed;
+}
+
+.lobby-rules__hint {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.lobby-rules__reset {
+  margin-left: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lobby-rules__reset:disabled {
+  color: var(--button-disabled-text);
+  border-color: var(--color-border);
+  cursor: not-allowed;
+}
+
+.lobby-rules__difficulty {
+  display: grid;
+  gap: 6px;
+}
+
+.lobby-rules__difficulty-label {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.lobby-rules__difficulty-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 6px;
+}
+
+.lobby-rules__difficulty-option {
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--surface-input);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lobby-rules__difficulty-option.active {
+  border-color: var(--color-primary);
+  background: var(--button-enabled-bg);
+  color: var(--button-enabled-text);
+}
+
+.lobby-rules__difficulty-option:disabled {
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
+  cursor: not-allowed;
+}
+
+.lobby-rules__difficulty-option:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.lobby-rules__error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--color-error-bg);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 900;
 }
 </style>

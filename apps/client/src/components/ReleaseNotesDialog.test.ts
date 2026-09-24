@@ -29,4 +29,18 @@ describe('ReleaseNotesDialog', () => {
     expect(html).toContain('aria-label="关闭更新说明"');
     expect(html).toContain('关闭');
   });
+
+  it('defer 时只渲染入口，正文等玩家点开再出', async () => {
+    const html = await renderToString(createSSRApp({
+      render: () => h(ReleaseNotesDialog as never, { defer: true } as never),
+    }));
+
+    expect(html).toContain('更新说明');
+    expect(html).toContain(`v${releaseNotes.releases[0].version}`);
+    expect(html).toContain('aria-labelledby="release-notes-title"');
+    expect(html).not.toContain('role="region" aria-label="更新说明列表"');
+    for (const release of releaseNotes.releases) {
+      for (const change of release.changes) expect(html).not.toContain(change);
+    }
+  });
 });

@@ -257,7 +257,10 @@ function nonPropertyTypeLabel(cell: Exclude<Cell, PropertyCell>): string {
     case 'world':
       return '世界之窗';
     case 'module':
-      return cell.cellType === 'airport-branch' ? '机场' : '特殊格';
+      // 模块格的类型名按 cellType 走，别一律落到「特殊格」——不同模块的格子玩法完全不同。
+      if (cell.cellType === 'airport-branch') return '机场';
+      if (cell.cellType === 'beacon') return '烽火台';
+      return '特殊格';
   }
 }
 
@@ -297,7 +300,7 @@ function describeCellEffect(effect: CellEffect, state: GameState | RenderableGam
 }
 
 
-function describeAirportBranch(cell: Extract<Cell, { type: 'module' }>, state: GameState | RenderableGameState): string {
+function describeModuleCell(cell: Extract<Cell, { type: 'module' }>, state: GameState | RenderableGameState): string {
   if (cell.module.id === 'world-tour' && cell.cellType === 'airport-branch') {
     const payload = cell.payload as {
       branchCellIds?: number[];
@@ -307,6 +310,12 @@ function describeAirportBranch(cell: Extract<Cell, { type: 'module' }>, state: G
     const mergeCell = state.board.cells.find((candidate) => candidate.id === payload.mergeCellId);
     const mergeName = mergeCell ? mergeCell.name : '主环';
     return `恰好停在此时结束本回合；下个本人回合掷一颗骰子进入 ${branchCount} 格太平洋支线，在「${mergeName}」合回主环。`;
+  }
+  if (cell.module.id === 'great-wall' && cell.cellType === 'beacon') {
+    const payload = cell.payload as { claimCost?: number; toll?: number };
+    const claimCost = payload.claimCost ?? 0;
+    const toll = payload.toll ?? 0;
+    return `停在无主烽火台时可花 ${formatMoney(claimCost)} 占据它；其他玩家之后再停在此格，须向你支付 ${formatMoney(toll)} 通行费。`;
   }
   return `由 ${cell.module.id}@${cell.module.version} 模块规则结算。`;
 }
@@ -331,7 +340,7 @@ function nonPropertyDescription(cell: Exclude<Cell, PropertyCell>, state: GameSt
     case 'world':
       return 'effect' in cell ? describeCellEffect(cell.effect, state) : '按格子规则结算。';
     case 'module':
-      return describeAirportBranch(cell, state);
+      return describeModuleCell(cell, state);
   }
 }
 
@@ -648,6 +657,8 @@ export function formatRecentLogEvent(state: GameState | RenderableGameState, eve
       return `债务已结清 ${money(event.amount)}`;
     case 'player_bankrupt':
       return `${playerName(state, event.playerId)} 破产`;
+    case 'player_surrendered':
+      return `${playerName(state, event.playerId)} 投降出局`;
     case 'turn_ended':
       return `${playerName(state, event.playerId)} 回合结束`;
     case 'game_over':

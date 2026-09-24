@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed } from 'vue';
 import type { PlayerColor, PlayerState } from '@richman/engine';
 import { formatCashDelta, formatMoney } from '../ui/format';
 import type { CashNotice } from '../session/gameSession';
@@ -30,7 +30,20 @@ const heroIndex = computed(() =>
   visiblePlayers.value.findIndex((player) => player.id === heroId.value),
 );
 
+/** 常规主位轨道（≤4 人）：宽度足够放大昵称与现金。*/
 const HERO_TRACK = 'minmax(0, 2.75fr)';
+
+/**
+ * 5-6 人（#94）：一屏之内必须看得到全部席位。
+ *
+ * 上一版在 5-6 人时切成「固定 88px 的单行横滑条」，要滑到主位才知道轮到谁；单机人数上限提到
+ * 6 人之后这条路成了常态，滑来滑去比「挤」更难受。现在改成**压缩网格**：所有席位始终同屏，
+ * 主位略宽 + 徽章 + 「行动中」区分，非主位只收字号与内边距 —— 不丢昵称，也不丢现金。
+ */
+const compactMode = computed(() => visiblePlayers.value.length >= 5);
+
+/** 主位轨道：常规 2.75fr 够放大字号；5-6 人时降到 1.8fr，给其余 5 个席位留出可读宽度。*/
+const heroTrack = computed(() => (compactMode.value ? 'minmax(0, 1.8fr)' : HERO_TRACK));
 const SEAT_TRACK = 'minmax(0, 1fr)';
 
 /** 手机端：主位在自身轨道就地加宽、其余席位收窄；轨道数量不变时由 CSS 平滑插值。*/
@@ -38,75 +51,14 @@ const mobileSeatTemplate = computed(() => {
   const players = visiblePlayers.value;
   if (players.length === 0) return SEAT_TRACK;
   return players
-    .map((_, index) => (index === heroIndex.value ? HERO_TRACK : SEAT_TRACK))
+    .map((_, index) => (index === heroIndex.value ? heroTrack.value : SEAT_TRACK))
     .join(' ');
 });
 
 /** 桌面端：主位仍占第一宽列（配合同样只在桌面生效的 CSS order），其余按引擎顺序。*/
 const desktopSeatTemplate = computed(() =>
-  [HERO_TRACK, ...visiblePlayers.value.slice(1).map(() => SEAT_TRACK)].join(' '),
+  [heroTrack.value, ...visiblePlayers.value.slice(1).map(() => SEAT_TRACK)].join(' '),
 );
-
-// 5-6 人：席位太挤，改用固定高度单行横滑（席位仍按引擎顺序、绝不重排），
-// 当前行动者由脚本滚进可视区；≤4 人维持既有网格伸缩布局，完全不变。
-const scrollMode = computed(() => visiblePlayers.value.length >= 5);
-
-const railRef = ref<HTMLElement | null>(null);
-
-function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined'
-    && typeof window.matchMedia === 'function'
-    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
-/** 只滚动横滑容器本身，绝不触碰页面滚动；主位已可见时不产生滚动。*/
-function scrollHeroIntoView(behaviorOverride?: ScrollBehavior): void {
-  const rail = railRef.value;
-  const seats = rail?.querySelector<HTMLElement>('.player-seats');
-  const hero = rail?.querySelector<HTMLElement>('.player-card.hero');
-  if (!rail || !seats || !hero || seats.scrollWidth <= seats.clientWidth) return;
-  const containerRect = seats.getBoundingClientRect();
-  const heroRect = hero.getBoundingClientRect();
-  const heroLeft = heroRect.left - containerRect.left + seats.scrollLeft;
-  const heroRight = heroLeft + heroRect.width;
-  const pad = 8;
-  const behavior: ScrollBehavior = behaviorOverride
-    ?? (prefersReducedMotion() ? 'auto' : 'smooth');
-  if (heroLeft - pad < seats.scrollLeft) {
-    seats.scrollTo({ left: Math.max(0, heroLeft - pad), behavior });
-  } else if (heroRight + pad > seats.scrollLeft + seats.clientWidth) {
-    seats.scrollTo({
-      left: Math.min(seats.scrollWidth - seats.clientWidth, heroRight + pad - seats.clientWidth),
-      behavior,
-    });
-  }
-}
-
-watch([heroId, scrollMode, () => visiblePlayers.value.length], () => {
-  void nextTick(scrollHeroIntoView);
-});
-
-let seatsObserver: ResizeObserver | null = null;
-
-function observeSeatsSize(): void {
-  seatsObserver?.disconnect();
-  seatsObserver = null;
-  const seats = railRef.value?.querySelector<HTMLElement>('.player-seats');
-  if (seats === undefined || seats === null || typeof ResizeObserver === 'undefined') return;
-  seatsObserver = new ResizeObserver(() => {
-    scrollHeroIntoView('auto');
-  });
-  seatsObserver.observe(seats);
-}
-
-onMounted(() => {
-  scrollHeroIntoView();
-  observeSeatsSize();
-});
-onBeforeUnmount(() => {
-  seatsObserver?.disconnect();
-  seatsObserver = null;
-});
 
 const playerShape: Record<PlayerColor, string> = {
   red: '●',
@@ -141,12 +93,12 @@ function pillKey(notice: CashNotice): string {
 </script>
 
 <template>
-  <aside ref="railRef" class="player-rail" aria-label="玩家资产条">
+  <aside class="player-rail" aria-label="玩家资产条">
     <TransitionGroup
-      :name="scrollMode ? 'seat-static' : 'seat'"
+      :name="compactMode ? 'seat-static' : 'seat'"
       tag="div"
       class="player-seats"
-      :class="{ 'seat-scroll': scrollMode }"
+      :class="{ compact: compactMode }"
       :style="{ '--seat-cols-mobile': mobileSeatTemplate, '--seat-cols-desktop': desktopSeatTemplate }"
     >
       <div
@@ -480,48 +432,67 @@ function pillKey(notice: CashNotice): string {
   }
 }
 
-/* 5-6 人横滑模式：栏高与卡片高度仍锁死 50px/45px，席位按引擎顺序单行排布，
-   主位就地加宽，其余席位定宽；超宽部分只在容器内横向滑动，不撑破页面。*/
-.player-seats.seat-scroll {
-  display: flex;
-  flex-flow: row nowrap;
-  align-items: stretch;
-  grid-template-columns: none;
+/* 5-6 人压缩模式（#94）：仍是一行网格、栏高锁死 50px/45px，但**所有席位同屏可见** ——
+   不横滑、不重排，主位靠徽章 + 「行动中」+ 略宽轨道区分；非主位只收紧字号与内边距，
+   昵称与现金都保留（现金是核心信息，绝不省略）。*/
+.player-seats.compact .seat-move,
+.player-seats.compact .seat-enter-active {
   transition: none;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  overscroll-behavior-x: contain;
-  touch-action: pan-x;
-  height: 45px;
-  max-height: 45px;
 }
 
-.player-seats.seat-scroll::-webkit-scrollbar {
-  display: none;
+.player-seats.compact .player-card {
+  /* 6 个席位要挤在 ~320px 起算的宽度里，左右内边距压到 1px，把宽度全让给昵称与现金。*/
+  padding: 3px 1px;
+  gap: 2px;
 }
 
-.player-seats.seat-scroll .player-slot {
-  flex: 0 0 88px;
-  height: 45px;
-  max-height: 45px;
+.player-seats.compact .seat-head {
+  gap: 2px;
 }
 
-.player-seats.seat-scroll .player-slot.hero {
-  flex: 0 0 156px;
-  /* 横滑模式不重排席位：覆盖桌面网格模式的主位提前 order。*/
-  order: 0;
+.player-seats.compact .seat-shape {
+  font-size: 7px;
+  line-height: 12px;
 }
 
-.player-seats.seat-scroll .player-card {
-  height: 45px;
-  min-height: 45px;
-  max-height: 45px;
+.player-seats.compact .player-nickname {
+  font-size: 8px;
+  line-height: 12px;
 }
 
-.player-seats.seat-scroll .seat-move,
-.player-seats.seat-scroll .seat-enter-active {
-  transition: none;
+.player-seats.compact .seat-state {
+  font-size: 7px;
+  line-height: 10px;
+}
+
+.player-seats.compact .player-cash {
+  font-size: 8px;
+  line-height: 11px;
+}
+
+.player-seats.compact .player-cash.cash-long {
+  font-size: 7px;
+}
+
+.player-seats.compact .player-card.hero {
+  gap: 5px;
+  padding: 3px 5px;
+}
+
+.player-seats.compact .player-card.hero .hero-badge {
+  width: 20px;
+  height: 24px;
+  font-size: 10px;
+}
+
+.player-seats.compact .player-card.hero .player-cash {
+  font-size: 13px;
+  line-height: 16px;
+  letter-spacing: -0.4px;
+}
+
+.player-seats.compact .player-card.hero .player-cash.cash-long {
+  font-size: 11px;
 }
 
 @media (prefers-reduced-motion: reduce) {

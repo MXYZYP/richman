@@ -8,11 +8,16 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 // 专用手机底部抽屉：native <dialog> 承载 —— top layer 天然挡住背景点击、Esc 即 cancel、
 // 焦点被困在弹层内；打开时锁 body 滚动，关闭时把焦点还给「仍连接且可见」的触发元素。
-// 组件常驻（由 open prop 控制），桌面端由 GameView 用 display:contents 原位渲染其内容。
-const props = defineProps<{
+// 两种 layout（桌面行为不同，手机端一律是底部抽屉）：
+//   inline —— 默认。桌面端用 display:contents 把内容原位摊平进宿主容器（侧栏分组用）。
+//   modal  —— 桌面端保持真正的居中弹窗（设置等需要独立入口的场合）。
+const props = withDefaults(defineProps<{
   open: boolean;
   title: string;
-}>();
+  layout?: 'inline' | 'modal';
+}>(), {
+  layout: 'inline',
+});
 
 const emit = defineEmits<{ close: [] }>();
 
@@ -75,6 +80,7 @@ function closeFromBackdrop(event: MouseEvent): void {
   <dialog
     ref="dialog"
     class="mobile-sheet"
+    :data-variant="layout"
     :aria-labelledby="titleId"
     @cancel.prevent="emit('close')"
     @click="closeFromBackdrop"
@@ -170,13 +176,32 @@ function closeFromBackdrop(event: MouseEvent): void {
 }
 
 @media (min-width: 768px) {
-  .mobile-sheet-panel,
-  .mobile-sheet-body {
+  /* inline 变体：桌面端把抽屉外壳摊平成透明分组容器，内容直接流进宿主容器。 */
+  .mobile-sheet[data-variant='inline'] .mobile-sheet-panel,
+  .mobile-sheet[data-variant='inline'] .mobile-sheet-body {
     display: contents;
   }
 
-  .mobile-sheet-head {
+  .mobile-sheet[data-variant='inline'] .mobile-sheet-head {
     display: none;
+  }
+
+  /* modal 变体：桌面端是居中弹窗，保留头部标题与关闭按钮。 */
+  .mobile-sheet[data-variant='modal'] {
+    top: 50%;
+    bottom: auto;
+    left: 50%;
+    right: auto;
+    translate: -50% -50%;
+    width: min(92vw, 520px);
+    max-height: min(86vh, 760px);
+    border: 1px solid var(--center-border);
+    border-radius: 16px;
+    box-shadow: 0 24px 64px rgb(53 39 20 / 28%);
+  }
+
+  .mobile-sheet[data-variant='modal'] .mobile-sheet-panel {
+    max-height: min(86vh, 760px);
   }
 }
 

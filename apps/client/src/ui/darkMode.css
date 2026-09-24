@@ -1,0 +1,89 @@
+/*
+ * 深色模式（#11）：应用级外观，作用于首页 / 大厅 / 单机建房 / 设置 / 通用弹层等
+ * 「页面级」界面。由 ui/themeManager.ts 写入 <html data-appearance="dark"> 触发。
+ *
+ * 与「对局皮肤」（gameTheme.css，:root[data-theme] 作用域）完全独立：
+ *   - 本文件覆盖的是 :root 上的全局变量，谁都没有重新定义过 --surface-* 等，
+ *     所以对局内（.game-view 子树重新定义了同名变量）不受影响，棋盘配色仍由皮肤决定。
+ *   - 为了让「开深色模式 → 进对局也变暗」，皮肤多了一个 'auto' 选项（见 themeManager）：
+ *     auto 在深色模式下解析成「暗夜」，浅色模式下解析成「经典」。
+ *
+ * 配色刻意沿用「暗夜」皮肤的色系（深蓝炭灰 + 琥珀），保证站点深色与对局暗夜是一套观感。
+ * 玩家身份色（--player-*）与收付钱语义色不覆盖：它们跨主题稳定，且欠款/破产必须仍是红色。
+ */
+
+:root[data-appearance='dark'] {
+  /* 让浏览器把原生控件（复选框、下拉、滚动条、日期选择器）也按深色渲染 */
+  color-scheme: dark;
+
+  /* 页面与文字 */
+  --color-bg: #171b26;
+  --color-cell: #232a3d;
+  --color-border: #3c4660;
+  --color-primary: #f0b860;
+  --color-accent: #7fb0d8;
+  --color-text: #e8edf5;
+  --color-muted: #9aa6bd;
+  --color-gain: #5bc98f;
+  --color-pay: #f08a7a;
+  --cash-profit-text: #f6b3a6;
+  --cash-profit-bg: #3a2730;
+  --cash-loss-text: #93d8b3;
+  --cash-loss-bg: #1e3a2c;
+  --price-color: #f0b860;
+
+  /* 棋盘底与阴影 */
+  --board-bg: #232a3d;
+  --board-surface: #232a3d;
+  --board-shadow: 0 16px 44px rgb(0 0 0 / 46%);
+
+  /* 中央面板 */
+  --center-bg: linear-gradient(135deg, #2b3346, #1f2536);
+  --center-border: #3c4660;
+  --title-color: #f0c878;
+  --event-bg: #2a3142;
+  --event-text: #f0d49a;
+  --overlay-scrim: rgb(5 8 14 / 62%);
+
+  /* 支线虚线轨迹 */
+  --branch-track: #566187;
+
+  /* 页面级表面色：浅色下是「半透明白叠暖纸」，深色下换成「半透明深色叠深底」 */
+  --surface-card: linear-gradient(180deg, rgb(43 51 70 / 96%), rgb(31 37 54 / 92%));
+  --surface-raised: rgb(43 51 70 / 92%);
+  --surface-soft: rgb(38 45 62 / 88%);
+  --surface-quiet: rgb(34 41 57 / 84%);
+  --surface-input: rgb(28 34 48 / 92%);
+  --color-error-bg: #3a2730;
+
+  /* 按钮 */
+  --button-enabled-bg: #e0a74e;
+  --button-enabled-text: #1c1408;
+  --button-disabled-bg: #2a3142;
+  --button-disabled-text: #7886a0;
+
+  /* 连接横幅 */
+  --color-warning: #e0a94a;
+  --banner-warning-bg: #2f3550;
+  --banner-error-bg: #3a2730;
+
+  /* 功能格背景 / 棋子描边 */
+  --cell-function-bg: linear-gradient(180deg, #2b3346, #232a3d);
+  --token-ring: #232a3d;
+  --token-shadow: 0 2px 6px rgb(0 0 0 / 50%);
+}
+
+/* 页面背景：#app 的柔光与点阵是浅色专门调过的，深色下必须换一套，
+   否则顶部会顶着一层接近纯白的径向光斑。 */
+:root[data-appearance='dark'] #app {
+  background-color: var(--color-bg);
+  background-image:
+    radial-gradient(circle, rgb(255 255 255 / 4%) 1.1px, transparent 1.3px),
+    radial-gradient(1000px 520px at 50% 0%, rgb(46 54 74 / 88%), transparent 68%),
+    radial-gradient(900px 620px at 50% 28%, rgb(74 104 92 / 20%), transparent 72%);
+}
+
+/* 触摸高光：浅色是暖墨，深色下换成琥珀，按下反馈在深底上才看得见（:root 就是 html） */
+:root[data-appearance='dark'] {
+  -webkit-tap-highlight-color: rgb(240 184 96 / 18%);
+}

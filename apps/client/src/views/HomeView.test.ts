@@ -16,7 +16,7 @@ describe('HomeView release notes entry', () => {
 
     const entry = `v${releaseNotes.releases[0].version} · 更新说明`;
     expect(html.split(entry)).toHaveLength(2);
-    expect(html).toContain('class="home-version"');
+    expect(html).toContain('class="release-notes-trigger"');
   });
 });
 
@@ -27,6 +27,6 @@ describe('HomeView join role', () => {
     expect(html).toContain('参赛');
     expect(html).toContain('观战');
     expect(html).toContain('加入房间');
-    expect(html).toContain('输入好友分享的 4 位房间码');
+    expect(html).toContain('输入好友分享的 6 位房间码');
   });
 });

@@ -10,10 +10,13 @@ const props = defineProps<{
   positionName: string;
   debtAmount: number | null;
   assets: AssetRow[];
+  /** 房主且处于联机对局、且当前查看的并非自己时为真，显示「踢出对局」按钮。 */
+  canKick: boolean;
 }>();
 
 const emit = defineEmits<{
   close: [];
+  kick: [];
 }>();
 
 const marks: Record<PlayerColor, string> = { red: '●', blue: '■', yellow: '▲', green: '★', purple: '◆', orange: '⬟' };
@@ -84,6 +87,14 @@ function closeFromBackdrop(event: MouseEvent): void {
             @click="requestClose"
           >
             ×
+          </button>
+          <button
+            v-if="props.canKick"
+            type="button"
+            class="dialog-kick"
+            @click="emit('kick')"
+          >
+            踢出对局
           </button>
         </header>
 
@@ -262,6 +273,33 @@ function closeFromBackdrop(event: MouseEvent): void {
 }
 
 .dialog-close:focus-visible {
+  outline: 3px solid var(--game-focus);
+  outline-offset: 2px;
+}
+
+.dialog-kick {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--color-pay) 42%, var(--color-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-pay) 9%, var(--player-tile));
+  color: var(--color-pay);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+
+.dialog-kick:hover {
+  background: color-mix(in srgb, var(--color-pay) 16%, var(--player-tile));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-pay) 55%, transparent);
+}
+
+.dialog-kick:focus-visible {
   outline: 3px solid var(--game-focus);
   outline-offset: 2px;
 }

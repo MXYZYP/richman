@@ -999,3 +999,199 @@ describe('单机真人抽卡确认（作弊重抽）', () => {
     expect(session.state.value.cardChoice).toEqual({ mode: 'local-human', pending: null });
   });
 });
+
+// ── 悔棋 / 回放（P1-5）────────────────────────────────────────────────────────
+// 这两个能力此前只有「按钮接线」层面的覆盖（SettingsDialog 渲染出按钮、GameView 转发事件），
+// localSession 里的 undo / replay 本体是零测试的。下面用两颗真人棋子（没有电脑玩家）驱动真实
+// 意图，验证：还原精度、可连续撤回、撤回与本地存档的原子性、以及回放不污染真实对局。
+describe('悔棋与回放（P1-5）', () => {
+  const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+  function humanOnlySession(seed: string, persistenceOverride?: LocalGamePersistence): LocalSession {
+    const pack = getActiveMapPack('china-tour');
+    const initial = createGame({
+      mapRef: pack.ref,
+      ruleModules: pack.game.requiredRuleModules,
+      board: pack.game.board,
+      cards: pack.game.cards,
+      config: pack.game.config,
+      players: [{ id: 'human', nickname: '玩家' }, { id: 'other', nickname: '对手' }],
+      seed,
+    });
+    return createLocalSession({
+      mapPack: pack,
+      restoreState: initial,
+      persistence: persistenceOverride,
+      wait: async () => undefined,
+    });
+  }
+
+  /** 按阶段挑一个「一定会推进状态」的可见动作。全是真人，所以不会有电脑玩家抢回合。 */
+  function pickPlayableAction(session: LocalSession): ClientAction {
+    const actions = session.availableActions.value;
+    for (const intentType of ['accept_card', 'roll_dice', 'buy_property', 'skip_buy', 'end_turn', 'skip_build']) {
+      const action = actions.find((candidate) => candidate.intent.type === intentType);
+      if (action) return action;
+    }
+    throw new Error(
+      `没有可执行动作（阶段 ${session.state.value.turnPhase}）：${actions.map((a) => a.intent.type).join(',') || '空'}`,
+    );
+  }
+
+  async function playNextAction(session: LocalSession): Promise<void> {
+    const before = session.state.value;
+    const action = pickPlayableAction(session);
+    await session.sendIntent(action.intent);
+    if (session.state.value === before) {
+      throw new Error(`动作 ${action.intent.type} 没有产生状态推进（lastError=${session.lastError.value ?? 'null'}）`);
+    }
+  }
+
+  it('撤回一步精确还原到操作前的快照，并可一路撤回到本局起点', async () => {
+    const session = humanOnlySession('undo-rewind');
+    const origin = clone(session.state.value);
+    expect(session.canUndo.value).toBe(false);
+    expect(session.canReplay.value).toBe(false);
+
+    const snapshots: unknown[] = [];
+    for (let step = 0; step < 6; step += 1) {
+      snapshots.push(clone(session.state.value));
+      await playNextAction(session);
+      expect(session.canUndo.value).toBe(true);
+      expect(session.canReplay.value).toBe(true);
+    }
+    expect(session.state.value).not.toEqual(origin);
+
+    // 逐级撤回：每退一步都要落在当时记录的那份快照上，而不是「差不多」。
+    for (let step = snapshots.length - 1; step >= 0; step -= 1) {
+      await session.undo();
+      expect(session.state.value).toEqual(snapshots[step]);
+    }
+    expect(session.state.value).toEqual(origin);
+    // 撤到起点后历史与动作日志同步清空：既没得撤，也没得回放。
+    expect(session.canUndo.value).toBe(false);
+    expect(session.canReplay.value).toBe(false);
+  });
+
+  it('撤回会把还原后的状态写回本地存档，而不是只改内存', async () => {
+    const commits: GameState[] = [];
+    const session = humanOnlySession('undo-commit', persistence({
+      commit: async (nextState) => {
+        commits.push(nextState);
+        return { ok: true, slot: 1, revision: commits.length + 1 };
+      },
+    }));
+
+    const before = clone(session.state.value);
+    await playNextAction(session);
+    const afterAction = commits[commits.length - 1]!;
+    commits.length = 0;
+
+    await session.undo();
+
+    expect(commits).toHaveLength(1);
+    expect(commits[0]).not.toEqual(afterAction);
+    expect(commits[0]).toMatchObject({ currentPlayerId: before.currentPlayerId, phase: before.phase });
+    expect(session.lastError.value).toBeNull();
+  });
+
+  it('存档提交失败时撤回整体回滚，内存与存档不会各说各话', async () => {
+    let rejectCommit = false;
+    const session = humanOnlySession('undo-commit-fail', persistence({
+      commit: async () => (rejectCommit
+        ? { ok: false, reason: 'storage_error' }
+        : { ok: true, slot: 1, revision: 2 }),
+    }));
+
+    await playNextAction(session);
+    const afterAction = clone(session.state.value);
+
+    rejectCommit = true;
+    await session.undo();
+
+    expect(session.lastError.value).toBe('撤回失败，进度未改变');
+    // 关键：不能出现「棋盘退回去了、存档还停在后面」的错位，并且历史没有被白吃掉。
+    expect(session.state.value).toEqual(afterAction);
+    expect(session.canUndo.value).toBe(true);
+    expect(session.canReplay.value).toBe(true);
+  });
+
+  it('存档版本冲突时把会话标记失效，而不是继续改一盘已被别处改过的局', async () => {
+    let conflict = false;
+    const session = humanOnlySession('undo-stale', persistence({
+      commit: async () => (conflict
+        ? { ok: false, reason: 'revision_mismatch' }
+        : { ok: true, slot: 1, revision: 2 }),
+    }));
+
+    await playNextAction(session);
+    conflict = true;
+    await session.undo();
+
+    expect(session.staleSession.value).toBe(true);
+    expect(session.canUndo.value).toBe(false);
+    expect(session.canReplay.value).toBe(false);
+  });
+
+  it('撤回后再操作，历史重新对齐：再撤一次仍然精确回到同一步', async () => {
+    const session = humanOnlySession('undo-realign');
+
+    await playNextAction(session);
+    const afterFirst = clone(session.state.value);
+
+    await playNextAction(session);
+    await session.undo();
+    expect(session.state.value).toEqual(afterFirst);
+
+    // 撤回来的这一步继续往前走：新的动作成为新的「上一步」，历史不能被旧条目顶掉。
+    await playNextAction(session);
+    expect(session.canUndo.value).toBe(true);
+    await session.undo();
+    expect(session.state.value).toEqual(afterFirst);
+  });
+
+  it('回放不动真实对局状态，只把动画从头推一遍', async () => {
+    const waits: number[] = [];
+    const pack = getActiveMapPack('china-tour');
+    const initial = createGame({
+      mapRef: pack.ref,
+      ruleModules: pack.game.requiredRuleModules,
+      board: pack.game.board,
+      cards: pack.game.cards,
+      config: pack.game.config,
+      players: [{ id: 'human', nickname: '玩家' }, { id: 'other', nickname: '对手' }],
+      seed: 'replay-animation',
+    });
+    const session = createLocalSession({
+      mapPack: pack,
+      restoreState: initial,
+      wait: async (ms: number) => { waits.push(ms); },
+    });
+
+    for (let step = 0; step < 3; step += 1) await playNextAction(session);
+    const live = clone(session.state.value);
+    const waitsBeforeReplay = waits.length;
+
+    await session.replay();
+
+    expect(session.state.value).toEqual(live);
+    expect(session.canReplay.value).toBe(true);
+    expect(session.canUndo.value).toBe(true);
+    expect(session.lastError.value).toBeNull();
+    // 回放确实播了动画（否则这里等于什么都没发生，测试就成了空断言）。
+    expect(waits.length).toBeGreaterThan(waitsBeforeReplay);
+  });
+
+  it('没有历史时撤回与回放都是安全空操作', async () => {
+    const session = humanOnlySession('undo-empty');
+    const origin = clone(session.state.value);
+
+    await session.undo();
+    await session.replay();
+
+    expect(session.state.value).toEqual(origin);
+    expect(session.lastError.value).toBeNull();
+    expect(session.canUndo.value).toBe(false);
+    expect(session.canReplay.value).toBe(false);
+  });
+});

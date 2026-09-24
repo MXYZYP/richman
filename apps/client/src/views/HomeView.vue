@@ -2,9 +2,15 @@
 import { computed, ref, watch } from 'vue';
 import type { RoomRole } from '@richman/protocol';
 import { listActiveMaps, type MapCatalogEntry } from '@richman/board-data';
+import MapPicker from '../components/MapPicker.vue';
+import PwaInstallRow from '../components/PwaInstallRow.vue';
+import ReleaseNotesDialog from '../components/ReleaseNotesDialog.vue';
 import { capRoomCode, isValidRoomCode, planCreateSubmission, planJoinSubmission } from '../session/appFlow';
 import type { PendingRoomRequest } from '../session/sessionStorage';
 import type { LocalSaveCard, LocalSaveIdentity, LocalSaveObservedRecord } from '../session/localGameSave';
+import { browserStorage, loadPlayerStats } from '../session/playerStats';
+import { formatMoney } from '../ui/format';
+import { THEMES, getStoredTheme, setTheme, type ThemeId } from '../ui/themeManager';
 import {
   localCardKey,
   requestLocalDelete as planLocalDelete,
@@ -38,6 +44,8 @@ const props = withDefaults(defineProps<{
 });
 
 const emit = defineEmits<{
+  // 建房只带昵称与地图：电脑难度与规则自定义（初始资金等）都改成「房主在大厅里设」，
+  // 因为联机建房那一刻房间里还没有电脑玩家，先问难度是问不出所以然的（#4 / #6）。
   create: [nickname: string, mapId: string];
   join: [payload: { roomCode: string; nickname: string; role: RoomRole }];
   local: [mapId: string];
@@ -60,6 +68,7 @@ const selectedMapId = ref(
     ? props.initialMapId
     : (props.activeMaps[0]?.ref.id ?? ''),
 );
+// 建房时不再问电脑难度与皮肤：皮肤收进设置（#5），难度与规则自定义收进大厅的房主设置（#4 / #6）。
 const showMapSelector = computed(() => props.activeMaps.length > 1);
 watch(
   () => props.activeMaps,
@@ -127,6 +136,23 @@ function submitLocal() {
   if (props.submitting || !props.activeMaps.some((entry) => entry.ref.id === selectedMapId.value)) return;
   emit('local', selectedMapId.value);
 }
+
+// 本地战绩（路线图 #12）：无存储时为 null，UI 自动隐藏该区块。
+const playerStats = computed(() => {
+  const storage = browserStorage();
+  return storage === undefined ? null : loadPlayerStats(storage);
+});
+const favoriteMapTitle = computed(() => {
+  const stats = playerStats.value;
+  if (stats === null) return null;
+  let bestId = '';
+  let bestCount = 0;
+  for (const [id, count] of Object.entries(stats.favoriteMaps)) {
+    if (count > bestCount) { bestCount = count; bestId = id; }
+  }
+  if (bestId === '') return null;
+  return props.activeMaps.find((entry) => entry.ref.id === bestId)?.title ?? null;
+});
 </script>
 
 <template>
@@ -134,13 +160,14 @@ function submitLocal() {
     <section class="home-card" aria-labelledby="home-title">
       <p class="home-eyebrow">联机对战 · 单机游玩</p>
       <h1 id="home-title">进入大富翁</h1>
-      <p class="home-copy">用 4 位房间码和好友同桌，或单机游玩开一局。手机、电脑浏览器皆可。</p>
+      <p class="home-copy">用 6 位房间码和好友同桌，或单机游玩开一局。手机、电脑浏览器皆可。</p>
 
       <p v-if="error" class="home-error" role="alert">{{ error }}</p>
       <p v-if="localSaveError" class="home-error" role="alert">{{ localSaveError }}</p>
 
       <section v-if="localSaveCards.length > 0" class="local-saves" aria-labelledby="local-saves-title">
         <h2 id="local-saves-title">继续单机</h2>
+        <p class="local-saves-hint">以下为本机存档，仅保存在这台设备上，与在线房间互不影响。</p>
         <article v-for="card in localSaveCards" :key="localCardKey(card)" class="local-save-card">
           <template v-if="card.kind === 'valid'">
             <div class="local-save-copy">
@@ -212,6 +239,24 @@ function submitLocal() {
         </div>
       </section>
 
+      <section v-if="playerStats" class="player-stats" aria-labelledby="stats-title">
+        <h2 id="stats-title">我的战绩</h2>
+        <dl class="stats-grid">
+          <div class="stats-cell">
+            <dt>胜 / 负</dt>
+            <dd>{{ playerStats.wins }} / {{ playerStats.losses }}</dd>
+          </div>
+          <div class="stats-cell">
+            <dt>总资产峰值</dt>
+            <dd>{{ formatMoney(playerStats.bestAsset) }}</dd>
+          </div>
+          <div v-if="favoriteMapTitle" class="stats-cell">
+            <dt>常用地图</dt>
+            <dd>{{ favoriteMapTitle }}</dd>
+          </div>
+        </dl>
+      </section>
+
       <form class="home-form" @submit.prevent>
         <label class="home-field">
           <span>你的昵称</span>
@@ -226,19 +271,21 @@ function submitLocal() {
           />
         </label>
 
-        <label v-if="showMapSelector" class="home-field home-map-field">
-          <span>地图</span>
-          <select v-model="selectedMapId" :disabled="submitting">
-            <option v-for="entry in activeMaps" :key="entry.ref.id" :value="entry.ref.id">
-              {{ entry.title }}
-            </option>
-          </select>
-        </label>
+        <MapPicker
+          v-if="showMapSelector"
+          v-model="selectedMapId"
+          :maps="activeMaps"
+          :disabled="submitting"
+        />
 
         <div class="home-actions">
           <button type="button" class="home-primary" :disabled="!canCreate" @click="submitCreate">
             创建房间
           </button>
+          <p class="home-hint">
+            建房后进入房间大厅：房主可添加电脑玩家并设定其难度、自定义初始资金等规则；
+            皮肤与深色模式在设置里随时切换。
+          </p>
         </div>
 
         <div class="home-join">
@@ -249,7 +296,7 @@ function submitLocal() {
               type="text"
               inputmode="numeric"
               autocomplete="off"
-              placeholder="4 位数字"
+              placeholder="6 位数字"
               aria-describedby="home-room-hint"
               :aria-invalid="showRoomError"
               :disabled="submitting"
@@ -280,9 +327,9 @@ function submitLocal() {
           </button>
         </div>
         <p id="home-room-hint" class="home-hint" :class="{ invalid: showRoomError }" role="status">
-          {{ showRoomError ? '房间码需为 4 位数字' : (joinRole === 'spectator'
+          {{ showRoomError ? '房间码需为 6 位数字' : (joinRole === 'spectator'
             ? '观战仅查看棋盘、资产与战报；满员或已开局的房间也可加入'
-            : '输入好友分享的 4 位房间码') }}
+            : '输入好友分享的 6 位房间码；开局前可加入，开局后仅可观战') }}
         </p>
       </form>
 
@@ -292,6 +339,12 @@ function submitLocal() {
         单机游玩（无需联网）
       </button>
     </section>
+
+    <footer class="home-beian">
+      <!-- 更新说明入口：首页必须能看到当前版本并打开更新历史（组件自带触发按钮 + 弹层）。 -->
+      <ReleaseNotesDialog />
+      <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">新ICP备2026008728号</a>
+    </footer>
   </main>
 </template>
 
@@ -314,6 +367,46 @@ function submitLocal() {
     linear-gradient(180deg, rgb(255 255 255 / 94%), rgb(247 243 234 / 84%)),
     var(--board-surface);
   box-shadow: 0 18px 48px rgb(53 39 20 / 14%);
+}
+
+.player-stats {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: rgb(255 255 255 / 60%);
+}
+
+.player-stats h2 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.stats-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.stats-cell {
+  display: grid;
+  gap: 4px;
+}
+
+.stats-cell dt {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.stats-cell dd {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text);
 }
 
 .home-eyebrow,
@@ -375,6 +468,12 @@ function submitLocal() {
   font-size: 18px;
 }
 
+.local-saves-hint {
+  margin: -4px 0 0;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
 .local-save-card {
   min-width: 0;
   display: grid;
@@ -434,7 +533,7 @@ function submitLocal() {
   border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 8px 10px;
-  background: rgb(255 255 255 / 84%);
+  background: var(--surface-input);
   color: var(--color-text);
   font-weight: 800;
 }
@@ -466,6 +565,7 @@ function submitLocal() {
 }
 
 .home-role-option {
+  flex: 1;
   min-height: 48px;
   padding-inline: 14px;
   border: 0;
@@ -485,6 +585,10 @@ function submitLocal() {
   opacity: 0.6;
 }
 
+.home-actions {
+  display: grid;
+  gap: 8px;
+}
 
 .home-hint {
   margin: 0;
@@ -494,6 +598,23 @@ function submitLocal() {
 .home-hint.invalid {
   color: var(--color-primary);
   font-weight: 900;
+}
+
+.home-beian {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--color-muted);
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+.home-beian a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.home-beian a:hover {
+  text-decoration: underline;
 }
 
 .home-primary,

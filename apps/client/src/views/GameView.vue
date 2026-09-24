@@ -9,11 +9,17 @@ import PlayerAssetDialog from '../components/PlayerAssetDialog.vue';
 import SettlementDialog from '../components/SettlementDialog.vue';
 import PropertyAwards from '../components/PropertyAwards.vue';
 import MobileSheet from '../components/MobileSheet.vue';
+import ChatPanel from '../components/ChatPanel.vue';
+import SettingsDialog from '../components/SettingsDialog.vue';
 import { formatRecentLogEvent, getAssetRows, getCellDetail, getPendingCardChoice, getPendingPurchaseOffer, getPlayerAssetDialogModel, type ClientAction } from '../game/clientGame';
 import { formatCashAnnouncement, formatMoney } from '../ui/format';
 import type { CashNotice, GameSession } from '../session/gameSession';
-import { getPlaybackSpeedRef, setPlaybackSpeed, paceMultiplier, PLAYBACK_SPEED_OPTIONS } from '../session/playbackPace';
+import { paceMultiplier } from '../session/playbackPace';
 import { getGameInteractionState } from '../session/gameInteraction';
+import { browserStorage, recordGameResult } from '../session/playerStats';
+import type { Intent } from '@richman/engine';
+import { playSfx } from '../audio/sfx';
+import { isBgmEnabled, startBgm, stopBgm, armBgmAutoStart } from '../audio/bgm';
 import '../ui/gameTheme.css';
 
 // One shared board for both local hot-seat and online play. Every mode difference is resolved
@@ -39,10 +45,43 @@ const armedDebtAutoOpen = ref<string | null>(null);
 // One media query drives the shell (dock + sheets) so CSS and JS agree on what "mobile" means.
 // Switching back to desktop closes any open sheet — a native modal left open would keep locking
 // the page behind the desktop layout.
-type MobileSheetId = 'assets' | 'log' | 'settings';
+type MobileSheetId = 'assets' | 'log' | 'chat';
 const mobileSheet = ref<MobileSheetId | null>(null);
 const mobileLayoutQuery = typeof window === 'undefined' ? null : window.matchMedia('(max-width: 1024px)');
 const isMobileLayout = ref(mobileLayoutQuery?.matches ?? false);
+
+// 设置弹窗独立于 mobileSheet：它两端共用（桌面侧栏按钮 / 移动底部操作坞标签），
+// 不再被 isMobileLayout 拦在门外——这正是 #13 要补的"桌面没有设置入口"。
+const settingsOpen = ref(false);
+const dockSettingsTrigger = ref<HTMLButtonElement | null>(null);
+
+function toggleSettings(): void {
+  settingsOpen.value = !settingsOpen.value;
+}
+
+// 房间聊天（联机有效；本地热座 chatLog 恒为空）。
+// 布局契约（#50）：聊天不再使用固定定位的浮动按钮——它曾与侧栏内容、底部操作坞互相遮挡。
+//   桌面：内联在侧栏流内的可折叠区块（.chat-desktop），永不遮挡其它区域。
+//   移动：由底部操作坞的「聊天」标签驱动同一套 MobileSheet 抽屉（mobileSheet === 'chat'）。
+// isChatOpen 只服务桌面折叠态；移动端展开态由 mobileSheet 统一表达。
+// 可见性（本轮）：单机热座没有聊天通道（localSession.sendChat 是空实现），
+// 因此**本地对局完全不渲染聊天入口**——此前会渲染一个"能打字但发不出去"的死入口。
+const isChatAvailable = computed(() => props.session.mode === 'online');
+const isChatOpen = ref(false);
+const chatMessages = computed(() => props.session.chatLog.value);
+const chatLocalId = computed(() => props.session.localPlayerId.value);
+function handleSendChat(text: string): void {
+  props.session.sendChat(text);
+}
+// 可发现性：桌面端聊天此前默认折叠、藏在侧栏里，玩家常常找不到。
+// 首次收到他人消息时自动展开一次（只自动展开一次，之后完全尊重用户的收起动作）。
+let chatAutoOpened = false;
+watch(chatMessages, (messages) => {
+  if (chatAutoOpened || !isChatAvailable.value || isMobileLayout.value) return;
+  if (messages.length === 0) return;
+  chatAutoOpened = true;
+  isChatOpen.value = true;
+});
 
 function handleLayoutChange(event: MediaQueryListEvent): void {
   isMobileLayout.value = event.matches;
@@ -77,12 +116,11 @@ watch(() => props.session, () => {
   isConfirmingLeave.value = false;
   isLogExpanded.value = false;
   mobileSheet.value = null;
+  settingsOpen.value = false;
   armedDebtAutoOpen.value = null;
 });
 
 // Session refs surfaced as local computeds so the template auto-unwraps them and stays clean.
-const playbackSpeed = getPlaybackSpeedRef();
-const paceOptions = PLAYBACK_SPEED_OPTIONS;
 const state = computed(() => props.session.state.value);
 const displayPositions = computed(() => props.session.displayPositions.value);
 const dice = computed(() => props.session.dice.value);
@@ -121,6 +159,24 @@ const playerAssetDialog = computed(() => {
   return getPlayerAssetDialogModel(current, selectedPlayerId.value);
 });
 
+/** 房主且处于联机对局时，可对资产面板中选中的「其他存活玩家」使用踢出对局（出局）。 */
+const canKickSelectedPlayer = computed(() => {
+  if (props.session.mode === 'local' || !props.session.isHost?.value) return false;
+  const current = state.value;
+  const id = selectedPlayerId.value;
+  if (current === null || current.phase !== 'playing' || id === null) return false;
+  const target = current.players.find((player) => player.id === id);
+  if (target === undefined || target.bankrupt || target.id === props.session.localPlayerId.value) return false;
+  return true;
+});
+
+async function onKickSelectedPlayer(): Promise<void> {
+  const id = selectedPlayerId.value;
+  if (id === null || props.session.kickPlayer === undefined) return;
+  await props.session.kickPlayer(id);
+  closePlayerAssets();
+}
+
 const interaction = computed(() => getGameInteractionState({
   mode: props.session.mode,
   state: props.session.state.value,
@@ -143,6 +199,119 @@ const connectionBanner = computed(() => {
 
 // The interaction selector owns the spectator decision (room.spectators + local member id);
 // the view only forwards it so read-only affordances never re-derive membership themselves.
+// 本局游戏时长：对局进入 playing 时启动计时，game_over 时冻结。格式随跨度自适应
+// （秒 → 分秒 → 时分秒），起始只显示秒，符合「从秒开始」的要求。
+const gameStartedAt = ref<number | null>(null);
+const elapsedSeconds = ref(0);
+let durationTimer: number | null = null;
+
+const gameDurationLabel = computed(() => formatDuration(elapsedSeconds.value));
+
+function formatDuration(totalSeconds: number): string {
+  const total = Math.max(0, Math.floor(totalSeconds));
+  if (total < 60) return `${total}秒`;
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  if (minutes < 60) return `${minutes}分${seconds}秒`;
+  const hours = Math.floor(minutes / 60);
+  const displayMinutes = minutes % 60;
+  return `${hours}时${displayMinutes}分${seconds}秒`;
+}
+
+function startDurationTimer() {
+  if (durationTimer !== null) return;
+  if (gameStartedAt.value === null) gameStartedAt.value = Date.now();
+  // 组件按浏览器环境编写，但也必须能被 SSR / 单元测试渲染：没有 window 时直接跳过计时器。
+  if (typeof window === 'undefined') return;
+  durationTimer = window.setInterval(() => {
+    if (gameStartedAt.value !== null) {
+      elapsedSeconds.value = Math.floor((Date.now() - gameStartedAt.value) / 1000);
+    }
+  }, 1000);
+}
+
+function stopDurationTimer() {
+  if (durationTimer !== null) {
+    if (typeof window !== 'undefined') window.clearInterval(durationTimer);
+    durationTimer = null;
+  }
+}
+
+watch(
+  () => state.value?.phase,
+  (phase) => {
+    if (phase === 'playing' && gameStartedAt.value === null) startDurationTimer();
+    else if (phase === 'game_over') {
+      stopDurationTimer();
+      recordLocalPlayerStats();
+      const localId = props.session.localPlayerId.value;
+      playSfx(state.value?.winnerId === localId ? 'win' : 'lose');
+    }
+  },
+  { immediate: true },
+);
+
+// 对局结束（game_over）时把本地参赛者的本局结果写入战绩统计。
+// 观战者不在 players 列表中，自然被跳过；任何异常都不影响结算流程。
+function recordLocalPlayerStats(): void {
+  const current = state.value;
+  if (current === null) return;
+  const storage = browserStorage();
+  if (storage === undefined) return;
+  const localId = props.session.localPlayerId.value;
+  const localPlayer = current.players.find((player) => player.id === localId);
+  if (localPlayer === undefined) return;
+  const won = current.winnerId === localId;
+  recordGameResult(storage, {
+    won,
+    finalAsset: localPlayer.cash,
+    mapId: current.mapRef.id,
+    at: Date.now(),
+  });
+}
+
+// 音效 / 背景音乐 / 皮肤 / 动画速度的开关都搬进了 SettingsDialog（#13 统一设置入口），
+// 它们各自直接读写自己的偏好模块，本视图不再持有这些状态。
+// 悔棋/回放（P1-5，仅本地热座对局提供）。联机对局无此能力（服务器为权威态，不可本地回退）。
+const canUndo = computed(() => props.session.canUndo?.value ?? false);
+const canReplay = computed(() => props.session.canReplay?.value ?? false);
+async function undoMove(): Promise<void> {
+  await props.session.undo?.();
+}
+async function replayGame(): Promise<void> {
+  await props.session.replay?.();
+}
+
+// 骰子落下（dice ref 由 null 变非 null）时播声音。
+watch(
+  () => dice.value,
+  (value) => {
+    if (value !== null) playSfx('dice');
+  },
+);
+
+// 本地玩家现金变动：减少=付款声，增加=收款声。
+watch(
+  () => {
+    const current = state.value;
+    if (current === null) return undefined;
+    const local = current.players.find((player) => player.id === props.session.localPlayerId.value);
+    return local?.cash;
+  },
+  (next, prev) => {
+    if (prev === undefined || next === undefined || next === prev) return;
+    playSfx(next < prev ? 'pay' : 'coin');
+  },
+);
+
+// 任一玩家破产（bankrupt 由 false 变 true）时播破产音。
+watch(
+  () => state.value?.players.some((player) => player.bankrupt) ?? false,
+  (bankruptNow, wasBankrupt) => {
+    if (bankruptNow && !wasBankrupt) playSfx('bankrupt');
+  },
+);
+
 const isSpectator = computed(() => interaction.value.kind === 'spectating');
 const actionPanelError = computed(() => (connectionBanner.value !== null ? null : lastError.value));
 const availableActions = computed(() => (
@@ -259,11 +428,41 @@ const settlementPrimaryLabel = computed(() => (props.session.mode === 'local' ? 
 // A connected exit leaves gracefully over the socket (progress stays in the room); a severed
 // connection can only abandon locally, discarding the stored session — the dialog says so.
 const canNotifyRoom = computed(() => props.session.connectionStatus.value === 'connected');
-const leaveConfirmTitle = computed(() => (canNotifyRoom.value ? '离开房间？' : '放弃这局？'));
-const leaveConfirmBody = computed(() => (canNotifyRoom.value
-  ? '离开后本局进度会保留在房间，你之后可以从首页回到上一局继续。'
-  : '当前连接已断开，无法通知房间。放弃后会清除本地存档并返回首页。'));
-const leaveConfirmLabel = computed(() => (canNotifyRoom.value ? '确认离开' : '放弃这局'));
+
+// 二次确认弹窗同时服务于「离开房间」与「投降」两种流程，用 confirmMode 区分文案与确认动作。
+const confirmMode = ref<'leave' | 'surrender'>('leave');
+const confirmTitle = computed(() => (
+  confirmMode.value === 'surrender'
+    ? '是否确认投降？'
+    : (canNotifyRoom.value ? '离开房间？' : '放弃这局？')
+));
+const confirmBody = computed(() => {
+  if (confirmMode.value === 'surrender') {
+    return state.value?.players.length === 2
+      ? '投降后你立即出局，本局按破产流程结算（对手获胜）。确认要继续吗？'
+      : '投降后你立即出局，现金与名下地产全部清零，地产转为无主、可被其他玩家购买，其余玩家继续对局。';
+  }
+  return canNotifyRoom.value
+    ? '离开后本局进度会保留在房间，你之后可以从首页回到上一局继续。'
+    : '当前连接已断开，无法通知房间。放弃后会清除本地存档并返回首页。';
+});
+const confirmLabel = computed(() => (
+  confirmMode.value === 'surrender' ? '是' : (canNotifyRoom.value ? '确认离开' : '放弃这局')
+));
+const cancelLabel = computed(() => (confirmMode.value === 'surrender' ? '否' : '继续游戏'));
+
+// 投降按钮仅在联机对局、本玩家仍在局且连接正常时可用（本地热座无独立座位，不提供此按钮）。
+const canSurrender = computed(() => {
+  const current = state.value;
+  if (current === null || current.phase !== 'playing') return false;
+  const localId = props.session.localPlayerId.value;
+  if (localId === null) return false;
+  const seat = current.players.find((player) => player.id === localId);
+  if (seat === undefined || seat.bankrupt) return false;
+  if (interaction.value.kind === 'spectating') return false;
+  if (props.session.connectionStatus.value !== 'connected') return false;
+  return true;
+});
 
 function openPlayerAssets(playerId: string, trigger: HTMLButtonElement): void {
   const current = state.value;
@@ -300,21 +499,61 @@ watch(state, (current, previous) => {
 function requestExit() {
   if (isConfirmingLeave.value) return;
   if (needsLeaveConfirm.value) {
+    confirmMode.value = 'leave';
     isConfirmingLeave.value = true;
     return;
   }
   emit('exit');
 }
 
-// Exit lives inside the settings sheet: close the native sheet first so the leave-confirm
+// Exit lives inside the settings dialog: close the native dialog first so the leave-confirm
 // dialog (and its focus trap) is never fighting a top-layer sheet for the screen.
+// 设置入口有两个（桌面侧栏按钮 / 移动底部操作坞标签），焦点归还给当前那个可见的。
+function settingsTriggerElement(): HTMLElement | null {
+  return settingsTrigger.value ?? dockSettingsTrigger.value;
+}
+
 function requestExitFromSheet(): void {
-  if (needsLeaveConfirm.value) leaveTrigger = settingsTrigger.value;
-  closeMobileSheet();
+  if (needsLeaveConfirm.value) { confirmMode.value = 'leave'; leaveTrigger = settingsTriggerElement(); }
+  settingsOpen.value = false;
   requestExit();
 }
 
+// 投降：与离开房间共用同一套二次确认弹窗，仅切换 confirmMode 改变文案与确认动作。
+function requestSurrender() {
+  if (isConfirmingLeave.value || !canSurrender.value) return;
+  confirmMode.value = 'surrender';
+  isConfirmingLeave.value = true;
+}
+
+function requestSurrenderFromSheet(): void {
+  if (!canSurrender.value) return;
+  confirmMode.value = 'surrender';
+  leaveTrigger = settingsTriggerElement();
+  settingsOpen.value = false;
+  requestSurrender();
+}
+
+async function confirmSurrender(): Promise<void> {
+  if (isSubmittingIntent.value) return;
+  isSubmittingIntent.value = true;
+  const surrenderIntent: Intent = { type: 'surrender' };
+  try {
+    await props.session.sendIntent(surrenderIntent);
+  } catch {
+    // 投降指令未成功（如连接中断）：仍按用户意图退出房间；具体错误由 session 层提示。
+  } finally {
+    isSubmittingIntent.value = false;
+  }
+  isConfirmingLeave.value = false;
+  emit('exit');
+}
+
 function confirmLeave() {
+  if (confirmMode.value === 'surrender') {
+    void confirmSurrender();
+    return;
+  }
   isConfirmingLeave.value = false;
   emit('exit');
 }
@@ -466,6 +705,10 @@ onMounted(() => {
     stageObserver = new ResizeObserver(() => measureBoardStage());
     stageObserver.observe(boardStageRef.value);
   }
+  // 恢复中的对局可能挂载时已是 playing：兜底启动计时（startDurationTimer 内部幂等）。
+  if (state.value?.phase === 'playing') startDurationTimer();
+  // 背景音乐（P1-4）：若用户上轮已开启，布防"首次手势续播"（浏览器自动播放策略要求手势）。
+  if (isBgmEnabled()) armBgmAutoStart();
 });
 
 onBeforeUnmount(() => {
@@ -477,6 +720,9 @@ onBeforeUnmount(() => {
   window.visualViewport?.removeEventListener('resize', bumpLayout);
   document.removeEventListener('keydown', onModalKeydown, true);
   mobileLayoutQuery?.removeEventListener('change', handleLayoutChange);
+  stopDurationTimer();
+  // 背景音乐（P1-4）：离开对局时停止，释放 AudioContext 计时器。
+  stopBgm();
   selectedPlayerId.value = null;
   playerDialogTrigger = null;
   cellDialogTrigger = null;
@@ -531,7 +777,11 @@ function inspectFinalBoard() {
       <header class="players">
         <div class="game-meta">
           <span>{{ state.board.boardName }} / {{ state.players.length }} 人对局</span>
-          <span>{{ session.mode === 'local' ? '本地游戏' : '联机游戏' }}</span>
+          <span class="game-meta-tags">
+            <span>{{ session.mode === 'local' ? '本地游戏' : '联机游戏' }}</span>
+            <span v-if="session.mode !== 'local' && session.room.value?.roomCode" class="game-room-code">房间号 {{ session.room.value?.roomCode }}</span>
+            <span class="game-duration" :title="`本局游戏时长 ${gameDurationLabel}`">{{ gameDurationLabel }}</span>
+          </span>
         </div>
         <PlayerRail
           :players="displayPlayers"
@@ -552,28 +802,20 @@ function inspectFinalBoard() {
       </div>
       <aside class="side-panel">
         <button type="button" class="restart-button restart-desktop" @click="requestExit">{{ exitLabel }}</button>
-        <Teleport to="body" :disabled="!isMobileLayout">
-          <MobileSheet
-            class="sheet sheet-settings"
-            :open="isMobileLayout && mobileSheet === 'settings'"
-            title="设置"
-            @close="closeMobileSheet"
-          >
-            <div class="pace-control" role="group" aria-label="动画速度">
-              <span class="pace-label">动画</span>
-              <button
-                v-for="option in paceOptions"
-                :key="option.value"
-                type="button"
-                class="pace-option"
-                :class="{ 'pace-active': option.value === playbackSpeed }"
-                :aria-pressed="option.value === playbackSpeed"
-                @click="setPlaybackSpeed(option.value)"
-              >{{ option.label }}</button>
-            </div>
-            <button type="button" class="restart-button restart-mobile" @click="requestExitFromSheet">{{ exitLabel }}</button>
-          </MobileSheet>
-        </Teleport>
+        <button
+          v-if="canSurrender"
+          type="button"
+          class="restart-button restart-desktop surrender-button"
+          @click="requestSurrender"
+        >投降</button>
+        <button
+          ref="settingsTrigger"
+          type="button"
+          class="restart-button restart-desktop settings-open-button"
+          aria-haspopup="dialog"
+          :aria-expanded="settingsOpen"
+          @click="settingsOpen = true"
+        >设置</button>
         <ActionPanel
           compact-purchase
           :actions="availableActions"
@@ -670,6 +912,66 @@ function inspectFinalBoard() {
             <PropertyAwards v-if="state?.phase === 'playing'" :state="state" />
           </MobileSheet>
         </Teleport>
+        <!-- 桌面内联聊天（#50）：位于侧栏文档流内、可折叠，不再悬浮遮挡任何区域；
+             移动端隐藏，改由底部操作坞的「聊天」标签驱动下方抽屉。
+             仅联机对局渲染：单机热座没有聊天通道（#本轮）。 -->
+        <section v-if="isChatAvailable" class="chat-desktop" aria-label="房间聊天">
+          <button
+            type="button"
+            class="chat-desktop__toggle"
+            :aria-expanded="isChatOpen"
+            @click="isChatOpen = !isChatOpen"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4zM8 9h8M8 12h5" /></svg>
+            房间聊天
+            <span v-if="chatMessages.length > 0" class="chat-desktop__badge">{{ chatMessages.length }}</span>
+          </button>
+          <ChatPanel
+            v-if="isChatOpen"
+            class="chat-desktop__panel"
+            :messages="chatMessages"
+            :local-player-id="chatLocalId"
+            @send="handleSendChat"
+          />
+        </section>
+
+        <!-- 移动端聊天抽屉：与「资产 / 战报 / 设置」同一套 MobileSheet 语义。 -->
+        <Teleport to="body" :disabled="!isMobileLayout">
+          <MobileSheet
+            v-if="isChatAvailable"
+            class="sheet sheet-chat"
+            :open="isMobileLayout && mobileSheet === 'chat'"
+            title="房间聊天"
+            @close="closeMobileSheet"
+          >
+            <ChatPanel
+              class="chat-sheet-panel"
+              :messages="chatMessages"
+              :local-player-id="chatLocalId"
+              @send="handleSendChat"
+            />
+          </MobileSheet>
+        </Teleport>
+
+        <!-- 统一设置入口（#13）：桌面/移动同一份内容，桌面居中弹窗、手机底部抽屉。
+             入口两处：侧栏「设置」按钮（桌面）与底部操作坞「设置」标签（移动）。 -->
+        <SettingsDialog
+          :open="settingsOpen"
+          :is-local-game="session.mode === 'local'"
+          :can-undo="canUndo"
+          :can-replay="canReplay"
+          :cash-goal="state?.cashGoal ?? null"
+          :map-id="state?.mapRef.id ?? null"
+          :exit-label="exitLabel"
+          :can-surrender="canSurrender"
+          :show-session-actions="isMobileLayout"
+          @update:open="settingsOpen = $event"
+          @undo="undoMove"
+          @replay="replayGame"
+          @exit="requestExitFromSheet"
+          @surrender="requestSurrenderFromSheet"
+        />
+
         <nav class="mobile-dock-bar" aria-label="游戏工具">
           <button
             type="button"
@@ -692,15 +994,25 @@ function inspectFinalBoard() {
             战报
           </button>
           <button
-            ref="settingsTrigger"
+            ref="dockSettingsTrigger"
             type="button"
             class="dock-entry"
             aria-haspopup="dialog"
-            :aria-expanded="mobileSheet === 'settings'"
-            @click="toggleMobileSheet('settings')"
+            :aria-expanded="settingsOpen"
+            @click="toggleSettings"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2" /></svg>
             设置
+          </button>
+          <button
+            v-if="isChatAvailable"
+            type="button"
+            class="dock-entry"
+            :aria-expanded="mobileSheet === 'chat'"
+            @click="toggleMobileSheet('chat')"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4zM8 9h8M8 12h5" /></svg>
+            聊天<span v-if="chatMessages.length > 0" class="dock-chat-dot" aria-hidden="true"></span>
           </button>
         </nav>
       </aside>
@@ -719,7 +1031,9 @@ function inspectFinalBoard() {
       :position-name="playerAssetDialog.positionName"
       :debt-amount="playerAssetDialog.debtAmount"
       :assets="playerAssetDialog.assets"
+      :can-kick="canKickSelectedPlayer"
       @close="closePlayerAssets"
+      @kick="onKickSelectedPlayer"
     />
 
     <SettlementDialog
@@ -737,14 +1051,14 @@ function inspectFinalBoard() {
         class="confirm-dialog"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="leave-confirm-title"
-        aria-describedby="leave-confirm-body"
+        aria-labelledby="confirm-title"
+        aria-describedby="confirm-body"
       >
-        <h2 id="leave-confirm-title">{{ leaveConfirmTitle }}</h2>
-        <p id="leave-confirm-body">{{ leaveConfirmBody }}</p>
+        <h2 id="confirm-title">{{ confirmTitle }}</h2>
+        <p id="confirm-body">{{ confirmBody }}</p>
         <div class="confirm-actions">
-          <button type="button" class="confirm-cancel" @click="cancelLeave">继续游戏</button>
-          <button type="button" class="confirm-leave" @click="confirmLeave">{{ leaveConfirmLabel }}</button>
+          <button type="button" class="confirm-cancel" @click="cancelLeave">{{ cancelLabel }}</button>
+          <button type="button" class="confirm-leave" @click="confirmLeave">{{ confirmLabel }}</button>
         </div>
       </section>
     </div>
@@ -873,6 +1187,25 @@ function inspectFinalBoard() {
   color: var(--color-muted);
 }
 
+.game-meta-tags {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.game-duration {
+  font-variant-numeric: tabular-nums;
+}
+
+.game-room-code {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(217, 164, 65, 0.16);
+  color: var(--color-accent, #D9A441);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+
 /* Mobile sheets double as transparent grouping wrappers on desktop: the dialog box vanishes
    (display: contents) and its children keep flowing inside the side panel exactly as before. */
 .sheet {
@@ -992,45 +1325,25 @@ function inspectFinalBoard() {
   display: none;
 }
 
-
-.pace-control {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--board-surface);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--color-text);
+/* 投降按钮：与离开/托管按钮同尺寸同位置，仅以危险色（红）区分语义。 */
+.surrender-button {
+  --surrender: #c0392b;
+  border-color: color-mix(in srgb, var(--surrender) 42%, var(--color-border));
+  color: var(--surrender);
 }
 
-.pace-label {
-  color: var(--color-muted);
-  margin-right: 2px;
+.surrender-button:hover {
+  background: color-mix(in srgb, var(--surrender) 10%, var(--board-surface));
 }
 
-.pace-option {
-  flex: 1;
-  min-height: 44px;
-  border: 1px solid transparent;
-  border-radius: 9px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
+@media (hover: none) {
+  .surrender-button:active {
+    background: color-mix(in srgb, var(--surrender) 14%, var(--board-surface));
+  }
 }
 
-.pace-option.pace-active {
-  background: var(--color-primary);
-  color: #fff;
-}
 
-.pace-option:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
-}
+/* 设置行的样式随设置内容一起搬进了 SettingsDialog.vue（#13 统一设置入口）。 */
 
 .takeover-button {
   background: var(--color-accent);
@@ -1179,7 +1492,6 @@ function inspectFinalBoard() {
    统一 140ms 过渡：悬停微亮、按压下沉。只动 transform / 背景 / 阴影这类合成层属性，
    不触发重排重绘，动效灵动但几乎不影响性能。 */
 .dock-entry,
-.pace-option,
 .log-toggle,
 .restart-button,
 .takeover-button,
@@ -1194,13 +1506,11 @@ function inspectFinalBoard() {
 }
 
 .dock-entry:hover,
-.pace-option:hover,
 .log-toggle:hover {
   background: rgb(255 255 255 / 62%);
 }
 
-.dock-entry:active,
-.pace-option:active {
+.dock-entry:active {
   transform: scale(0.96);
 }
 
@@ -1222,7 +1532,6 @@ function inspectFinalBoard() {
 /* 尊重系统的“减弱动态效果”设置。 */
 @media (prefers-reduced-motion: reduce) {
   .dock-entry,
-  .pace-option,
   .log-toggle,
   .restart-button,
   .takeover-button,
@@ -1231,6 +1540,18 @@ function inspectFinalBoard() {
   .banner-home {
     transition: none;
   }
+}
+
+/* 桌面分支（>1024px）棋盘容器：此前 .board-stage 仅在 ≤1024px 媒体查询内定义，
+   桌面分支无基础样式 → 100% 缩放下棋盘塌缩/不显示（放大到 150% 触发 ≤1024px 断点才出现）。
+   这里补齐：作为栅格项时居中棋盘、允许收缩、溢出裁剪，任何缩放下都完整可见。 */
+.board-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* 紧凑布局断点 1024px（原 767px）。
@@ -1344,7 +1665,7 @@ function inspectFinalBoard() {
     position: sticky;
     bottom: 0;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 8px;
     min-height: 50px;
     padding: 2px 12px 3px;
@@ -1394,6 +1715,16 @@ function inspectFinalBoard() {
     height: 8px;
     border-radius: 50%;
     background: var(--color-pay);
+  }
+
+  .dock-chat-dot {
+    position: absolute;
+    top: 7px;
+    right: 9px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-accent, #D9A441);
   }
 
   /* Sheets exist only as open dialogs on mobile; a closed one must stay display:none so the
@@ -1460,6 +1791,81 @@ function inspectFinalBoard() {
 
   .side-panel {
     gap: 10px;
+  }
+}
+
+/* ---- 聊天（#50）----
+   历史问题：聊天入口用 position:fixed 悬浮在四角，与侧栏内容、底部操作坞、房间卡片互相遮挡。
+   现在：桌面 = 侧栏文档流内的可折叠区块；移动 = 底部操作坞驱动的 MobileSheet 抽屉。
+   两处都不再脱离文档流，因此任何分辨率 / 缩放 / 安全区下都不会与其它元素重叠。 */
+.chat-desktop {
+  display: grid;
+  gap: 8px;
+}
+
+.chat-desktop__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--board-surface);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-desktop__toggle svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chat-desktop__badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* 面板铺满侧栏宽度、高度受控，绝不溢出到棋盘或其它区域。 */
+.chat-desktop__panel {
+  width: 100%;
+  max-height: min(320px, 42vh);
+}
+
+.chat-sheet-panel {
+  width: 100%;
+  max-height: 60vh;
+}
+
+/* 动画速度说明（#55 语义）随设置一起搬到 SettingsDialog.vue。 */
+
+/* 移动端：桌面聊天区块隐藏（聊天改由底部操作坞驱动抽屉）。 */
+@media (max-width: 1024px) {
+  .chat-desktop {
+    display: none;
+  }
+}
+
+/* 桌面端：移动聊天抽屉整块隐藏。否则 .sheet 的 display:contents 会让它的 ChatPanel
+   重复内联到侧栏（同一份聊天出现两次）。 */
+@media (min-width: 1025px) {
+  .sheet-chat {
+    display: none;
   }
 }
 </style>

@@ -1,7 +1,7 @@
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import type { GameState, Intent } from '@richman/engine';
 import type { MapPresentation } from '@richman/board-data';
-import type { PublicRoomState } from '@richman/protocol';
+import type { ChatMessage, PublicRoomState } from '@richman/protocol';
 import type { ClientAction, DisplayCard } from '../game/clientGame';
 
 /** Display-safe game state: no engine seed or private deck queues. */
@@ -53,9 +53,25 @@ export interface GameSession {
   readonly displayCash: Ref<Record<string, number>>;
   readonly transientNotice: Ref<TransientNotice | null>;
   readonly availableActions: ComputedRef<ClientAction[]>;
+  /** 房间聊天记录（联机有效，本地热座为空）。 */
+  readonly chatLog: Ref<ChatMessage[]>;
   sendIntent(intent: Intent): Promise<void>;
   skipOfflineTurn(): Promise<void>;
   leave(): Promise<void>;
+  /** 发送一条房间聊天消息（联机）。返回 void，发送结果不阻塞 UI。 */
+  sendChat(text: string): void;
   dispose(): void;
   retryResume?(): Promise<void>;
+  /** 本地玩家是否为房主（联机有效，本地热座恒为 false/不提供）。房主可在对局中踢人。 */
+  readonly isHost?: Ref<boolean>;
+  /** 房主将对局中指定玩家强制出局（联机有效；本地热座不提供）。 */
+  kickPlayer?(playerId: string): Promise<void>;
+  /** 是否可撤回上一步（仅本地热座对局提供）。 */
+  readonly canUndo?: Ref<boolean>;
+  /** 是否可回放本局（仅本地热座对局提供）。 */
+  readonly canReplay?: Ref<boolean>;
+  /** 撤回上一步操作（仅本地热座对局提供）。 */
+  undo?(): Promise<void>;
+  /** 重新动画播放本局（仅本地热座对局提供）。 */
+  replay?(): Promise<void>;
 }

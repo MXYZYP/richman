@@ -1,4 +1,5 @@
 import type { RoomRole } from '@richman/protocol';
+import type { BotDifficulty } from '@richman/engine';
 
 export const ACTIVE_ONLINE_SESSION_KEY = 'richman_session';
 export const PENDING_ROOM_REQUEST_KEY = 'richman_pending_room_request';
@@ -20,6 +21,8 @@ export interface CreateRoomRequest {
   requestId: string;
   nickname: string;
   mapId: string;
+  /** 电脑玩家难度（P1-6）；不传时服务器按 normal 处理。 */
+  botDifficulty?: BotDifficulty;
 }
 
 export interface JoinRoomRequest {
@@ -33,7 +36,7 @@ export interface JoinRoomRequest {
 
 export type PendingRoomRequest = CreateRoomRequest | JoinRoomRequest;
 
-const ROOM_CODE_PATTERN = /^\d{4}$/;
+const ROOM_CODE_PATTERN = /^\d{6}$/;
 const REQUEST_ID_PATTERN = /^[0-9a-f]{32}$/i;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -57,6 +60,10 @@ function isRequestId(value: unknown): value is string {
   return typeof value === 'string' && REQUEST_ID_PATTERN.test(value);
 }
 
+function isBotDifficulty(value: unknown): value is BotDifficulty {
+  return value === 'easy' || value === 'normal' || value === 'hard';
+}
+
 function isOnlineSession(value: unknown): value is OnlineSession {
   return isRecord(value)
     && hasExactKeys(value, ['roomCode', 'playerId', 'token'])
@@ -69,8 +76,13 @@ function isPendingRoomRequest(value: unknown): value is PendingRoomRequest {
   if (!isRecord(value) || !isRequestId(value.requestId) || !isNonEmptyString(value.nickname)) return false;
 
   if (value.operation === 'create') {
-    return hasExactKeys(value, ['operation', 'requestId', 'nickname', 'mapId'])
-      && isNonEmptyString(value.mapId);
+    // botDifficulty 为可选扩展字段：旧版/未传时仅 4 键即合法；携带时须恰好 5 键且难度值合法。
+    if (hasExactKeys(value, ['operation', 'requestId', 'nickname', 'mapId']) && isNonEmptyString(value.mapId)) {
+      return true;
+    }
+    return hasExactKeys(value, ['operation', 'requestId', 'nickname', 'mapId', 'botDifficulty'])
+      && isNonEmptyString(value.mapId)
+      && isBotDifficulty(value.botDifficulty);
   }
   return value.operation === 'join'
     && hasExactKeys(value, ['operation', 'requestId', 'roomCode', 'nickname', 'role'])

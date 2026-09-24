@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { PlayerColor } from '@richman/engine';
 import type { RenderableGameState } from '../session/gameSession';
 import BoardCell from './BoardCell.vue';
 import {
@@ -19,15 +18,6 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{ selectCell: [cellId: number] }>();
-
-const playerShape: Record<PlayerColor, string> = {
-  red: '●',
-  blue: '■',
-  yellow: '▲',
-  green: '★',
-  purple: '◆',
-  orange: '⬟',
-};
 
 const cellModels = computed(() => new Map(
   props.state.board.cells.map((cell) => [cell.id, getCellPresentationModel(props.state, cell.id, props.assetResolver)]),
@@ -105,7 +95,8 @@ const playerTokens = computed(() => {
     stackIndex.set(cellId, index + 1);
     return {
       playerId: player.id,
-      shape: playerShape[player.color],
+      // 形状不再由 JS 提供：剪影与配色都交给 CSS（.token-<color> 各自的 clip-path / --token-fill），
+      // 模板只消费 colorKey 与当前行动者标记。
       colorKey: player.color,
       placement: cellModel(cellId).style,
       offset: tokenOffset(cellId, index, stackCounts.get(cellId) ?? 1),
@@ -188,7 +179,15 @@ const playerTokens = computed(() => {
           class="token-layer"
           :style="token.placement"
         >
-          <span class="token" :class="`token-${token.colorKey}`" :style="token.offset">{{ token.shape }}</span>
+          <!-- 棋子（#97）：颜色 + 轮廓双重辨识，形状语言与玩家栏同源（●圆 ■方 ▲三角 ★星 ◆菱形 ⬟六边形）。
+               剪影与白边都交给 CSS，见下方 .token / .token-body；当前行动者额外加一圈光晕。-->
+          <span
+            class="token"
+            :class="[`token-${token.colorKey}`, { acting: token.playerId === state.currentPlayerId }]"
+            :style="token.offset"
+          >
+            <span class="token-body"></span>
+          </span>
         </div>
       </div>
     </div>
@@ -204,6 +203,8 @@ const playerTokens = computed(() => {
   height: var(--board-size, auto);
   aspect-ratio: 1;
   max-width: 100%;
+  /* 兜底：容器高度不足时（桌面 2 列布局）棋盘不得超出容器高度，避免被裁掉。 */
+  max-height: 100%;
   margin: 0 auto;
 }
 
@@ -308,29 +309,66 @@ const playerTokens = computed(() => {
   .token-layer { transition: none; }
 }
 
-/* 棋子按画布单位缩放：任何棋盘尺寸下都贴在格角，不压住垂直居中的格名。 */
+/* 棋子（#97）：颜色 + 轮廓双重辨识，形状语言与玩家栏同源（●圆 ■方 ▲三角 ★星 ◆菱形 ⬟六边形）。
+   两层同形裁剪：外层整块是环色，内层 inset 出一圈并复刻同一 clip-path，于是任何轮廓下都能得到
+   均匀的「白边包彩色」；内层再叠一层顶部高光，读起来是一个立体棋子，而不是一枚色点。 */
 .token {
   position: absolute;
   top: 0.3cqw;
   right: 0.3cqw;
   width: 3.2cqw;
   height: 3.3cqw;
-  border: 0.4cqw solid var(--token-ring);
-  border-radius: 50% 50% 22% 22%;
-  display: grid;
-  place-items: center;
-  color: var(--token-ring);
-  font-size: 1.6cqw;
-  font-weight: 900;
-  box-shadow: var(--token-shadow);
+  /* 默认圆形（红），其余颜色在下面各自覆盖成自己的剪影。 */
+  clip-path: circle(50% at 50% 50%);
+  /* 描边层：整块填环色，内层 inset 之后露出的这一圈就是"边"。 */
+  background: var(--token-ring);
+  /* clip-path 会把 box-shadow 一起剪掉，阴影必须改用 drop-shadow 才会跟随剪影形状。 */
+  filter: drop-shadow(var(--token-shadow));
 }
 
-.token-red { background: var(--player-red); }
-.token-blue { background: var(--player-blue); }
-.token-yellow { background: var(--player-yellow); }
-.token-green { background: var(--player-green); }
-.token-purple { background: var(--player-purple); }
-.token-orange { background: var(--player-orange); }
+.token-body {
+  position: absolute;
+  inset: 0.45cqw;
+  /* 复刻外层轮廓：clip-path 的百分比按自身盒子解析，于是自动缩成内缩一圈的同形色块。 */
+  clip-path: inherit;
+  background-color: var(--token-fill);
+  /* 左上偏亮、右下回落的斜向高光：给平面色块一点体积感。 */
+  background-image: linear-gradient(158deg, rgb(255 255 255 / 46%), rgb(255 255 255 / 0%) 62%);
+}
+
+.token-red { --token-fill: var(--player-red); clip-path: circle(50% at 50% 50%); }
+.token-blue { --token-fill: var(--player-blue); clip-path: inset(3% round 22%); }
+.token-yellow { --token-fill: var(--player-yellow); clip-path: polygon(50% 0%, 100% 92%, 0% 92%); }
+.token-green {
+  --token-fill: var(--player-green);
+  clip-path: polygon(
+    50% 0%, 61.2% 34.6%, 97.6% 34.6%, 68.2% 55.9%, 79.4% 90.5%,
+    50% 69.1%, 20.6% 90.5%, 31.8% 55.9%, 2.4% 34.6%, 38.8% 34.6%
+  );
+}
+.token-purple { --token-fill: var(--player-purple); clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+.token-orange {
+  --token-fill: var(--player-orange);
+  clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%);
+}
+
+/* 当前行动者：剪影外再加一圈琥珀光晕，并用很轻的呼吸让它在满盘棋子里一眼可见。
+   只动 opacity（合成器友好），不用 filter 动画，避免低端机上掉帧。*/
+.token.acting {
+  filter: drop-shadow(var(--token-shadow)) drop-shadow(0 0 0.45cqw var(--color-accent));
+  animation: token-acting 1.8s ease-in-out infinite;
+}
+
+@keyframes token-acting {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.76; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .token.acting {
+    animation: none;
+  }
+}
 
 @media (max-width: 767px) {
   /* 棋盘尺寸一律交给 --board-size（脚本实测），这里只切换手机版的格子几何：

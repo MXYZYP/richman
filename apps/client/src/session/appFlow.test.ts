@@ -23,7 +23,7 @@ const createRequest: PendingRoomRequest = {
 const joinRequest: PendingRoomRequest = {
   operation: 'join',
   requestId: 'fedcba9876543210fedcba9876543210',
-  roomCode: '1234',
+  roomCode: '123456',
   nickname: '客人',
   role: 'player',
 };
@@ -179,18 +179,18 @@ describe('room code normalization and validation', () => {
     expect(normalizeRoomCode('\f\v0123\u000b')).toBe('0123');
   });
 
-  it('accepts exactly four ASCII digits', () => {
-    expect(isValidRoomCode('1234')).toBe(true);
-    expect(isValidRoomCode('0123')).toBe(true);
+  it('accepts exactly six ASCII digits', () => {
+    expect(isValidRoomCode('123456')).toBe(true);
+    expect(isValidRoomCode('012345')).toBe(true);
   });
 
-  it('rejects anything that is not four ASCII digits', () => {
-    expect(isValidRoomCode('123')).toBe(false);
+  it('rejects anything that is not six ASCII digits', () => {
     expect(isValidRoomCode('12345')).toBe(false);
-    expect(isValidRoomCode('12ab')).toBe(false);
+    expect(isValidRoomCode('1234567')).toBe(false);
+    expect(isValidRoomCode('12ab34')).toBe(false);
     expect(isValidRoomCode('')).toBe(false);
-    expect(isValidRoomCode('１２３４')).toBe(false); // full-width digits
-    expect(isValidRoomCode(' 1234 ')).toBe(false); // caller must normalize first
+    expect(isValidRoomCode('１２３４５６')).toBe(false); // full-width digits
+    expect(isValidRoomCode(' 123456 ')).toBe(false); // caller must normalize first
   });
 });
 
@@ -207,19 +207,19 @@ describe('nickname normalization and validation', () => {
 });
 
 describe('capRoomCode — normalize before capping (never raw maxlength truncation)', () => {
-  it('strips internal whitespace from a pasted code before capping to four digits', () => {
-    expect(capRoomCode('12 34')).toBe('1234');
-    expect(capRoomCode(' 12 34 ')).toBe('1234');
+  it('strips internal whitespace from a pasted code before capping to six digits', () => {
+    expect(capRoomCode('12 3456')).toBe('123456');
+    expect(capRoomCode(' 12 3456 ')).toBe('123456');
   });
 
-  it('caps to the first four ASCII characters only after normalization', () => {
-    // Raw maxlength=4 would truncate "12 34" to "12 3" then strip to "123"; normalization first avoids that.
-    expect(capRoomCode('12 34 56')).toBe('1234');
-    expect(capRoomCode('1234567')).toBe('1234');
+  it('caps to the first six ASCII characters only after normalization', () => {
+    // Raw maxlength=6 would truncate "12 34 56" to "12 34 " then strip to "1234 "; normalization first avoids that.
+    expect(capRoomCode('12 34 567')).toBe('123456');
+    expect(capRoomCode('1234567')).toBe('123456');
   });
 
-  it('leaves a clean four-digit code untouched and preserves leading zeros', () => {
-    expect(capRoomCode('0123')).toBe('0123');
+  it('leaves a clean six-digit code untouched and preserves leading zeros', () => {
+    expect(capRoomCode('012345')).toBe('012345');
     expect(capRoomCode('')).toBe('');
   });
 });
@@ -241,25 +241,25 @@ describe('planCreateSubmission — explicit single create action', () => {
 
 describe('planJoinSubmission — explicit single join action', () => {
   it('returns a normalized room-code and trimmed nickname for a valid, idle join', () => {
-    expect(planJoinSubmission('12 34', '  客人 ', false)).toEqual({ roomCode: '1234', nickname: '客人', role: 'player' });
+    expect(planJoinSubmission('12 3456', '  客人 ', false)).toEqual({ roomCode: '123456', nickname: '客人', role: 'player' });
   });
 
   it('refuses to submit while already submitting', () => {
-    expect(planJoinSubmission('1234', '客人', true)).toBeNull();
+    expect(planJoinSubmission('123456', '客人', true)).toBeNull();
   });
 
   it('refuses an invalid room code', () => {
     expect(planJoinSubmission('12', '客人', false)).toBeNull();
-    expect(planJoinSubmission('１２３４', '客人', false)).toBeNull();
+    expect(planJoinSubmission('１２３４５６', '客人', false)).toBeNull();
   });
 
   it('refuses a blank nickname even with a valid room code', () => {
-    expect(planJoinSubmission('1234', '   ', false)).toBeNull();
+    expect(planJoinSubmission('123456', '   ', false)).toBeNull();
   });
 
   it('carries an explicit spectator role through a valid join payload', () => {
-    expect(planJoinSubmission('1234', '观众', false, 'spectator')).toEqual({
-      roomCode: '1234',
+    expect(planJoinSubmission('123456', '观众', false, 'spectator')).toEqual({
+      roomCode: '123456',
       nickname: '观众',
       role: 'spectator',
     });
@@ -274,7 +274,7 @@ describe('classifyEntryFailure — definitive vs transient entry errors', () => 
     },
   );
 
-  it.each(['REQUEST_TIMEOUT', 'DISCONNECTED', 'OPERATION_IN_PROGRESS', 'SESSION_NOT_RECOVERED', 'SOME_UNKNOWN_CODE'])(
+  it.each(['REQUEST_TIMEOUT', 'DISCONNECTED', 'OPERATION_IN_PROGRESS', 'SESSION_NOT_RECOVERED', 'CREATE_RATE_LIMITED', 'SOME_UNKNOWN_CODE'])(
     'treats %s as transient (default same-id retry)',
     (code) => {
       expect(classifyEntryFailure(code)).toBe('transient');

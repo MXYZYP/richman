@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { getActiveMapPack, listActiveMaps, type MapCatalogEntry, type MapPack } from '@richman/board-data';
+import type { BotDifficulty } from '@richman/engine';
 import testBoard from '../../../../packages/board-data/maps/__test__/test-map-v1/board.json';
 import testCards from '../../../../packages/board-data/maps/__test__/test-map-v1/cards.json';
 import testConfig from '../../../../packages/board-data/maps/__test__/test-map-v1/game-config.json';
 import testManifest from '../../../../packages/board-data/maps/__test__/test-map-v1/manifest.json';
 import {
+  BOT_DIFFICULTY_OPTIONS,
   createDefaultGameSetup,
   gameSetupToCreateOptions,
+  updateGameSetupBotDifficulty,
   updateGameSetupCounts,
   updateGameSetupMapId,
   validateGameSetup,
@@ -127,20 +130,36 @@ describe('game setup model', () => {
 
   it('resolves and passes the exact selected pack into local session options', () => {
     const setup = createDefaultGameSetup(dependencies);
-    setup.mapId = harbor.ref.id;
 
-    const options = gameSetupToCreateOptions(setup, dependencies);
+    // 换图要走模型 API：直接改 mapId 会绕过「按新图档位夹取最高房级」，表单随即校验失败。
+    const switched = updateGameSetupMapId(setup, harbor.ref.id, dependencies);
+    const options = gameSetupToCreateOptions(switched, dependencies);
     expect(options.mapPack).toBe(harbor);
     expect(options.mapPack!.ref).toEqual(harbor.ref);
   });
 
+  it('clamps the custom max house level down to the newly selected map ceiling', () => {
+    const setup = createDefaultGameSetup(dependencies);
+    expect(setup.config.maxHouseLevel).toBeGreaterThan(harbor.game.config.maxHouseLevel);
+
+    const switched = updateGameSetupMapId(setup, harbor.ref.id, dependencies);
+
+    expect(switched.config.maxHouseLevel).toBe(harbor.game.config.maxHouseLevel);
+    // 夹回后表单恢复可提交，而不是卡在「最高房级需为 1-2 之间的整数」。
+    expect(() => gameSetupToCreateOptions(switched, dependencies)).not.toThrow();
+    // 其余规则项不受换图影响。
+    expect(switched.config.initialCash).toBe(setup.config.initialCash);
+    expect(switched.config.mortgageInterestRate).toBe(setup.config.mortgageInterestRate);
+  });
+
+  // #8：单机热座上限已对齐联机（MAX_PLAYERS = 6），裁剪阈值随之从 4 改为 6。
   it.each([
     {
-      name: 'raises zero humans and trims bots to the four-player maximum',
-      counts: { humanCount: 0, botCount: 4 },
+      name: 'raises zero humans to one and fills bots up to the six-player maximum',
+      counts: { humanCount: 0, botCount: 5 },
       expectedHumanCount: 1,
-      expectedBotCount: 3,
-      expectedBotFlags: [false, true, true, true],
+      expectedBotCount: 5,
+      expectedBotFlags: [false, true, true, true, true, true],
     },
     {
       name: 'adds a bot when one human alone would make an illegal one-player game',
@@ -150,11 +169,11 @@ describe('game setup model', () => {
       expectedBotFlags: [false, true],
     },
     {
-      name: 'trims bots before humans when requested players exceed four',
-      counts: { humanCount: 2, botCount: 3 },
+      name: 'trims bots before humans when requested players exceed six',
+      counts: { humanCount: 2, botCount: 5 },
       expectedHumanCount: 2,
-      expectedBotCount: 2,
-      expectedBotFlags: [false, false, true, true],
+      expectedBotCount: 4,
+      expectedBotFlags: [false, false, true, true, true, true],
     },
   ])('$name', ({ counts, expectedHumanCount, expectedBotCount, expectedBotFlags }) => {
     const setup = updateGameSetupCounts(createDefaultGameSetup(), counts);
@@ -221,5 +240,77 @@ describe('game setup model', () => {
       { id: 'p3', nickname: '电脑A', isBot: true },
       { id: 'p4', nickname: '电脑B', isBot: true },
     ]);
+  });
+});
+
+// #6：电脑难度原先只在首页设，现在搬进建房流程 —— 模型层要保证「一个字段搬了家，别的东西都没跟着动」。
+describe('game setup model · 电脑玩家难度（#6）', () => {
+  it('默认表单的难度是「普通」，且默认值取自档位表而不是另写一个字面量', () => {
+    const setup = createDefaultGameSetup();
+    const values = BOT_DIFFICULTY_OPTIONS.map((option) => option.value);
+
+    expect(setup.botDifficulty).toBe('normal');
+    expect(values).toContain(setup.botDifficulty);
+    // 三档、值唯一、每档都有给玩家看的 label 与 hint（界面直接渲染，缺一个就是空白按钮）。
+    expect(values).toEqual(['easy', 'normal', 'hard']);
+    expect(new Set(values).size).toBe(BOT_DIFFICULTY_OPTIONS.length);
+    for (const option of BOT_DIFFICULTY_OPTIONS) {
+      expect(option.label.length).toBeGreaterThan(0);
+      expect(option.hint.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('换难度只改 botDifficulty 这一个字段，且返回新对象、不改原表单', () => {
+    const setup = updateGameSetupCounts(createDefaultGameSetup(), { humanCount: 2, botCount: 2 });
+    setup.cashGoalEnabled = true;
+    setup.cashGoal = china.game.config.initialCash + 5000;
+
+    const next = updateGameSetupBotDifficulty(setup, 'hard');
+
+    expect(next).not.toBe(setup);
+    expect(next.botDifficulty).toBe('hard');
+    // 原表单不被就地修改（Vue 里同一份 setup 被两处引用时，就地改会互相串味）。
+    expect(setup.botDifficulty).toBe('normal');
+    // 其他字段原样带过去：人数、名单、现金目标、规则项、地图一个都不能动。
+    expect(next.humanCount).toBe(setup.humanCount);
+    expect(next.botCount).toBe(setup.botCount);
+    expect(next.players).toBe(setup.players);
+    expect(next.mapId).toBe(setup.mapId);
+    expect(next.cashGoalEnabled).toBe(true);
+    expect(next.cashGoal).toBe(setup.cashGoal);
+    expect(next.config).toBe(setup.config);
+  });
+
+  it.each(['easy', 'normal', 'hard'] as const)('难度 %s 一路透传到本机对局参数里', (botDifficulty: BotDifficulty) => {
+    const setup = updateGameSetupBotDifficulty(createDefaultGameSetup(dependencies), botDifficulty);
+
+    expect(validateGameSetup(setup, dependencies)).toEqual({ ok: true });
+    expect(gameSetupToCreateOptions(setup, dependencies).botDifficulty).toBe(botDifficulty);
+  });
+
+  it('把电脑数减到 0 时仍保留已选难度，不悄悄回落到「普通」', () => {
+    // 界面在 botCount === 0 时会把整段难度选择藏起来，但值本身要留着：
+    // 玩家「2 真人 2 电脑 → 困难」后把电脑调成 0 再调回 2，不该发现难度自己变回普通了。
+    const withBots = updateGameSetupBotDifficulty(
+      updateGameSetupCounts(createDefaultGameSetup(), { humanCount: 2, botCount: 2 }),
+      'hard',
+    );
+
+    const noBots = updateGameSetupCounts(withBots, { humanCount: 2, botCount: 0 });
+
+    expect(noBots.botCount).toBe(0);
+    expect(noBots.botDifficulty).toBe('hard');
+
+    const backToBots = updateGameSetupCounts(noBots, { humanCount: 2, botCount: 2 });
+    expect(backToBots.botDifficulty).toBe('hard');
+  });
+
+  it('换地图也不会重置难度（换图只该夹最高房级）', () => {
+    const setup = updateGameSetupBotDifficulty(createDefaultGameSetup(dependencies), 'easy');
+
+    const switched = updateGameSetupMapId(setup, harbor.ref.id, dependencies);
+
+    expect(switched.mapId).toBe(harbor.ref.id);
+    expect(switched.botDifficulty).toBe('easy');
   });
 });

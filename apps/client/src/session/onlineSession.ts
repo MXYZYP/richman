@@ -3,9 +3,10 @@ import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { createGamePresenter, getAvailableActions, type GamePresenterResult } from './gamePresenter';
 import { paceMultiplier } from './playbackPace';
 import { io, type Socket } from 'socket.io-client';
-import type { GameEvent, Intent } from '@richman/engine';
+import type { BotDifficulty, GameEvent, Intent } from '@richman/engine';
 import type {
   Ack,
+  ChatMessage,
   ClientToServerEvents,
   CreateRoomAck,
   JoinRoomAck,
@@ -13,8 +14,11 @@ import type {
   PublicRoomState,
   ResumeAck,
   RoomRole,
+  RoomSettings,
+  RoomSettingsPatch,
   ServerToClientEvents,
 } from '@richman/protocol';
+import { CHAT_TEXT_MAX_LENGTH } from '@richman/protocol';
 import type { ClientAction, DisplayCard } from '../game/clientGame';
 import { resolvePublicGameSnapshot } from '../game/mapResolver';
 import type { CashNotice, ConnectionStatus, GameSession, RenderableGameState, TransientNotice } from './gameSession';
@@ -51,7 +55,7 @@ const browserGlobals = globalThis as typeof globalThis & {
   localStorage?: StorageLike;
   location?: { origin: string };
 };
-type Operation = 'create' | 'join' | 'resume' | 'start' | 'addBot' | 'removeBot' | 'renameBot' | 'leave' | 'intent' | 'skip';
+type Operation = 'create' | 'join' | 'resume' | 'start' | 'addBot' | 'removeBot' | 'renameBot' | 'updateSettings' | 'leave' | 'intent' | 'skip' | 'kick';
 type LastErrorKind = 'derived' | 'operation' | 'blocking' | 'terminal';
 type ReconciliationMarker = {
   readonly generation: number;
@@ -79,7 +83,7 @@ type LastErrorState =
 const MAP_COMPATIBILITY_ERROR = '当前客户端缺少房间所需地图，请刷新或更新后重试。';
 
 /** A host-only lobby mutation. Exactly one may be in flight at a time (single-flight lock). */
-export type LobbyCommand = 'start' | 'addBot' | 'removeBot' | 'renameBot' | 'leave';
+export type LobbyCommand = 'start' | 'addBot' | 'removeBot' | 'renameBot' | 'updateSettings' | 'leave' | 'kick';
 
 export interface CreateOnlineSessionOptions {
   url?: string;
@@ -96,7 +100,7 @@ export interface OnlineGameSession extends GameSession {
    * means a same-id retry is futile and the user should abandon; `transient` retries.
    */
   readonly entryFailure: Ref<EntryFailureKind | null>;
-  create(nickname: string, mapId: string): Promise<void>;
+  create(nickname: string, mapId: string, botDifficulty?: BotDifficulty): Promise<void>;
   retryPending(): Promise<void>;
   retryResume(): Promise<void>;
   /** Keep the stored session intact, but suppress automatic recovery until explicitly retried. */
@@ -134,10 +138,18 @@ export interface OnlineGameSession extends GameSession {
   readonly pendingCommand: Ref<LobbyCommand | null>;
   /** A human reason the game cannot start yet, or null when the host may start. */
   readonly startBlockedReason: ComputedRef<string | null>;
+  /**
+   * 房间设置（#4 规则自定义 / #6 电脑难度）的权威副本，由服务端 `room:settings` 广播/单播驱动。
+   * `null` = 尚未收到（刚进大厅的一瞬），UI 应等它到位再渲染设置面板，避免闪一帧默认值。
+   */
+  readonly roomSettings: Ref<RoomSettings | null>;
+  /** 房主修改房间设置（仅大厅阶段生效；服务端会拒绝非房主与已开局房间）。 */
+  updateRoomSettings(patch: RoomSettingsPatch): Promise<void>;
   start(): Promise<void>;
   addBot(): Promise<void>;
   removeBot(playerId: string): Promise<void>;
   renameBot(playerId: string, nickname: string): Promise<void>;
+  kickPlayer(playerId: string): Promise<void>;
 }
 
 const DEFAULT_ACK_TIMEOUT_MS = 8_000;
@@ -145,12 +157,13 @@ const ERROR_MESSAGES: Record<string, string> = {
   INVALID_TOKEN: '会话已失效，请重新加入房间',
   ROOM_NOT_FOUND: '房间不存在或已关闭',
   ROOM_FULL: '房间人数已满',
-  GAME_ALREADY_STARTED: '游戏已经开始，无法修改房间',
+  GAME_ALREADY_STARTED: '游戏已开始，无法加入（仅可切换为观战）',
   NICKNAME_TAKEN: '昵称已被使用，请换一个',
   NOT_HOST: '只有房主可以执行此操作',
   INVALID_NICKNAME: '昵称需为 1 至 20 个字符',
   NOT_ENOUGH_PLAYERS: '至少需要 2 名玩家才能开始',
   INVALID_ROOM_ACTION: '当前房间状态无法执行此操作',
+  CREATE_RATE_LIMITED: '创建房间过于频繁，请稍后再试',
   REQUEST_TIMEOUT: '请求超时，请重试',
   OPERATION_IN_PROGRESS: '请求正在处理中',
   DISCONNECTED: '连接已断开，请重试',
@@ -270,6 +283,9 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
   const displayCash = ref<Record<string, number>>({});
   const transientNotice = ref<TransientNotice | null>(null);
   let transientNoticeId = 0;
+  const chatLog = ref<ChatMessage[]>([]);
+  /** 房间设置（#4 / #6）：服务端广播的权威副本，仅大厅期间有意义。 */
+  const roomSettings = ref<RoomSettings | null>(null);
   let transientNoticeTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
   type Attempt<T extends object> = {
     settled: boolean;
@@ -392,6 +408,8 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     clearRenderedState();
     compatibilityError.value = null;
     room.value = null;
+    roomSettings.value = null;
+    chatLog.value = [];
     clearTransientFeedback();
   };
   const withCurrentPresence = (snapshot: RenderableGameState): RenderableGameState => {
@@ -818,6 +836,26 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     attempt.resolve({ ok: false, code: 'DISCONNECTED', message: '' });
     resumePromise = null;
   };
+  const onChat = (message: ChatMessage): void => {
+    if (disposed) return;
+    chatLog.value.push(message);
+    if (chatLog.value.length > 200) chatLog.value.splice(0, chatLog.value.length - 200);
+  };
+  // 服务端单播的“最近聊天”快照（进入房间 / 重连时）：以服务端为准整体覆盖，
+  // 这样刷新页面、换设备重连后仍然看得到之前的聊天记录。
+  const onChatHistory = (payload: { messages: ChatMessage[] }): void => {
+    if (disposed) return;
+    if (!Array.isArray(payload?.messages)) return;
+    chatLog.value = payload.messages.slice(-200);
+  };
+  // 房间设置（#4 / #6）由服务端广播/单播，整间共用一份：直接整体覆盖即可（低频、幂等）。
+  const onRoomSettings = (settings: RoomSettings): void => {
+    if (disposed) return;
+    roomSettings.value = {
+      botDifficulty: settings.botDifficulty,
+      ruleConfig: settings.ruleConfig ?? null,
+    };
+  };
   const onConnect = (): void => {
     connectionReady.resolve();
     reconnectPending = false;
@@ -851,6 +889,9 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
   socket.on('room:closed', onClosed);
   socket.on('game:events', onEvents);
   socket.on('game:snapshot', onSnapshot);
+  socket.on('room:chat_broadcast', onChat);
+  socket.on('room:chat_history', onChatHistory);
+  socket.on('room:settings', onRoomSettings);
   socket.on('connect', onConnect);
   socket.on('disconnect', onDisconnect);
   socket.on('connect_error', onConnectError);
@@ -862,10 +903,9 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
       return;
     }
     clearLastError((current) => current.kind === 'terminal' || current.kind === 'blocking');
-    if (!savePendingRoomRequest(storage, request)) {
-      fail('REQUEST_TIMEOUT', request.operation);
-      return;
-    }
+    // 持久化待恢复请求仅用于断线重连，属"尽力而为"：localStorage 不可用/写满/隐私模式时不应阻断
+    // 建房/进房，更不应误报成"请求超时"（会让用户误判为网络问题）。保存失败仅意味着失去自动恢复能力。
+    savePendingRoomRequest(storage, request);
     const owner = stagedEntry?.request.requestId === request.requestId
       ? stagedEntry
       : { request, room: null, roomFromBroadcast: false, snapshot: null, eventBatches: [], transitions: [] };
@@ -877,6 +917,7 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
           nickname: request.nickname,
           requestId: request.requestId,
           mapId: request.mapId,
+          ...(request.botDifficulty !== undefined && request.botDifficulty !== 'normal' ? { botDifficulty: request.botDifficulty } : {}),
         })
         : await emitAck<JoinRoomAck>('join', 'room:join', {
           roomCode: request.roomCode,
@@ -887,18 +928,21 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
       if (!ack.ok || disposed || entryAttempt !== owner) {
         if (!disposed && entryAttempt === owner) {
           stagedEntry = owner;
-          if (!ack.ok) entryFailure.value = classifyEntryFailure(ack.code);
+          if (!ack.ok) {
+            entryFailure.value = classifyEntryFailure(ack.code);
+            // 失败原因必须落到界面上：只有「上次操作未完成」这一句话，玩家既不知道
+            // 为什么失败，也不知道该等还是该改输入（例如限流该等、昵称重复该换）。
+            // 服务端 message 不直接用（可能是内部英文串），统一走本地文案表。
+            setLastError({ kind: 'operation', message: publicError(ack.code), code: ack.code });
+          }
         }
         return;
       }
       if (!owner.roomFromBroadcast) owner.room = ack.room;
       const active: OnlineSession = { roomCode: ack.room.roomCode, playerId: ack.playerId, token: ack.token };
-      if (!commitOnlineSession(storage, active)) {
-        stagedEntry = owner;
-        entryFailure.value = 'transient';
-        fail('REQUEST_TIMEOUT', request.operation);
-        return;
-      }
+      // 持久化活跃会话仅用于断线自动恢复，属尽力而为：保存失败不阻断已成功的建房/进房，
+      // 也不应误报成"请求超时"。
+      commitOnlineSession(storage, active);
       activeSession = active;
       hasActiveSession = true;
       localPlayerId.value = ack.playerId;
@@ -934,11 +978,12 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
       if (entryAttempt === owner) entryAttempt = null;
     }
   };
-  const create = async (nickname: string, mapId: string): Promise<void> => submit({
+  const create = async (nickname: string, mapId: string, botDifficulty: BotDifficulty = 'normal'): Promise<void> => submit({
     operation: 'create',
     nickname,
     requestId: requestId(crypto),
     mapId,
+    botDifficulty,
   });
   const join = async (roomCode: string, nickname: string, role: RoomRole = 'player'): Promise<void> => submit({
     operation: 'join',
@@ -1046,9 +1091,36 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     if (guardSpectatorCommand('renameBot')) return;
     await runLobbyCommand('renameBot', () => emitAck<Record<string, never>>('renameBot', 'room:rename_bot', { playerId, nickname }));
   };
+  /**
+   * 房主调整房间设置（#4 / #6）。走 `runLobbyCommand` 复用「同一时刻只允许一条大厅变更」
+   * 的互斥锁与待确认态；结果既用 ack 立即收敛、也接受随后的 `room:settings` 广播覆盖。
+   */
+  const updateRoomSettings = async (patch: RoomSettingsPatch): Promise<void> => {
+    if (guardSpectatorCommand('updateSettings')) return;
+    await runLobbyCommand('updateSettings', async () => {
+      const response = await emitAck<RoomSettings>('updateSettings', 'room:update_settings', patch);
+      if (!response.ok) return response;
+      roomSettings.value = {
+        botDifficulty: response.botDifficulty,
+        ruleConfig: response.ruleConfig ?? null,
+      };
+      return { ok: true };
+    });
+  };
+  const kickPlayer = async (playerId: string): Promise<void> => {
+    if (guardSpectatorCommand('kick')) return;
+    await runLobbyCommand('kick', () => emitAck<Record<string, never>>('kick', 'room:kick_player', { playerId }));
+  };
+  const sendChat = (text: string): void => {
+    if (disposed || !socket.connected || !hasActiveSession) return;
+    const trimmed = text.trim();
+    if (trimmed.length === 0 || trimmed.length > CHAT_TEXT_MAX_LENGTH) return;
+    socket.emit('room:chat_message', { text: trimmed });
+  };
   const sendIntent = async (intent: Intent): Promise<void> => {
     if (isSpectator.value) return;
-    if (!canControlActiveActor.value) {
+    // 投降不受“是否轮到该玩家 / 是否处于接管态”限制：任何在局真人都能随时认输退出房间。
+    if (intent.type !== 'surrender' && !canControlActiveActor.value) {
       if (room.value?.takeoverPlayerId === localPlayerId.value) refreshTakeoverStatus();
       return;
     }
@@ -1119,6 +1191,9 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     socket.off('room:closed', onClosed);
     socket.off('game:events', onEvents);
     socket.off('game:snapshot', onSnapshot);
+    socket.off('room:chat_broadcast', onChat);
+    socket.off('room:chat_history', onChatHistory);
+    socket.off('room:settings', onRoomSettings);
     socket.off('connect', onConnect);
     socket.off('disconnect', onDisconnect);
     socket.off('connect_error', onConnectError);
@@ -1130,7 +1205,7 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     isAnimating, isBotThinking, lastError, compatibilityError, cashNotices, displayCash, transientNotice, entryFailure, availableActions: computed<ClientAction[]>(() => (
       canControlActiveActor.value && state.value !== null ? getAvailableActions(state.value) : []
     )),
-    create, retryPending, retryResume, deferResume, join, start, addBot, removeBot, renameBot, sendIntent, skipOfflineTurn, leave, dispose,
+    chatLog, sendChat, create, retryPending, retryResume, deferResume, join, start, addBot, removeBot, renameBot, roomSettings, updateRoomSettings, kickPlayer, sendIntent, skipOfflineTurn, leave, dispose,
     abortEntry, discardStoredSession, abandon, isHost, isSpectator, isLobbyCommandReady, pendingCommand, startBlockedReason,
   };
 }

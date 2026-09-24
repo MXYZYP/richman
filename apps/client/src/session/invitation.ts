@@ -1,4 +1,4 @@
-const ROOM_CODE_PATTERN = /^\d{4}$/;
+const ROOM_CODE_PATTERN = /^\d{6}$/;
 
 export type InvitationQrEncoder<T> = (canonicalUrl: string) => T;
 
@@ -8,7 +8,7 @@ function isRoomCode(roomCode: string): boolean {
 
 export function createInvitationUrl(currentUrl: URL, roomCode: string): URL {
   if (!isRoomCode(roomCode)) {
-    throw new RangeError('Invitation room code must be exactly four digits');
+    throw new RangeError('Invitation room code must be exactly six digits');
   }
 
   const invitationUrl = new URL(currentUrl.origin + currentUrl.pathname);

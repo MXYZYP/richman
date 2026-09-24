@@ -102,3 +102,32 @@ describe('PlayerRail seat order', () => {
     expect(seats.map((seat) => seat.acting)).toEqual([true, false, false]);
   });
 });
+
+// #94：5-6 人不再横滑，改成压缩网格 —— 一屏之内看得到全部席位，主位靠徽章 +「行动中」区分。
+describe('PlayerRail 5-6 人压缩模式（#94）', () => {
+  it('六个席位全部同屏渲染，主位仍只有一个', async () => {
+    const players = makePlayers();
+    const six = [
+      ...players,
+      { ...players[2]!, id: 'p5', nickname: '电脑D', color: 'purple' as const },
+      { ...players[2]!, id: 'p6', nickname: '电脑E', color: 'orange' as const },
+    ];
+
+    const html = await renderRail(six, six[4]!.id);
+
+    const seats = seatsOf(html);
+    expect(seats.map((seat) => seat.nickname)).toEqual(six.map((player) => player.nickname));
+    expect(seats.map((seat) => seat.acting)).toEqual([false, false, false, false, true, false]);
+    expect(html).toContain('player-seats compact');
+    // 横滑类必须消失：「轮到谁」不该需要左右滑动去找。
+    expect(html).not.toContain('seat-scroll');
+  });
+
+  it('5 人起启用压缩模式，4 人仍走常规网格', async () => {
+    const players = makePlayers();
+    const five = [...players, { ...players[2]!, id: 'p5', nickname: '电脑D', color: 'purple' as const }];
+
+    expect(await renderRail(five, five[0]!.id)).toContain('player-seats compact');
+    expect(await renderRail(players, players[0]!.id)).not.toContain('player-seats compact');
+  });
+});

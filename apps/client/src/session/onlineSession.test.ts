@@ -3,7 +3,7 @@ import { ACTIVE_ONLINE_SESSION_KEY, PENDING_ROOM_REQUEST_KEY } from './sessionSt
 import { createOnlineSession, type OnlineGameSession } from './onlineSession';
 import { createGame } from '@richman/engine';
 import { getActiveMapPack } from '@richman/board-data';
-import type { PublicGameSnapshot } from '@richman/protocol';
+import type { ChatMessage, PublicGameSnapshot } from '@richman/protocol';
 
 const chinaMapPack = getActiveMapPack('china-tour');
 const CHINA_ROOM_MAP = { ref: chinaMapPack.ref, title: chinaMapPack.metadata.title };
@@ -104,21 +104,54 @@ describe('online session', () => {
     const session = createOnlineSession({ storage, socketFactory: () => socket as never });
 
     expect([...listeners.keys()]).toEqual([
-      'room:state', 'player:connection', 'room:closed', 'game:events', 'game:snapshot', 'connect', 'disconnect', 'connect_error',
+      'room:state', 'player:connection', 'room:closed', 'game:events', 'game:snapshot', 'room:chat_broadcast', 'room:chat_history', 'room:settings', 'connect', 'disconnect', 'connect_error',
     ]);
     const staleRoomState = listeners.get('room:state');
     void session.create('房主', 'china-tour');
     expect(emissions).toHaveLength(1);
     session.dispose();
     staleRoomState?.({
-      roomCode: '1234', status: 'lobby', hostId: 'host', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP,
+      roomCode: '123456', status: 'lobby', hostId: 'host', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP,
     });
 
     expect(session.room.value).toBeNull();
   });
 
-  it('reuses the persisted pending request on retry instead of generating a second request id', async () => {
-    const storage = new MemoryStorage();
+  it('replaces the chat log with the server history and keeps live broadcasts appended after it', () => {
+    const listeners = new Map<string, (...args: unknown[]) => void>();
+    const socket = {
+      connected: true,
+      on(event: string, listener: (...args: unknown[]) => void) { listeners.set(event, listener); return this; },
+      off(event: string) { listeners.delete(event); return this; },
+      emit() { return this; },
+      disconnect() { return this; },
+    };
+    const session = createOnlineSession({ storage: new MemoryStorage(), socketFactory: () => socket as never });
+
+    const history: ChatMessage[] = [
+      { playerId: 'p1', nickname: '房主', text: '历史一', ts: 1, role: 'player' },
+      { playerId: 'p2', nickname: '客人', text: '历史二', ts: 2, role: 'player' },
+    ];
+    // 进入房间 / 重连时服务端单播最近记录 → 本地 chatLog 以服务端为准整体覆盖。
+    listeners.get('room:chat_history')?.({ messages: history });
+    expect(session.chatLog.value.map((message) => message.text)).toEqual(['历史一', '历史二']);
+
+    // 之后到达的实时广播追加在历史之后。
+    listeners.get('room:chat_broadcast')?.({ playerId: 'p1', nickname: '房主', text: '实时', ts: 3, role: 'player' });
+    expect(session.chatLog.value.map((message) => message.text)).toEqual(['历史一', '历史二', '实时']);
+
+    // 再次收到历史（例如刷新后重连）不会把已有记录重复累加。
+    listeners.get('room:chat_history')?.({ messages: history });
+    expect(session.chatLog.value.map((message) => message.text)).toEqual(['历史一', '历史二']);
+
+    // 畸形载荷被忽略，不影响既有记录。
+    listeners.get('room:chat_history')?.({ messages: 'oops' });
+    expect(session.chatLog.value.map((message) => message.text)).toEqual(['历史一', '历史二']);
+
+    session.dispose();
+  });
+
+  it('reuses the persisted pending request on retry instead of generating a second request id', async () => {    const storage = new MemoryStorage();
     const emissions: unknown[][] = [];
     let cryptoCalls = 0;
     const session = createOnlineSession({
@@ -148,7 +181,7 @@ describe('online session', () => {
     vi.useFakeTimers();
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const session = createOnlineSession({
       storage,
       ackTimeoutMs: 1,
@@ -163,7 +196,7 @@ describe('online session', () => {
 
     (emissions[0]?.at(-1) as (ack: unknown) => void)({
       ok: true,
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await Promise.resolve();
     await Promise.resolve();
@@ -185,7 +218,7 @@ describe('online session', () => {
     expect(emissions).toHaveLength(4);
   });
 
-  it('does not emit a create request when pending storage fails', async () => {
+  it('still emits the create request when pending storage fails, keeping the entry recoverable', async () => {
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
     storage.setItem = () => { throw new Error('storage unavailable'); };
@@ -203,8 +236,10 @@ describe('online session', () => {
     void session.create('sensitive-nickname', 'china-tour');
     await Promise.resolve();
 
-    expect(emissions).toHaveLength(0);
-    expect(session.lastError.value).not.toContain('sensitive-nickname');
+    // 持久化待恢复请求属"尽力而为"：写失败只意味着失去断线自动恢复，不应阻断建房。
+    expect(emissions).toHaveLength(1);
+    // 失败原因也不应把敏感昵称回显给用户。
+    expect(session.lastError.value ?? '').not.toContain('sensitive-nickname');
   });
 
   it('makes a captured create acknowledgement inert after disposal', async () => {
@@ -228,7 +263,7 @@ describe('online session', () => {
       ok: true,
       playerId: 'player-1',
       token: 'secret-token',
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await creating;
 
@@ -241,7 +276,7 @@ describe('online session', () => {
   it('preserves local session state when leave fails', async () => {
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     storage.setItem(PENDING_ROOM_REQUEST_KEY, JSON.stringify({ operation: 'create', mapId: 'china-tour', nickname: 'owner', requestId: 'abababababababababababababababab' }));
     const session = createOnlineSession({
       storage,
@@ -267,7 +302,7 @@ describe('online session', () => {
     vi.useFakeTimers();
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     storage.setItem(PENDING_ROOM_REQUEST_KEY, JSON.stringify({ operation: 'create', mapId: 'china-tour', nickname: 'owner', requestId: 'abababababababababababababababab' }));
     const session = createOnlineSession({
       storage,
@@ -283,7 +318,7 @@ describe('online session', () => {
 
     (emissions[0]?.at(-1) as (ack: unknown) => void)({
       ok: true,
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await Promise.resolve();
     await Promise.resolve();
@@ -299,7 +334,7 @@ describe('online session', () => {
   it('resumes an active session immediately when a factory returns an already connected socket', () => {
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
 
     createOnlineSession({
       storage,
@@ -318,7 +353,7 @@ describe('online session', () => {
     const listeners = new Map<string, (...args: never[]) => void>();
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const socket = {
       connected: false,
       on(event: string, listener: (...args: never[]) => void) { listeners.set(event, listener); return this; },
@@ -343,7 +378,7 @@ describe('online session', () => {
   it('cancels an in-flight resume when recovery is deferred and ignores its late acknowledgement', async () => {
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const session = createOnlineSession({
       storage,
       socketFactory: () => ({
@@ -358,7 +393,7 @@ describe('online session', () => {
     session.deferResume();
     (emissions[0]?.at(-1) as (ack: unknown) => void)({
       ok: true,
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await Promise.resolve();
     await Promise.resolve();
@@ -373,7 +408,7 @@ describe('online session', () => {
     const listeners = new Map<string, (...args: never[]) => void>();
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const session = createOnlineSession({
       storage,
       socketFactory: () => ({
@@ -388,7 +423,7 @@ describe('online session', () => {
     listeners.get('room:closed')?.({ reason: 'game_over' } as never);
     (emissions[0]?.at(-1) as (ack: unknown) => void)({
       ok: true,
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await Promise.resolve();
     await Promise.resolve();
@@ -403,7 +438,7 @@ describe('online session', () => {
     const listeners = new Map<string, (...args: never[]) => void>();
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const socket = {
       connected: false,
       on(event: string, listener: (...args: never[]) => void) { listeners.set(event, listener); return this; },
@@ -420,11 +455,11 @@ describe('online session', () => {
     expect(emissions.filter(([event]) => event === 'session:resume')).toHaveLength(1);
     (emissions[0]?.at(-1) as (ack: unknown) => void)({
       ok: true,
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await retry;
 
-    expect(session.room.value?.roomCode).toBe('1234');
+    expect(session.room.value?.roomCode).toBe('123456');
     socket.connected = false;
     listeners.get('disconnect')?.();
     socket.connected = true;
@@ -436,7 +471,7 @@ describe('online session', () => {
     const listeners = new Map<string, (...args: never[]) => void>();
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     let connectCalls = 0;
     const socket = {
       connected: false,
@@ -478,7 +513,7 @@ describe('online session', () => {
     const listeners = new Map<string, (...args: never[]) => void>();
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     let connectCalls = 0;
     const socket = {
       connected: false,
@@ -517,7 +552,7 @@ describe('online session', () => {
     const listeners = new Map<string, (...args: never[]) => void>();
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     let connectCalls = 0;
     const socket = {
       connected: false,
@@ -545,7 +580,7 @@ describe('online session', () => {
   it('supersedes a timed-out resume on reconnect and ignores its late acknowledgement', async () => {
     vi.useFakeTimers();
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const listeners = new Map<string, (...args: never[]) => void>();
     const emissions: unknown[][] = [];
     const socket = {
@@ -573,18 +608,18 @@ describe('online session', () => {
     });
     secondAck({
       ok: true,
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(session.room.value?.roomCode).toBe('1234');
+    expect(session.room.value?.roomCode).toBe('123456');
     expect(session.localPlayerId.value).toBe('player-1');
   });
 
   it('retains transiently failed resume credentials and retries on the current socket', async () => {
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const emissions: unknown[][] = [];
     const session = createOnlineSession({
       storage,
@@ -604,19 +639,19 @@ describe('online session', () => {
     const retryAck = emissions[1]?.at(-1) as (ack: unknown) => void;
     retryAck({
       ok: true,
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await retry;
     await Promise.resolve();
 
     expect(storage.getItem(ACTIVE_ONLINE_SESSION_KEY)).not.toBeNull();
     expect(session.connectionStatus.value).toBe('connected');
-    expect(session.room.value?.roomCode).toBe('1234');
+    expect(session.room.value?.roomCode).toBe('123456');
   });
 
   it('clears confidential local session state for permanent resume failure and safe room closure reasons', async () => {
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     storage.setItem(PENDING_ROOM_REQUEST_KEY, JSON.stringify({ operation: 'create', mapId: 'china-tour', nickname: 'owner', requestId: 'abababababababababababababababab' }));
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const emissions: unknown[][] = [];
@@ -669,7 +704,7 @@ describe('online session', () => {
     expect(storage.getItem(PENDING_ROOM_REQUEST_KEY)).toContain('abababababababababababababababab');
   });
 
-  it('keeps a recoverable pending request when active session storage cannot commit', async () => {
+  it('publishes the room even when active session storage cannot commit, keeping the pending request recoverable', async () => {
     const storage = new MemoryStorage();
     const emissions: unknown[][] = [];
     storage.setItem = (key, value) => {
@@ -690,14 +725,16 @@ describe('online session', () => {
     const creating = session.create('owner', 'china-tour');
     (emissions[0]?.at(-1) as (ack: unknown) => void)({
       ok: true, playerId: 'player-1', token: 'secret-token',
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await creating;
 
-    expect(session.localPlayerId.value).toBeNull();
-    expect(session.room.value).toBeNull();
+    // 持久化活跃会话同样属"尽力而为"：写失败不应把已经成功的建房结果藏起来，
+    // 否则用户明明建房成功却仍停在首页。待恢复请求被保留，刷新后可 retryPending。
+    expect(session.localPlayerId.value).toBe('player-1');
+    expect(session.room.value).not.toBeNull();
     expect(storage.getItem(PENDING_ROOM_REQUEST_KEY)).not.toBeNull();
-    expect(session.lastError.value).not.toContain('secret-token');
+    expect(session.lastError.value ?? '').not.toContain('secret-token');
   });
 
   it('settles a preconnect command immediately when disposed', async () => {
@@ -742,7 +779,7 @@ describe('online session', () => {
 
   it('does not make an auto-resume acknowledgement stale when retried immediately', async () => {
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const emissions: unknown[][] = [];
     const session = createOnlineSession({
       storage,
@@ -758,7 +795,7 @@ describe('online session', () => {
     const retry = session.retryResume();
     (emissions[0]?.at(-1) as (ack: unknown) => void)({
       ok: true,
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await retry;
 
@@ -784,7 +821,7 @@ describe('online session', () => {
     const creating = session.create('owner', 'china-tour');
     (emissions[0]?.at(-1) as (ack: unknown) => void)({
       ok: true, playerId: 'player-1', token: 'secret-token',
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await creating;
 
@@ -808,7 +845,7 @@ describe('online session', () => {
     });
 
     const creating = session.create('owner', 'china-tour');
-    void session.join('1234', 'guest', 'player');
+    void session.join('123456', 'guest', 'player');
     await Promise.resolve();
     expect(emissions).toHaveLength(1);
     expect(storage.getItem(PENDING_ROOM_REQUEST_KEY)).toContain('abababababababababababababababab');
@@ -825,7 +862,7 @@ describe('online session', () => {
     ]);
   });
 
-  it('stages early room broadcasts until credentials persist, then publishes the retry atomically', async () => {
+  it('publishes early room broadcasts immediately even when credentials cannot persist, then re-publishes the retry atomically', async () => {
     const storage = new MemoryStorage();
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const emissions: unknown[][] = [];
@@ -845,7 +882,7 @@ describe('online session', () => {
         disconnect() { return this; },
       }) as never,
     });
-    const earlyRoom = { roomCode: '1234', status: 'playing' as const, hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP };
+    const earlyRoom = { roomCode: '123456', status: 'playing' as const, hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP };
     const earlySnapshot = createPublicSnapshot();
 
     const first = session.create('owner', 'china-tour');
@@ -857,9 +894,11 @@ describe('online session', () => {
     });
     await first;
 
-    expect(session.room.value).toBeNull();
-    expect(session.state.value).toBeNull();
-    expect(session.localPlayerId.value).toBeNull();
+    // 活跃会话写入失败属"尽力而为"：早到的房间广播与快照仍应立即发布，
+    // 不能因为本地持久化失败就把已经到达的房间状态藏起来。待恢复请求被保留，可 retryPending。
+    expect(session.localPlayerId.value).toBe('player-1');
+    expect(session.room.value).not.toBeNull();
+    expect(session.state.value).not.toBeNull();
     expect(storage.getItem(PENDING_ROOM_REQUEST_KEY)).not.toBeNull();
 
     rejectActiveCommit = false;
@@ -884,7 +923,7 @@ describe('online session', () => {
 
   it('clears an existing presenter and every derived display value after an incompatible live snapshot', async () => {
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const emissions: unknown[][] = [];
     const session = createOnlineSession({
@@ -898,7 +937,7 @@ describe('online session', () => {
       }) as never,
     });
     const room = {
-      roomCode: '1234', status: 'playing' as const, hostId: 'player-1',
+      roomCode: '123456', status: 'playing' as const, hostId: 'player-1',
       players: [{ id: 'player-1', nickname: '玩家一', isBot: false, online: true }],
       spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP,
     };
@@ -927,7 +966,7 @@ describe('online session', () => {
 
   it('keeps the compatibility error visible when a resume acknowledgement contains a bad map ref', async () => {
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const emissions: unknown[][] = [];
     const session = createOnlineSession({
       storage,
@@ -940,7 +979,7 @@ describe('online session', () => {
       }) as never,
     });
     const room = {
-      roomCode: '1234', status: 'playing' as const, hostId: 'player-1', players: [],
+      roomCode: '123456', status: 'playing' as const, hostId: 'player-1', players: [],
       spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP,
     };
 
@@ -973,16 +1012,16 @@ describe('online session', () => {
         }) as never,
       });
       const room = {
-        roomCode: '1234', status: 'playing' as const, hostId: 'player-1', players: [],
+        roomCode: '123456', status: 'playing' as const, hostId: 'player-1', players: [],
         spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP,
       };
       const entering = operation === 'create'
         ? session.create('房主', 'china-tour')
-        : session.join('1234', '玩家二', 'player');
+        : session.join('123456', '玩家二', 'player');
       listeners.get('game:snapshot')?.({ state: createIncompatibleSnapshot() });
       (emissions[0]?.at(-1) as (ack: unknown) => void)({
         ok: true,
-        roomCode: '1234',
+        roomCode: '123456',
         playerId: 'player-1',
         token: 'secret-token',
         room,
@@ -1033,7 +1072,7 @@ describe('online session', () => {
     const first = session.create('owner', 'china-tour');
     (emissions[0]?.at(-1) as (ack: unknown) => void)({
       ok: true, playerId: 'player-1', token: 'secret-token',
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await first;
 
@@ -1050,7 +1089,7 @@ describe('online session', () => {
     const retry = session.retryPending();
     (emissions[1]?.at(-1) as (ack: unknown) => void)({
       ok: true, playerId: 'player-1', token: 'secret-token',
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await retry;
 
@@ -1060,7 +1099,7 @@ describe('online session', () => {
 
   it('keeps state-changing commands locked while persisted active credentials are resuming', async () => {
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const emissions: unknown[][] = [];
     const session = createOnlineSession({
       storage,
@@ -1085,7 +1124,7 @@ describe('online session', () => {
 
     (emissions[0]?.at(-1) as (ack: unknown) => void)({
       ok: true,
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await Promise.resolve();
     await Promise.resolve();
@@ -1116,7 +1155,7 @@ describe('online session', () => {
     const creating = session.create('owner', 'china-tour');
     (emissions[0]?.at(-1) as (ack: unknown) => void)({
       ok: true, playerId: 'player-1', token: 'secret-token',
-      room: { roomCode: '1234', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
+      room: { roomCode: '123456', status: 'lobby', hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP },
     });
     await creating;
     listeners.get('room:closed')?.({ reason: 'game_over' });
@@ -1129,7 +1168,7 @@ describe('online session', () => {
   });
   it('overlays the latest room presence onto a snapshot received after an older connection update', async () => {
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const emissions: unknown[][] = [];
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const session = createOnlineSession({
@@ -1143,7 +1182,7 @@ describe('online session', () => {
       }) as never,
     });
     const room = {
-      roomCode: '1234', status: 'playing' as const, hostId: 'player-1',
+      roomCode: '123456', status: 'playing' as const, hostId: 'player-1',
       players: [{ id: 'player-1', nickname: '玩家一', isBot: false, online: true }],
       spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP,
     };
@@ -1169,7 +1208,7 @@ describe('online session', () => {
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const session = createOnlineSession({
       storage,
       ackTimeoutMs: 10,
@@ -1181,7 +1220,7 @@ describe('online session', () => {
         disconnect() { return this; },
       }) as never,
     });
-    const lobby = { roomCode: '1234', status: 'lobby' as const, hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP };
+    const lobby = { roomCode: '123456', status: 'lobby' as const, hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP };
     (emissions[0]?.at(-1) as (ack: unknown) => void)({ ok: true, room: lobby });
     await Promise.resolve();
     await Promise.resolve();
@@ -1227,7 +1266,7 @@ describe('online session', () => {
     const firstSnapshot = createPublicSnapshot({ turn: 1 });
     const secondSnapshot = createPublicSnapshot({ turn: 2 });
     const room = {
-      roomCode: '1234', status: 'playing' as const, hostId: 'player-1',
+      roomCode: '123456', status: 'playing' as const, hostId: 'player-1',
       players: [
         { id: 'player-1', nickname: '玩家一', isBot: false, online: true },
         { id: 'player-2', nickname: '玩家二', isBot: false, online: true },
@@ -1256,7 +1295,7 @@ describe('online session', () => {
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const session = createOnlineSession({
       storage,
       ackTimeoutMs: 10,
@@ -1270,7 +1309,7 @@ describe('online session', () => {
     });
     const snapshot = createPublicSnapshot();
     const room = {
-      roomCode: '1234', status: 'playing' as const, hostId: 'player-1',
+      roomCode: '123456', status: 'playing' as const, hostId: 'player-1',
       players: [
         { id: 'player-1', nickname: '玩家一', isBot: false, online: true },
         { id: 'player-2', nickname: '玩家二', isBot: false, online: true },
@@ -1314,7 +1353,7 @@ describe('online session', () => {
         disconnect() { return this; },
       }) as never,
     });
-    const playing = { roomCode: '1234', status: 'playing' as const, hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP };
+    const playing = { roomCode: '123456', status: 'playing' as const, hostId: 'player-1', players: [], spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP };
     const latestSnapshot = createPublicSnapshot();
 
     const first = session.create('owner', 'china-tour');
@@ -1342,7 +1381,7 @@ describe('online session', () => {
   it('resets a disconnected intent reconciliation before accepting the next recovered intent', async () => {
     vi.useFakeTimers();
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const emissions: unknown[][] = [];
     const socket = {
@@ -1354,7 +1393,7 @@ describe('online session', () => {
     };
     const session = createOnlineSession({ storage, ackTimeoutMs: 10, socketFactory: () => socket as never });
     const room = {
-      roomCode: '1234', status: 'playing' as const, hostId: 'player-1',
+      roomCode: '123456', status: 'playing' as const, hostId: 'player-1',
       players: [{ id: 'player-1', nickname: '玩家一', isBot: false, online: true }],
       spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP,
     };
@@ -1383,7 +1422,7 @@ describe('online session', () => {
   });
   it('announces local takeover from authoritative room state and clears only that status', async () => {
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const emissions: unknown[][] = [];
     const session = createOnlineSession({
@@ -1397,7 +1436,7 @@ describe('online session', () => {
       }) as never,
     });
     const room = {
-      roomCode: '1234', status: 'playing' as const, hostId: 'host',
+      roomCode: '123456', status: 'playing' as const, hostId: 'host',
       players: [{ id: 'player-1', nickname: '玩家一', isBot: false, online: true }],
       spectators: [], takeoverPlayerId: 'player-1', map: CHINA_ROOM_MAP,
     };
@@ -1412,7 +1451,7 @@ describe('online session', () => {
   });
   it('abandon clears the in-game session locally when the socket is dead', async () => {
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const emissions: unknown[][] = [];
     const session = createOnlineSession({
@@ -1426,7 +1465,7 @@ describe('online session', () => {
       }) as never,
     });
     const room = {
-      roomCode: '1234', status: 'playing' as const, hostId: 'player-1',
+      roomCode: '123456', status: 'playing' as const, hostId: 'player-1',
       players: [{ id: 'player-1', nickname: '玩家一', isBot: false, online: true }],
       spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP,
     };
@@ -1450,7 +1489,7 @@ describe('online session', () => {
 
   it('abandon keeps the session and reports STORAGE_UNAVAILABLE when the record cannot be removed', async () => {
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     storage.setItem(PENDING_ROOM_REQUEST_KEY, JSON.stringify({
       operation: 'create', mapId: 'china-tour', nickname: 'stale', requestId: '0123456789abcdef0123456789abcdef',
     }));
@@ -1467,7 +1506,7 @@ describe('online session', () => {
       }) as never,
     });
     const room = {
-      roomCode: '1234', status: 'playing' as const, hostId: 'player-1',
+      roomCode: '123456', status: 'playing' as const, hostId: 'player-1',
       players: [{ id: 'player-1', nickname: '玩家一', isBot: false, online: true }],
       spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP,
     };
@@ -1509,7 +1548,7 @@ describe('online session', () => {
     const listeners = new Map<string, (...args: never[]) => void>();
     const emissions: unknown[][] = [];
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const socket = {
       connected: false,
       on(event: string, listener: (...args: never[]) => void) { listeners.set(event, listener); return this; },
@@ -1588,6 +1627,36 @@ describe('online session', () => {
     await creating;
 
     expect(session.entryFailure.value).toBe('definitive');
+    expect(storage.getItem(PENDING_ROOM_REQUEST_KEY)).not.toBeNull();
+    // 拒绝原因要落到界面上：只说「上次操作未完成」，玩家无从判断该换昵称还是该放弃。
+    expect(session.lastError.value).toBe('房间人数已满');
+  });
+
+  it('surfaces the rate-limit reason and keeps the entry retryable when create is throttled', async () => {
+    const storage = new MemoryStorage();
+    const emissions: unknown[][] = [];
+    const session = createOnlineSession({
+      storage,
+      socketFactory: () => ({
+        connected: true,
+        on() { return this; },
+        off() { return this; },
+        emit(...args: unknown[]) { emissions.push(args); return this; },
+        disconnect() { return this; },
+      }) as never,
+    });
+
+    const creating = session.create('owner', 'china-tour');
+    (emissions[0]?.at(-1) as (ack: unknown) => void)({
+      ok: false,
+      code: 'CREATE_RATE_LIMITED',
+      message: '创建房间过于频繁，请稍后再试。',
+    });
+    await creating;
+
+    // 限流是「等一会儿再来」，绝不能归到 definitive（那会引导玩家放弃并重开，永远撞墙）。
+    expect(session.entryFailure.value).toBe('transient');
+    expect(session.lastError.value).toBe('创建房间过于频繁，请稍后再试');
     expect(storage.getItem(PENDING_ROOM_REQUEST_KEY)).not.toBeNull();
   });
 
@@ -1696,7 +1765,7 @@ describe('online session transient gameplay feedback', () => {
     const emissions: unknown[][] = [];
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const socket = {
       connected: true,
       on(event: string, listener: (...args: unknown[]) => void) { listeners.set(event, listener); return this; },
@@ -1706,7 +1775,7 @@ describe('online session transient gameplay feedback', () => {
     };
     const session = createOnlineSession({ storage, socketFactory: () => socket as never });
     const room = {
-      roomCode: '1234', status: 'playing' as const, hostId: 'player-1',
+      roomCode: '123456', status: 'playing' as const, hostId: 'player-1',
       players: [{ id: 'player-1', nickname: '玩家一', isBot: false, online: true }],
       spectators: [], takeoverPlayerId: null, map: CHINA_ROOM_MAP,
     };
@@ -1835,7 +1904,7 @@ describe('online session transient gameplay feedback', () => {
 
   it('keeps a failed-resume reason after reset clears the recovered state', async () => {
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const emissions: unknown[][] = [];
     const session = createOnlineSession({
       storage,
@@ -1895,7 +1964,7 @@ describe('online session lobby controls', () => {
 
   function buildRoom(overrides: Partial<LobbyRoom> = {}): LobbyRoom {
     return {
-      roomCode: '0007',
+      roomCode: '000007',
       status: 'lobby',
       hostId: 'player-1',
       players: [{ id: 'player-1', nickname: '房主', isBot: false, online: true }],
@@ -1910,7 +1979,7 @@ describe('online session lobby controls', () => {
     const emissions: unknown[][] = [];
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '0007', playerId: localPlayerId, token: 'tkn' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '000007', playerId: localPlayerId, token: 'tkn' }));
     const socket = {
       connected: true,
       on(event: string, listener: (...args: unknown[]) => void) { listeners.set(event, listener); return this; },
@@ -2080,7 +2149,7 @@ describe('online session lobby controls', () => {
     ['INVALID_NICKNAME', '昵称需为 1 至 20 个字符'],
     ['NICKNAME_TAKEN', '昵称已被使用，请换一个'],
     ['NOT_HOST', '只有房主可以执行此操作'],
-    ['GAME_ALREADY_STARTED', '游戏已经开始，无法修改房间'],
+    ['GAME_ALREADY_STARTED', '游戏已开始，无法加入（仅可切换为观战）'],
     ['INVALID_ROOM_ACTION', '当前房间状态无法执行此操作'],
   ])('shows a specific message when rename-bot returns %s', async (code, expectedMessage) => {
     const seeded = buildRoom({ players: [...twoHumans, botPlayer('bot-1', '电脑 A')] });
@@ -2242,7 +2311,7 @@ describe('online session stale error lifecycle', () => {
 
   function room(overrides: Record<string, unknown> = {}) {
     return {
-      roomCode: '1234',
+      roomCode: '123456',
       status: 'playing' as const,
       hostId: 'player-1',
       players: humanPlayers,
@@ -2258,7 +2327,7 @@ describe('online session stale error lifecycle', () => {
     ackTimeoutMs?: number;
   } = {}) {
     const storage = new MemoryStorage();
-    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '1234', playerId: 'player-1', token: 'secret-token' }));
+    storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({ roomCode: '123456', playerId: 'player-1', token: 'secret-token' }));
     const emissions: unknown[][] = [];
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const socket = {
@@ -2628,7 +2697,7 @@ describe('online session spectators', () => {
 
   function spectatorRoom(overrides: Record<string, unknown> = {}) {
     return {
-      roomCode: '1234',
+      roomCode: '123456',
       status: 'playing' as const,
       hostId: 'player-1',
       players: [
@@ -2655,10 +2724,10 @@ describe('online session spectators', () => {
         disconnect() { return this; },
       }) as never,
     });
-    const joining = session.join('1234', '观众甲', 'spectator');
+    const joining = session.join('123456', '观众甲', 'spectator');
     expect(emissions[0]?.[0]).toBe('room:join');
     expect(emissions[0]?.[1]).toEqual({
-      roomCode: '1234',
+      roomCode: '123456',
       nickname: '观众甲',
       requestId: 'abababababababababababababababab',
       role: 'spectator',
@@ -2692,9 +2761,9 @@ describe('online session spectators', () => {
         disconnect() { return this; },
       }) as never,
     });
-    void session.join('1234', '客人');
+    void session.join('123456', '客人');
     expect(emissions[0]?.[1]).toEqual({
-      roomCode: '1234',
+      roomCode: '123456',
       nickname: '客人',
       requestId: 'cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd',
       role: 'player',
@@ -2706,7 +2775,7 @@ describe('online session spectators', () => {
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const storage = new MemoryStorage();
     storage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify({
-      roomCode: '1234', playerId: 'spec-1', token: 'spec-token',
+      roomCode: '123456', playerId: 'spec-1', token: 'spec-token',
     }));
     const socket = {
       connected: true,

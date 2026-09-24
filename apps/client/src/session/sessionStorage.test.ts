@@ -60,7 +60,7 @@ class TargetReadDeniedStorage extends MemoryStorage {
 }
 
 const activeSession: OnlineSession = {
-  roomCode: '1234',
+  roomCode: '123456',
   playerId: 'player-1',
   token: 'resume-token',
 };
@@ -75,7 +75,7 @@ const createRequest: PendingRoomRequest = {
 const joinRequest: PendingRoomRequest = {
   operation: 'join',
   requestId: 'fedcba9876543210fedcba9876543210',
-  roomCode: '5678',
+  roomCode: '567890',
   nickname: '小红',
   role: 'player',
 };
@@ -83,7 +83,7 @@ const joinRequest: PendingRoomRequest = {
 const spectatorJoinRequest: PendingRoomRequest = {
   operation: 'join',
   requestId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-  roomCode: '9012',
+  roomCode: '901234',
   nickname: '观众',
   role: 'spectator',
 };
