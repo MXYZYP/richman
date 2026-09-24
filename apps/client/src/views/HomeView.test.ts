@@ -50,6 +50,33 @@ describe('HomeView 玩法说明入口（#109）', () => {
   });
 });
 
+/**
+ * 复盘导入入口（#115）与地图工坊入口（#117）。别人把复盘码发过来时，玩家大概率**不在对局里**——
+ * 如果首页没有入口，他只能先随便开一局才能找到粘贴的地方，那这条链路等于断了。
+ * 工坊是同一个道理：图是玩家在地图编辑器里画好的，不该逼他先开一局才能把图装进来。
+ */
+describe('HomeView 复盘导入入口（#115）', () => {
+  it('首页就给出「导入回看」，与玩法说明并列在标题下方', async () => {
+    const html = await renderHome();
+
+    expect(html).toContain('收到复盘码？导入回看');
+    expect(html).toContain('class="home-entry-row"');
+    // 与玩法说明同一行、同一层级，都在表单之前。
+    expect(html.indexOf('class="home-entry-row"')).toBeGreaterThan(html.indexOf('class="home-copy"'));
+    expect(html.indexOf('class="home-entry-row"')).toBeLessThan(html.indexOf('class="home-form"'));
+    // 说明 / 复盘 / 工坊三条入口都在这一行里。
+    const row = html.slice(html.indexOf('class="home-entry-row"'), html.indexOf('class="home-form"'));
+    expect(row.match(/class="home-guide"/g)?.length).toBe(3);
+  });
+
+  it('地图工坊入口（#117）与另两条入口同级，且说清这是「自己画了图」的场景', async () => {
+    const html = await renderHome();
+    const row = html.slice(html.indexOf('class="home-entry-row"'), html.indexOf('class="home-form"'));
+
+    expect(row).toContain('自己画了图？地图工坊');
+  });
+});
+
 describe('HomeView stats transfer', () => {
   async function withLocalStorage<T>(run: () => Promise<T>): Promise<T> {
     const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
@@ -87,6 +114,111 @@ describe('HomeView stats transfer', () => {
 
     expect(html).not.toContain('我的战绩');
     expect(html).not.toContain('导出战绩码');
+  });
+});
+
+/**
+ * 成就与成就排行榜（路线图 #116）。
+ *
+ * 两者是同一份战绩的两种读法：成就**只在本机算**，排行榜才把四个聚合数字发出去。
+ * 因为这样，界面必须自己把隐私取舍讲清楚——「点一下才上传」这句话要是消失了，
+ * 这个功能就从「顺手的加分项」变成了「偷偷上传玩家数据」。所以下面专门盯这句文案。
+ */
+describe('HomeView 成就与排行榜（#116）', () => {
+  const STATS_KEY = 'richman_player_stats_v1';
+
+  function statsJson(overrides: Record<string, unknown> = {}): string {
+    return JSON.stringify({
+      schemaVersion: 1,
+      gamesPlayed: 0,
+      wins: 0,
+      losses: 0,
+      bestAsset: 0,
+      favoriteMaps: {},
+      lastPlayedAt: 0,
+      ...overrides,
+    });
+  }
+
+  async function withStats<T>(raw: string | null, run: () => Promise<T>): Promise<T> {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+    const values = new Map<string, string>();
+    if (raw !== null) values.set(STATS_KEY, raw);
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => { values.set(key, value); },
+        removeItem: (key: string) => { values.delete(key); },
+      },
+    });
+    try {
+      return await run();
+    } finally {
+      if (previous === undefined) Reflect.deleteProperty(globalThis, 'localStorage');
+      else Object.defineProperty(globalThis, 'localStorage', previous);
+    }
+  }
+
+  it('成就按分组铺开，一项都没达成时全是「未解锁」并给出下一个目标', async () => {
+    const html = await withStats(statsJson(), () => renderHome());
+
+    expect(html).toContain('成就 0 / ');
+    expect(html).toContain('class="achievements"');
+    // 三个分组都在（界面按组渲染，缺一组就会让人以为那类成就不存在）。
+    expect(html).toContain('里程碑');
+    expect(html).toContain('财富');
+    expect(html).toContain('地图');
+    expect(html).toContain('未解锁');
+    expect(html).not.toContain('achievement-unlocked');
+    // 空战绩时下一个目标必然是「开局」。
+    expect(html).toContain('下一个：开局');
+  });
+
+  it('战绩上来之后解锁项真的点亮（不是永远停在未解锁）', async () => {
+    const html = await withStats(
+      statsJson({
+        gamesPlayed: 50,
+        wins: 20,
+        losses: 30,
+        bestAsset: 150_000,
+        favoriteMaps: { 'china-tour': 3, 'world-tour': 1, 'silk-road': 1, 'great-wall': 1, 'yellow-river': 1 },
+      }),
+      () => renderHome(),
+    );
+
+    expect(html).toContain('achievement-unlocked');
+    expect(html).toContain('已解锁');
+    expect(html).not.toContain('成就 0 / ');
+    expect(html).toContain('五胜');
+    expect(html).toContain('富甲一方');
+  });
+
+  it('排行榜区块说清「点了才上传、只传四个数字」，且不自动取数时不假装已有榜单', async () => {
+    const html = await withStats(statsJson(), () => renderHome());
+
+    // 认这块 UI 一律用**结构标记**（id / class），不要用「成就排行榜」这类中文文案：
+    // 首页同时内联渲染了整份更新说明（ReleaseNotesDialog，非 defer），而更新说明正文里
+    // 本来就会写到「成就排行榜」。拿文案当标记，两条方向相反的断言会**同时**变得没有判别力
+    // —— 区块真被删掉了，「该出现」那条也照样绿（2026-09-24 发版 v2.14.0 时实测踩到）。
+    expect(html).toContain('id="leaderboard-title"');
+    expect(html).toContain('上榜 / 更新我的成绩');
+    expect(html).toContain('刷新榜单');
+    // 隐私取舍必须写在伸手可及的地方。
+    expect(html).toContain('只有点「上榜 / 更新我的成绩」才会把数据发到服务器');
+    expect(html).toContain('没有账号、没有密码、没有对局内容');
+    expect(html).toContain('成就本身完全在本机计算，不会上传');
+    // SSR 下 `onMounted` 不执行（也就不会有网络请求），如实显示加载中。
+    expect(html).toContain('正在加载榜单…');
+  });
+
+  it('没有本地存储时，成就与排行榜随战绩区块一起隐藏，不留半截 UI', async () => {
+    Reflect.deleteProperty(globalThis, 'localStorage');
+    const html = await renderHome();
+
+    expect(html).not.toContain('id="leaderboard-title"');
+    expect(html).not.toContain('class="achievements"');
+    expect(html).not.toContain('上榜 / 更新我的成绩');
   });
 });
 

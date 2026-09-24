@@ -1,9 +1,12 @@
 import { createSSRApp, h } from 'vue';
 import { renderToString } from 'vue/server-renderer';
 import { describe, expect, it } from 'vitest';
+import { applyIntent, chooseBotIntent } from '@richman/engine';
+import type { Intent } from '@richman/engine';
 import { getActiveMapPack, listActiveMaps } from '@richman/board-data';
 import { createDefaultGameSetup, updateGameSetupMapId } from '../game/gameSetup';
-import { createLocalSession } from '../session/localSession';
+import { createInitialLocalGameState, createLocalSession } from '../session/localSession';
+import { buildReplayPayload, prepareReplayPlayback, type ReplayPayload } from '../session/replayCode';
 import { toLocalSaveCards, type LocalSaveSummary } from '../session/localGameSave';
 import GameSetup from '../components/GameSetup.vue';
 import GameView from './GameView.vue';
@@ -29,6 +32,40 @@ const older: LocalSaveSummary = {
   turn: 4,
   updatedAt: Date.UTC(2026, 6, 15, 8, 30),
 };
+
+/**
+ * 造一份「真推演出来」的复盘载荷（#115）：用引擎自己的 bot 策略推进一局，收下每一步真实
+ * 执行过的意图。这里只需要载荷本身，正确性由 replayCode.test.ts 的往返用例守着。
+ */
+function buildDeterministicReplay(seed: string, steps: number): { payload: ReplayPayload; steps: number } {
+  const players = [
+    { id: 'p1', nickname: '玩家一' },
+    { id: 'p2', nickname: '电脑A', isBot: true },
+    { id: 'p3', nickname: '电脑B', isBot: true },
+  ];
+  const initial = createInitialLocalGameState({
+    mapPack: getActiveMapPack('china-tour'),
+    players,
+    seed,
+    cashGoal: null,
+  });
+
+  let state = initial;
+  const intents: Intent[] = [];
+  for (let index = 0; index < steps && state.phase !== 'game_over'; index += 1) {
+    const actorId = state.debt?.debtorId ?? state.currentPlayerId;
+    const intent = chooseBotIntent(state, actorId);
+    const result = applyIntent(state, actorId, intent);
+    if (!result.ok) throw new Error(`engine rejected its own bot intent (${result.code})`);
+    state = result.state;
+    intents.push(intent);
+  }
+
+  return {
+    payload: buildReplayPayload({ initialState: initial, recipe: { seed, players }, intents, createdAt: 0 }),
+    steps: intents.length,
+  };
+}
 
 describe('local resume UI', () => {
   it('把 valid cards 按 updatedAt 倒序，并保留 invalid/incompatible slot 可见', () => {
@@ -148,5 +185,27 @@ describe('local resume UI', () => {
     expect(localHtml).toContain('保存并返回首页');
     expect(localHtml).not.toContain('重新开局');
     session.dispose();
+  });
+
+  it('回看会话渲染出「复盘回看」横幅与退出路径，退出文案换成退出复盘（#115）', async () => {
+    // 真造一份复盘再来回看：这一条守的是「回看会话在视图里长得像什么」，
+    // 而不是「重放对不对」（那个在 replayCode.test.ts 里真推演过）。
+    const played = buildDeterministicReplay('gameview-playback-banner', 20);
+    const prepared = prepareReplayPlayback(played.payload);
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+
+    const playback = createLocalSession({ ...prepared.options, autoPlayBots: false });
+    const html = await renderToString(createSSRApp({ render: () => h(GameView, { session: playback }) }));
+
+    expect(playback.isPlayback).toBe(true);
+    expect(html).toContain('复盘回看');
+    expect(html).toContain(`共 ${played.steps} 步`);
+    expect(html).toContain('只能观看，不能操作');
+    expect(html).toContain('重新播放');
+    expect(html).toContain('退出复盘');
+    // 回看不是「保存并返回首页」：它没有任何进度可保存。
+    expect(html).not.toContain('保存并返回首页');
+    playback.dispose();
   });
 });

@@ -12,6 +12,13 @@ const GameView = defineAsyncComponent(() => import('./views/GameView.vue'));
 // 懒加载视图的独占依赖之一——静态引进来会把弹层基建重新塞回首屏包，白费掉这次分包。
 // 代价只是首次进站时引导晚一个微任务出现，肉眼看不出来。
 const FirstRunGuide = defineAsyncComponent(() => import('./components/FirstRunGuide.vue'));
+// 复盘弹窗（#115）同理走异步：它也只靠 MobileSheet 撑着，静态引进来等于把弹层基建塞回首屏包。
+// 首页那一份**只用来导入**（exportOutcome 恒为 null）：别人发来一段复盘码时，
+// 不该逼玩家先随便开一局才能粘进去。
+const ReplayDialogShell = defineAsyncComponent(() => import('./components/ReplayDialog.vue'));
+// 地图工坊（#117）同理：它同样只靠 MobileSheet 撑着。工坊的地图**只能单机玩**，
+// 所以它不进首页「创建房间」的地图表（那张表仍是生产注册表的十张图），只服务单机设置页。
+const MapWorkshopDialogShell = defineAsyncComponent(() => import('./components/MapWorkshopDialog.vue'));
 import {
   createInitialLocalGameState,
   createLocalSession,
@@ -29,10 +36,29 @@ import {
   type PendingRoomRequest,
   type StorageLike,
 } from './session/sessionStorage';
-import { createDefaultGameSetup, gameSetupToCreateOptions, updateGameSetupMapId, type GameSetupForm } from './game/gameSetup';
+import {
+  createDefaultGameSetup,
+  gameSetupToCreateOptions,
+  updateGameSetupMapId,
+  type GameSetupDependencies,
+  type GameSetupForm,
+} from './game/gameSetup';
 import { markFirstRunGuideSeen, shouldAutoOpenGuideHere } from './session/firstRunGuide';
-import { getMapPack, listActiveMaps } from '@richman/board-data';
+import { getMapPack, listActiveMaps, type MapRef } from '@richman/board-data';
 import type { RoomRole, RoomSettingsPatch } from '@richman/protocol';
+import {
+  createCustomMapResolver,
+  customMapSummaries,
+  describeCustomMapImportFailure,
+  exportCustomMapBundle,
+  loadCustomMaps,
+  mergeMapCatalog,
+  parseCustomMapImport,
+  persistCustomMaps,
+  removeCustomMap,
+  upsertCustomMap,
+  type CustomMapRecord,
+} from './session/customMaps';
 import {
   LOCAL_GAME_SAVE_KEYS,
   createBrowserLocalSaveMutationLock,
@@ -69,6 +95,126 @@ function browserStorage(): StorageLike | undefined {
 }
 let storage: StorageLike | undefined = browserStorage();
 let localSaveMutationLock = createBrowserLocalSaveMutationLock();
+
+// ---- 地图工坊（#117）：本机自定义地图 ----
+// 自定义地图**只服务单机**：联机建房走服务端，而服务端只认内置的那十张图，本机装的图会被直接拒。
+// 所以首页「创建房间」的地图表仍是 `activeMaps`（生产注册表的十张），只有单机设置页吃下面这份
+// 「生产 + 本机」的合并目录。读回一律容错（坏条目丢弃、坏 JSON 回退空表），此处不需要 try/catch。
+const customMapRecords = shallowRef<CustomMapRecord[]>(
+  storage === undefined ? [] : loadCustomMaps(storage),
+);
+const customMapEntries = computed(() => customMapSummaries(customMapRecords.value));
+const customMapResolver = computed(() => createCustomMapResolver(customMapRecords.value));
+const workshopOpen = ref(false);
+const workshopNotice = shallowRef<{ kind: 'ok' | 'error'; message: string; detail?: string | null } | null>(null);
+// 工坊只要 localStorage，不像本机存档那样还依赖 Web Locks，所以单独判一次。
+const workshopStorageAvailable = computed(() => browserStorage() !== undefined);
+
+const localSetupDependencies = computed<GameSetupDependencies>(() => ({
+  catalog: mergeMapCatalog(activeMaps, customMapEntries.value),
+  resolveActive: (mapId: string) => {
+    // 内置地图优先。目录顺序（mergeMapCatalog 把生产排在前）与这里保持一致：
+    // 万一本机存了一张与正式地图同名的图，单机也不该用它顶掉正式地图。
+    const production = activeMaps.find((entry) => entry.ref.id === mapId);
+    if (production !== undefined) return getMapPack(production.ref);
+    const custom = customMapResolver.value(mapId);
+    if (custom === null) throw new Error(`Unknown map id: ${mapId}`);
+    return custom;
+  },
+}));
+
+/**
+ * 恢复本机存档时按存档里的 `mapRef` 找回地图包：先内置，再本机装的。
+ *
+ * 必须按**精确 ref**（id + version + contentHash）取——同一 id 换过内容就是另一张图，
+ * 用错版本会把存档解到一张对不上的棋盘上。这跟生产 `getMapPack` 的三重比对是同一套标准。
+ */
+function resolveLocalMapPack(mapRef: MapRef) {
+  try {
+    return getMapPack(mapRef);
+  } catch {
+    // 不是内置地图，往下看本机装的。
+  }
+  const custom = customMapResolver.value(mapRef.id);
+  if (custom === null) return null;
+  return custom.ref.version === mapRef.version && custom.ref.contentHash === mapRef.contentHash
+    ? custom
+    : null;
+}
+
+function openWorkshop(): void {
+  workshopNotice.value = null;
+  workshopOpen.value = true;
+}
+
+/**
+ * 导入一张地图：解析 → 入库 → 落盘 → 回灌提示。
+ *
+ * 落盘在前、改内存在后：写不进去就什么都不改，宁可让玩家看到「没保存成功」，
+ * 也不要造出「界面上有了、刷新就没了」的假象。
+ */
+function importCustomMap(text: string): void {
+  const target = browserStorage();
+  if (target === undefined) {
+    workshopNotice.value = { kind: 'error', message: describeCustomMapImportFailure('storage'), detail: null };
+    return;
+  }
+  // 只把**内置地图**的 id 列为保留：同一张图改完重导应当是「升级」，不该被判重名。
+  const parsed = parseCustomMapImport(text, { reservedIds: activeMaps.map((entry) => entry.ref.id) });
+  if (!parsed.ok) {
+    workshopNotice.value = {
+      kind: 'error',
+      message: describeCustomMapImportFailure(parsed.reason),
+      detail: parsed.detail,
+    };
+    return;
+  }
+  const next = upsertCustomMap(customMapRecords.value, parsed.pack, Date.now());
+  if (next === null) {
+    workshopNotice.value = { kind: 'error', message: describeCustomMapImportFailure('full'), detail: null };
+    return;
+  }
+  if (!persistCustomMaps(target, next)) {
+    workshopNotice.value = { kind: 'error', message: describeCustomMapImportFailure('storage'), detail: null };
+    return;
+  }
+  const title = parsed.pack.metadata.title;
+  const existed = customMapRecords.value.some((record) => record.pack.ref.id === parsed.pack.ref.id);
+  customMapRecords.value = next;
+  // 包内声明的 contentHash 与本机重算不一致时说一句：入库的哈希始终以本机重算为准，
+  // 这种不一致通常意味着导出物被手改过，值得让玩家知道。
+  const hashNote = parsed.declaredHashMatched ? '' : '（包内声明的哈希与本机重算不一致，已按重算结果登记）';
+  workshopNotice.value = {
+    kind: 'ok',
+    message: `${existed ? '已更新' : '已装好'}「${title}」。${hashNote}`,
+    detail: null,
+  };
+}
+
+function deleteCustomMap(mapId: string): void {
+  const target = browserStorage();
+  const before = customMapRecords.value;
+  const next = removeCustomMap(before, mapId);
+  if (next.length === before.length) return;
+  if (target === undefined || !persistCustomMaps(target, next)) {
+    workshopNotice.value = { kind: 'error', message: describeCustomMapImportFailure('storage'), detail: null };
+    return;
+  }
+  const title = before.find((record) => record.pack.ref.id === mapId)?.pack.metadata.title ?? mapId;
+  customMapRecords.value = next;
+  workshopNotice.value = { kind: 'ok', message: `已删掉「${title}」。`, detail: null };
+}
+
+/** 工坊里点「单机试玩」：关掉弹层，直接进单机设置页并把这张图选好。 */
+function playCustomMap(mapId: string): void {
+  workshopOpen.value = false;
+  chooseLocal(mapId);
+}
+
+function customMapBundle(mapId: string): string | null {
+  const record = customMapRecords.value.find((entry) => entry.pack.ref.id === mapId);
+  return record === undefined ? null : exportCustomMapBundle(record.pack);
+}
 
 // Invite links prefill the room code only; the user still submits deliberately.
 const inviteRoomCode = ((): string => {
@@ -193,6 +339,9 @@ function closeGuide(): void {
   guideOpen.value = false;
   markFirstRunGuideSeen(browserStorage());
 }
+
+// 首页的「导入复盘」（#115）：与引导同级的常驻弹层，只负责导入。
+const replayImportOpen = ref(false);
 
 const onlineRoom = computed(() => onlineSession.room.value);
 const onlineError = computed(() => onlineSession.lastError.value);
@@ -373,7 +522,9 @@ function chooseLocal(mapId: string) {
   localSaveError.value = null;
   storagePrompt.value = false;
   replacementSummary.value = null;
-  setup.value = updateGameSetupMapId(setup.value, mapId);
+  // 依赖里含本机装的自定义地图（#117）：换图时的最高房级夹取（updateGameSetupMapId）
+  // 必须按**新图自己的**档位算，所以这里也要用合并目录，不能回落到生产默认依赖。
+  setup.value = updateGameSetupMapId(setup.value, mapId, localSetupDependencies.value);
   stage.value = 'local_setup';
   resetPageScroll();
 }
@@ -397,6 +548,27 @@ function launchLocalGame(
   stage.value = 'local_game';
   resetPageScroll();
   void localGame.value.runBotTurnIfNeeded();
+}
+
+/**
+ * 复盘回看（#115）：用一份已校验的复盘码换掉当前单机对局，进一个只读的回看会话。
+ *
+ * 刻意不传 persistence —— 回看不是对局：不该占存档位，更不该覆盖玩家正在进行的存档。
+ * 电脑也不自动走（prepareReplayPlayback 已设 autoPlayBots:false）：整局由「回放」驱动，
+ * 回看期间任何一方都不会自己行动（localSession 的 runBotTurnIfNeeded 对回看会话直接返回）。
+ */
+function handleReplayPlay(options: CreateLocalSessionOptions): void {
+  localStartGuard.cancel();
+  localGame.value?.dispose();
+  localGame.value = createLocalSession({ ...options, autoPlayBots: false });
+  pendingLocalStart.value = null;
+  storagePrompt.value = false;
+  replacementSummary.value = null;
+  localSaveError.value = null;
+  // 复盘可能来自另一张地图：首页那张卡跟着切过去，退出后不会停在上一局的图上。
+  if (options.mapPack !== undefined) homeMapId.value = options.mapPack.ref.id;
+  stage.value = 'local_game';
+  resetPageScroll();
 }
 
 async function attemptDurableLocalStart(pendingStart: NonNullable<typeof pendingLocalStart.value>): Promise<void> {
@@ -450,7 +622,10 @@ async function attemptDurableLocalStart(pendingStart: NonNullable<typeof pending
 
 async function startLocalGame(nextSetup: GameSetupForm) {
   setup.value = nextSetup;
-  const options = gameSetupToCreateOptions(nextSetup);
+  // 必须用与设置页**同一份**依赖：否则玩家在单机设置页选了本机装的自定义地图（#117），
+  // 这里却拿生产注册表去解析，会在 `gameSetupToCreateOptions` 里抛「所选地图当前不可用」——
+  // 正好造出「设置页让你选、点开始又说没有」的自相矛盾。
+  const options = gameSetupToCreateOptions(nextSetup, localSetupDependencies.value);
   const state = createInitialLocalGameState(options);
   const pendingStart = { setup: nextSetup, options, state };
   pendingLocalStart.value = pendingStart;
@@ -540,8 +715,10 @@ function resumeLocalGame(observed: LocalSaveIdentity): void {
     localSaveError.value = current.kind === 'incompatible' ? current.reason : '存档内容已损坏，无法恢复';
     return;
   }
-  let mapPack;
-  try { mapPack = getMapPack(current.save.state.mapRef); } catch {
+  // 先内置、再本机装的（#117）：单机存档可能用的是一张自定义地图，只查生产注册表会让
+  // 「用自定义地图开的局」永远恢复不了。仍按精确 ref 比对——同一 id 换过内容就是另一张图。
+  const mapPack = resolveLocalMapPack(current.save.state.mapRef);
+  if (mapPack === null) {
     void syncLocalSaves();
     localSaveError.value = '找不到这局使用的地图版本';
     return;
@@ -655,6 +832,8 @@ onBeforeUnmount(() => {
     @join="handleJoin"
     @refresh-rooms="refreshPublicRooms"
     @open-guide="openGuide"
+    @open-replay="replayImportOpen = true"
+    @open-workshop="openWorkshop"
     @local="chooseLocal"
     @resume="handleResumePending"
     @abandon-pending="handleAbandonPending"
@@ -666,6 +845,7 @@ onBeforeUnmount(() => {
   <GameSetup
     v-else-if="pageKind === 'local_setup'"
     :initial-setup="setup"
+    :dependencies="localSetupDependencies"
     :replacement-summary="replacementSummary"
     :storage-unavailable="!storageAvailable"
     :storage-prompt="storagePrompt"
@@ -681,6 +861,7 @@ onBeforeUnmount(() => {
     v-else-if="(pageKind === 'game' || pageKind === 'settlement') && activeSession"
     :session="activeSession"
     @exit="handleGameExit"
+    @replay-play="handleReplayPlay"
   />
   <LobbyView
     v-else-if="pageKind === 'lobby' && onlineRoom"
@@ -708,4 +889,28 @@ onBeforeUnmount(() => {
 
   <!-- 新手引导（#109）：与页面同级的常驻弹层，只在 open 时由 MobileSheet 真正 showModal()。 -->
   <FirstRunGuide :open="guideOpen" @close="closeGuide" />
+
+  <!-- 复盘导入（#115）：首页这一份只给「粘码回看」用，所以 exportOutcome 恒为 null
+       （弹窗据此直接落在导入页）。回看会整局换成单机会话，交给同一个 handleReplayPlay。 -->
+  <ReplayDialogShell
+    :open="replayImportOpen"
+    :export-outcome="null"
+    @update:open="replayImportOpen = $event"
+    @play="handleReplayPlay"
+  />
+
+  <!-- 地图工坊（#117）：本机装自定义地图的地方。存储读写全在 App 里（customMaps.ts），
+       弹层只管界面，导入/删除结果由 `workshopNotice` 回灌 —— 唯一的事实来源在上一层，
+       避免「列表已更新、提示还说失败」这类两处状态打架。 -->
+  <MapWorkshopDialogShell
+    :open="workshopOpen"
+    :maps="customMapEntries"
+    :notice="workshopNotice"
+    :storage-available="workshopStorageAvailable"
+    :bundle-for="customMapBundle"
+    @update:open="workshopOpen = $event"
+    @import="importCustomMap"
+    @remove="deleteCustomMap"
+    @play="playCustomMap"
+  />
 </template>

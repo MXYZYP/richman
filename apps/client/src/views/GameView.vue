@@ -13,11 +13,14 @@ import MobileSheet from '../components/MobileSheet.vue';
 import ChatPanel from '../components/ChatPanel.vue';
 import TurnCountdown from '../components/TurnCountdown.vue';
 import SettingsDialog from '../components/SettingsDialog.vue';
+import ReplayDialog from '../components/ReplayDialog.vue';
 import { formatRecentLogEvent, canProposeTrade, getAssetRows, getAuctionDisplay, getCellDetail, getOwnTradableCells, getPendingCardChoice, getPendingPurchaseOffer, getPlayerAssetDialogModel, getTradeDisplay, getTradeProposalOptions, type ClientAction } from '../game/clientGame';
 import { formatCashAnnouncement, formatMoney } from '../ui/format';
-import type { CashNotice, GameSession } from '../session/gameSession';
+import type { CashNotice, GameSession, ReplayExportOutcome } from '../session/gameSession';
+import type { CreateLocalSessionOptions } from '../session/localSession';
 import { paceMultiplier } from '../session/playbackPace';
 import { shouldShowTurnCountdown } from '../session/turnTimer';
+import { applyThemeForMap } from '../ui/themeManager';
 import { getGameInteractionState } from '../session/gameInteraction';
 import { browserStorage, recordGameResult } from '../session/playerStats';
 import type { Intent } from '@richman/engine';
@@ -28,7 +31,11 @@ import '../ui/gameTheme.css';
 // One shared board for both local hot-seat and online play. Every mode difference is resolved
 // by the pure interaction selector below — this view never branches on game rules or transport.
 const props = defineProps<{ session: GameSession }>();
-const emit = defineEmits<{ exit: [] }>();
+const emit = defineEmits<{
+  exit: [];
+  /** 用一份已校验的复盘码换一个回看会话；会话生命周期由 App 负责，本视图只转发。 */
+  replayPlay: [options: CreateLocalSessionOptions];
+}>();
 
 // View-local presentation state only. It is reset whenever the session identity changes so a
 // new game (or a resumed room) never inherits a stale selection or open dialog.
@@ -57,6 +64,9 @@ const isMobileLayout = ref(mobileLayoutQuery?.matches ?? false);
 // 不再被 isMobileLayout 拦在门外——这正是 #13 要补的"桌面没有设置入口"。
 const settingsOpen = ref(false);
 const dockSettingsTrigger = ref<HTMLButtonElement | null>(null);
+
+// 复盘弹窗（#115）。与设置弹窗同理：本机单机对局才有意义，入口沿用统一设置面板（#13）。
+const replayOpen = ref(false);
 
 function toggleSettings(): void {
   settingsOpen.value = !settingsOpen.value;
@@ -120,11 +130,20 @@ watch(() => props.session, () => {
   isLogExpanded.value = false;
   mobileSheet.value = null;
   settingsOpen.value = false;
+  replayOpen.value = false;
   armedDebtAutoOpen.value = null;
 });
 
 // Session refs surfaced as local computeds so the template auto-unwraps them and stays clean.
 const state = computed(() => props.session.state.value);
+
+// 皮肤「跟随地图」（#118）：地图 id 只存在于对局状态里，所以重算放在这里而不是 App.vue。
+// immediate 保证「刷新页面直接进对局」（此时启动只按 null 解析成经典）也能立刻纠正到地图配色。
+watch(
+  () => state.value?.mapRef.id ?? null,
+  (mapId) => applyThemeForMap(mapId),
+  { immediate: true },
+);
 const displayPositions = computed(() => props.session.displayPositions.value);
 const dice = computed(() => props.session.dice.value);
 const activeCard = computed(() => props.session.activeCard.value);
@@ -284,6 +303,41 @@ async function undoMove(): Promise<void> {
 async function replayGame(): Promise<void> {
   await props.session.replay?.();
 }
+
+// ---- 复盘（#115）----
+// 入口在统一设置面板的「对局操作」组里（那一组本身就只对单机渲染），所以这里不再另设可见性判断。
+// 联机不给复盘不是偷懒：服务端没有逐房间的操作日志，客户端手里只有「事件流 + 自己发过的意图」，
+// 据此重演必然跑偏 —— 那比没有复盘更糟。
+
+// 回看会话（isPlayback）：整局由「回放」驱动，棋盘只读。横幅让它一眼可辨，并给一条退出路径。
+const isPlayback = computed(() => props.session.isPlayback === true);
+const replayStepCount = computed(() => props.session.replaySteps?.value ?? 0);
+
+// 导出结果**在打开弹窗的瞬间才算一次**：会话内部会本地整局重放一遍做自校验，
+// 挂在 computed 上就会每走一步重算一次 → 几百步的对局是 O(n²)，主线程当场卡死。
+const replayExport = ref<ReplayExportOutcome | null>(null);
+
+function openReplayDialog(): void {
+  settingsOpen.value = false;
+  // 拿不到这个能力（联机）时给 `null`，弹窗会落到导入页并显示下面这句原因。
+  replayExport.value = props.session.buildReplayExport?.() ?? null;
+  replayOpen.value = true;
+}
+
+/** 导入通过后，整局会换成回看会话（由 App 建）；本视图只把请求转上去。 */
+function handleReplayPlay(options: CreateLocalSessionOptions): void {
+  emit('replayPlay', options);
+}
+
+// 回看会话进场即自动重演一遍，不必让用户再点一次「回放」。
+// 用 watch 而不是 onMounted：同 stage 内换会话（上一次回看 → 这一次回看）不会重挂载组件。
+watch(
+  () => props.session,
+  (session) => {
+    if (session.isPlayback === true) void replayGame();
+  },
+  { immediate: true },
+);
 
 // ---- 联机最小悔棋（#101）----
 // 只在「联机 + 房主开了悔棋」时出现这条面板。它与上面那套本地悔棋是两回事：
@@ -511,7 +565,10 @@ watch(debtSheetAutoOpenReady, (ready) => {
 // a local hot-seat restart never is. The pure interaction selector owns that rule so the view
 // never re-derives it. The confirm copy adapts to whether we can still notify the room.
 const needsLeaveConfirm = computed(() => interaction.value.requiresLeaveConfirm);
-const exitLabel = computed(() => (props.session.mode === 'local' ? '保存并返回首页' : '离开房间'));
+const exitLabel = computed(() => {
+  if (props.session.isPlayback === true) return '退出复盘';
+  return props.session.mode === 'local' ? '保存并返回首页' : '离开房间';
+});
 const settlementPrimaryLabel = computed(() => (props.session.mode === 'local' ? '再开一局' : '离开房间'));
 // A connected exit leaves gracefully over the socket (progress stays in the room); a severed
 // connection can only abandon locally, discarding the stored session — the dialog says so.
@@ -814,6 +871,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.body.classList.remove('game-view-active');
+  // 离开对局时把「跟随地图」的皮肤收回经典，否则沙色/绿色外壳会跟着用户回到首页与大厅弹层。
+  applyThemeForMap(null);
   stageObserver?.disconnect();
   stageObserver = null;
   window.removeEventListener('resize', bumpLayout);
@@ -853,6 +912,16 @@ function inspectFinalBoard() {
       <div v-if="connectionBanner.canRetry" class="banner-actions">
         <button type="button" class="banner-retry" @click="handleRetry">重试</button>
         <button type="button" class="banner-home" @click="requestExit">返回首页</button>
+      </div>
+    </div>
+
+    <!-- 复盘回看（#115）：与「连接异常」同形但语义不同——它不是故障，是一种模式提示。
+         没有这条横幅，玩家会以为棋子卡住了（点了不动、提示「这是复盘回看，不能操作」）。 -->
+    <div v-if="isPlayback" class="connection-banner replay-banner" role="status" aria-live="polite" :inert="isConfirmingLeave">
+      <span class="banner-text">复盘回看 · 共 {{ replayStepCount }} 步（只能观看，不能操作）</span>
+      <div class="banner-actions">
+        <button type="button" class="banner-retry" :disabled="!canReplay" @click="replayGame">重新播放</button>
+        <button type="button" class="banner-home" @click="requestExit">{{ exitLabel }}</button>
       </div>
     </div>
 
@@ -1124,8 +1193,19 @@ function inspectFinalBoard() {
           @update:open="settingsOpen = $event"
           @undo="undoMove"
           @replay="replayGame"
+          @replay-code="openReplayDialog"
           @exit="requestExitFromSheet"
           @surrender="requestSurrenderFromSheet"
+        />
+
+        <!-- 复盘码（#115）。它由设置面板里的「复盘」一行唤起：先关掉设置再开自己，
+             避免两个顶层 dialog 同时抢焦点（MobileSheet 关闭时会检查是否还有别的 dialog 打开，
+             所以这里同步改两个开关是安全的）。 -->
+        <ReplayDialog
+          :open="replayOpen"
+          :export-outcome="replayExport"
+          @update:open="replayOpen = $event"
+          @play="handleReplayPlay"
         />
 
         <nav class="mobile-dock-bar" aria-label="游戏工具">
@@ -1286,6 +1366,12 @@ function inspectFinalBoard() {
 .connection-banner.error {
   background: var(--banner-error-bg);
   color: var(--color-pay);
+}
+
+/* 复盘回看：用「事件条」的那套色（信息性），与上面的告警/错误色区分开。 */
+.replay-banner {
+  background: var(--event-bg);
+  color: var(--event-text);
 }
 
 .banner-actions {

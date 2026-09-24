@@ -29,6 +29,22 @@ export interface TransientNotice {
   readonly message: string;
 }
 
+/**
+ * 复盘导出结果（#115）。
+ *
+ * 刻意做成「码 + 原因」这种浅形状：视图只需要知道**能不能给码**、**给出来多长**、**不给是因为什么**。
+ * 把 `ReplayExportResult` 整体搬到这里会把 replayCode 的实现细节（载荷结构、失败码联合）泄漏进
+ * 两端共用的会话契约，也会让 `gameSession ↔ replayCode ↔ localSession` 绕成一圈类型依赖。
+ */
+export interface ReplayExportOutcome {
+  /** 可分享的复盘码；`null` = 这一局导不出来，看 `reason`。 */
+  readonly code: string | null;
+  /** 已自校验的步数（`code` 非 null 时有效，否则为 0）。 */
+  readonly steps: number;
+  /** `code === null` 时的一句话原因。 */
+  readonly reason: string;
+}
+
 
 /**
  * Display-safe session contract.
@@ -74,6 +90,21 @@ export interface GameSession {
   undo?(): Promise<void>;
   /** 重新动画播放本局（仅本地热座对局提供）。 */
   replay?(): Promise<void>;
+  /**
+   * 复盘回看会话（#115）：整局只用于重演，不接受操作、不自动走电脑。
+   * `true` 时视图可以「进场即自动重演」，把导入的复盘直接演给人看。
+   */
+  readonly isPlayback?: boolean;
+  /**
+   * 复盘导出（#115）：把这一局编成一段可分享的复盘码。**仅本地热座对局提供**。
+   *
+   * 联机不给复盘不是省事：服务端没有逐房间的操作日志，客户端手里只有「事件流 + 自己发过的意图」，
+   * 据此重演必然在中途跑偏 —— 那比没有复盘更糟。从存档恢复的对局也导不出来（存档只存局面，
+   * 开局的种子与座次已丢失），此时返回 `code: null` 并在 `reason` 里说清楚。
+   */
+  buildReplayExport?(): ReplayExportOutcome;
+  /** 复盘回看会话的总步数（仅 `isPlayback` 会话提供），供横幅显示「共 N 步」。 */
+  readonly replaySteps?: ComputedRef<number>;
   /**
    * 房间设置（#4 / #6 / #101）：仅联机提供，由服务端 `room:settings` 广播驱动。
    * 本地热座没有房间概念，因此不提供这个字段。

@@ -17,7 +17,7 @@ import {
   setBgmEnabled,
   setBgmVolume,
 } from '../audio/bgm';
-import { THEMES, getStoredAppearance, getStoredTheme, resolveTheme, setAppearance, setTheme, type AppearanceId, type ThemeId } from '../ui/themeManager';
+import { THEMES, getStoredAppearance, getStoredTheme, recommendedThemeForMap, resolveTheme, setAppearance, setTheme, type AppearanceId, type ThemeId } from '../ui/themeManager';
 import { PLAYBACK_SPEED_OPTIONS, getPlaybackSpeedRef, setPlaybackSpeed } from '../session/playbackPace';
 import { describeMapRulesById } from '../ui/mapRules';
 import { formatMoney } from '../ui/format';
@@ -66,6 +66,8 @@ const emit = defineEmits<{
   'update:open': [open: boolean];
   undo: [];
   replay: [];
+  /** 打开复盘弹窗（导出 / 导入复盘码）。由上层负责关掉本弹窗再开那一个。 */
+  replayCode: [];
   exit: [];
   surrender: [];
 }>();
@@ -73,21 +75,26 @@ const emit = defineEmits<{
 const themes = THEMES;
 const theme = ref<ThemeId>(getStoredTheme());
 const darkMode = ref(getStoredAppearance() === 'dark');
-/** 当前皮肤的实际配色（'auto' 时随深色模式解析），用于把「跟随深色」的结果说清楚。 */
+/** 当前皮肤的实际配色（'auto' 随深色模式、'map' 随本局地图解析），用于把自动挡的结果说清楚。 */
 const resolvedThemeLabel = computed(
-  () => THEMES.find((option) => option.id === resolveTheme(theme.value, darkMode.value ? 'dark' : 'light'))?.label ?? '',
+  () => THEMES.find((option) => option.id === resolveTheme(theme.value, darkMode.value ? 'dark' : 'light', props.mapId))?.label ?? '',
+);
+/** 「跟随地图」在本局会解析成哪一套（未知 / 无地图时回落到经典）。 */
+const mapThemeLabel = computed(
+  () => THEMES.find((option) => option.id === recommendedThemeForMap(props.mapId))?.label ?? '经典',
 );
 
 function chooseTheme(id: ThemeId): void {
   theme.value = id;
-  setTheme(id);
+  // 必须带上本局地图：否则「跟随地图」在设置面板里会按 null 解析成经典、棋盘当场掉色。
+  setTheme(id, props.mapId);
 }
 
-/** 深色模式：整站页面级外观；'auto' 皮肤依赖它，故 setAppearance 内部会一并重算 data-theme。 */
+/** 深色模式：整站页面级外观；'auto' / 'map' 皮肤依赖它，故 setAppearance 内部会一并重算 data-theme。 */
 function chooseDarkMode(next: boolean): void {
   darkMode.value = next;
   const appearance: AppearanceId = next ? 'dark' : 'light';
-  setAppearance(appearance);
+  setAppearance(appearance, props.mapId);
 }
 
 const playbackSpeed = getPlaybackSpeedRef();
@@ -201,7 +208,12 @@ const rulesSummary = computed(() => (
           当前实际配色：{{ resolvedThemeLabel }}。
           <template v-if="theme === 'auto'">
             「跟随深色」会随上面的深色模式自动切换（开 → 暗夜，关 → 经典）；
-            想锁死某个配色，直接点经典 / 海洋 / 暗夜即可。
+            想锁死某个配色，直接点经典 / 海洋 / 暗夜 / 森林 / 沙丘即可。
+          </template>
+          <template v-else-if="theme === 'map'">
+            「跟随地图」按本局地图取值：当前地图 →
+            {{ darkMode ? '暗夜（深色模式优先）' : mapThemeLabel }}。
+            换地图会自动换色，未收录的地图用经典。
           </template>
         </p>
       </div>
@@ -290,9 +302,18 @@ const rulesSummary = computed(() => (
           @click="emit('replay')"
         >观看本局回放</button>
       </div>
+      <!-- 复盘（#115）：回放是「自己再看一遍」，复盘是把整局编成一段码给别人看（或看别人的）。
+           入口放这里而不是侧栏——桌面侧栏已经很挤，而且它天然属于「对局操作」这一组。 -->
+      <div class="setting-row">
+        <span>复盘</span>
+        <button type="button" class="setting-action setting-action--ghost" @click="emit('replayCode')">
+          导出 / 导入复盘码
+        </button>
+      </div>
       <p class="settings-hint">
         悔棋与回放只在单机对局可用：单机没有别人，回退不会影响任何对手。
         联机的悔棋在对局面板上发起，且需要在场对手逐一同意才会生效——不能本地单方面回退。
+        复盘码也只导得出单机对局：它记录的是开局的种子与整局操作，联机没有这份逐房间日志。
       </p>
     </section>
 

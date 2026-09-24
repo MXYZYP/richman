@@ -67,9 +67,12 @@ dialog.mobile-sheet.sheet {
 
 /*
  * 皮肤主题（P2-9）：经典为默认（无 data-theme 或 data-theme="classic" 即生效）。
- * 海洋 / 暗夜 通过 :root[data-theme="..."] 叠加覆盖同一组变量。
+ * 海洋 / 暗夜 / 森林 / 沙丘 通过 :root[data-theme="..."] 叠加覆盖同一组变量。
  * 选择器保持与经典一致，仅作用于对局根容器与对局弹层（含 Teleport 到 body 的弹层），
  * 不污染首页 / 大厅。切换由 ui/themeManager.ts 设置 document.documentElement.dataset.theme。
+ *
+ * 每套皮肤必须覆盖**完整同一组变量**（经典那 48 条），否则会漏出上一套的颜色。
+ * 新增皮肤时照抄一个既有块的变量清单逐条替换色值即可，不要删项。
  */
 
 :root[data-theme='ocean'] .game-view,
@@ -182,6 +185,120 @@ dialog.mobile-sheet.sheet {
 
   --banner-warning-bg: #2f3550;
   --banner-error-bg: #3a2730;
+}
+
+/* 森林（#118）：深绿掌机 —— 草木棋盘 + 翠绿按键，配长城 / 山西这类山脊地图。 */
+:root[data-theme='forest'] .game-view,
+:root[data-theme='forest'] dialog.cell-dialog-layer,
+:root[data-theme='forest'] dialog.player-dialog-layer,
+:root[data-theme='forest'] dialog.mobile-sheet.sheet {
+  --game-page: #dfeadb;
+  --game-panel: #f2f8ee;
+  --game-board-base: #cfe3c8;
+  --game-dice-tray: #bed8b6;
+
+  --game-action-bg: linear-gradient(180deg, #8ed08a, #55ab5c);
+  --game-action-text: #10331a;
+  --game-action-shadow: #37803f;
+
+  --game-panel-raised: #f8fcf5;
+  --game-panel-quiet: #e3f0de;
+  --game-line-soft: #bed6b8;
+  --game-shadow-panel: 0 1px 0 #bed6b8, 0 5px 12px rgb(30 60 32 / 10%);
+  --game-shadow-dialog: 0 20px 48px rgb(30 60 32 / 28%);
+  --game-focus: #2f7a3d;
+  --game-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --game-radius-panel: 12px;
+  --game-radius-control: 9px;
+
+  --color-bg: var(--game-page);
+  --color-cell: #f8fcf5;
+  --color-border: #a9c9a2;
+  --color-text: #22331f;
+  --color-muted: #4f6a49;
+  --color-primary: #2f7a3d;
+  --color-accent: #5aa85e;
+
+  --board-bg: #d6e8d0;
+  --board-surface: var(--game-panel);
+  --board-shadow: 0 14px 40px rgb(30 60 32 / 18%);
+  --center-bg: linear-gradient(135deg, #f8fcf5, #e4f0df);
+  --center-border: #a6c79f;
+  --title-color: #1f5f2c;
+  --event-bg: #e4f3dd;
+  --event-text: #1d5a2a;
+  --overlay-scrim: rgb(18 38 20 / 46%);
+  --branch-track: #6f9c6c;
+  --price-color: #2f7a3d;
+  --cell-function-bg: linear-gradient(180deg, #f8fcf5, #e4f0df);
+
+  --button-enabled-bg: #63b56a;
+  --button-enabled-text: #10331a;
+  --button-disabled-bg: #dbe8d7;
+  --button-disabled-text: #64795f;
+
+  --token-ring: #f8fcf5;
+  --token-shadow: 0 2px 6px rgb(18 38 20 / 30%);
+
+  --banner-warning-bg: #e9f3e2;
+  --banner-error-bg: #f7e2da;
+}
+
+/* 沙丘（#118）：暖沙掌机 —— 驼色棋盘 + 赭石按键，配丝路 / 新疆 / 黄河这类黄土地图。 */
+:root[data-theme='sand'] .game-view,
+:root[data-theme='sand'] dialog.cell-dialog-layer,
+:root[data-theme='sand'] dialog.player-dialog-layer,
+:root[data-theme='sand'] dialog.mobile-sheet.sheet {
+  --game-page: #f2e8d8;
+  --game-panel: #fbf5e9;
+  --game-board-base: #ead9bd;
+  --game-dice-tray: #e0c9a5;
+
+  --game-action-bg: linear-gradient(180deg, #e8a765, #cd7f3a);
+  --game-action-text: #301604;
+  --game-action-shadow: #95602a;
+
+  --game-panel-raised: #fdf9f0;
+  --game-panel-quiet: #f2e7d3;
+  --game-line-soft: #ddc9a8;
+  --game-shadow-panel: 0 1px 0 #ddc9a8, 0 5px 12px rgb(80 55 25 / 10%);
+  --game-shadow-dialog: 0 20px 48px rgb(80 55 25 / 28%);
+  --game-focus: #a8641f;
+  --game-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --game-radius-panel: 12px;
+  --game-radius-control: 9px;
+
+  --color-bg: var(--game-page);
+  --color-cell: #fdf9f0;
+  --color-border: #cfb389;
+  --color-text: #3c2f1c;
+  --color-muted: #6b5940;
+  --color-primary: #a0641f;
+  --color-accent: #d08b3c;
+
+  --board-bg: #eddfc4;
+  --board-surface: var(--game-panel);
+  --board-shadow: 0 14px 40px rgb(80 55 25 / 18%);
+  --center-bg: linear-gradient(135deg, #fdf9f0, #f3e8d4);
+  --center-border: #cdb086;
+  --title-color: #8a4f12;
+  --event-bg: #faeeda;
+  --event-text: #7a4711;
+  --overlay-scrim: rgb(60 40 18 / 46%);
+  --branch-track: #b08a55;
+  --price-color: #a0641f;
+  --cell-function-bg: linear-gradient(180deg, #fdf9f0, #f3e8d4);
+
+  --button-enabled-bg: #d99149;
+  --button-enabled-text: #301604;
+  --button-disabled-bg: #ece0cd;
+  --button-disabled-text: #7d6b52;
+
+  --token-ring: #fdf9f0;
+  --token-shadow: 0 2px 6px rgb(60 40 18 / 30%);
+
+  --banner-warning-bg: #f8eeda;
+  --banner-error-bg: #f7e2da;
 }
 
 /* 弹层动效：260ms 跟手进场 / 160ms 快速退场；不支持的浏览器瞬开瞬关 */

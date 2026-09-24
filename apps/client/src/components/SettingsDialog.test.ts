@@ -61,6 +61,17 @@ describe('SettingsDialog', () => {
     expect(undoButton).not.toContain('disabled');
   });
 
+  it('复盘入口与悔棋/回放同组，且只在单机出现（#115）', async () => {
+    const local = await renderSettings({ isLocalGame: true });
+    expect(local).toContain('复盘');
+    expect(local).toContain('导出 / 导入复盘码');
+    // 「复盘只导得出单机」这件事必须写在面板里：否则联机玩家会满处找这个按钮。
+    expect(local).toContain('复盘码也只导得出单机对局');
+
+    const online = await renderSettings({ isLocalGame: false });
+    expect(online).not.toContain('导出 / 导入复盘码');
+  });
+
   it('胜利条件只在有现金目标时出现', async () => {
     const withGoal = await renderSettings({ cashGoal: 50000 });
     expect(withGoal).toContain('胜利条件：现金达到 50,000。');

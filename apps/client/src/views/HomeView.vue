@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import type { PublicRoomSummary, RoomRole } from '@richman/protocol';
 import { listActiveMaps, type MapCatalogEntry } from '@richman/board-data';
 import MapPicker from '../components/MapPicker.vue';
@@ -8,6 +8,15 @@ import ReleaseNotesDialog from '../components/ReleaseNotesDialog.vue';
 import { capRoomCode, isValidRoomCode, planCreateSubmission, planJoinSubmission } from '../session/appFlow';
 import type { PendingRoomRequest } from '../session/sessionStorage';
 import type { LocalSaveCard, LocalSaveIdentity, LocalSaveObservedRecord } from '../session/localGameSave';
+import { deriveAchievements, describeNextAchievement, type AchievementGroup } from '../session/achievements';
+import {
+  buildLeaderboardSubmission,
+  describeLeaderboardFailure,
+  ensurePlayerId,
+  loadLeaderboard,
+  publishLeaderboard,
+  type LeaderboardEntry,
+} from '../session/leaderboard';
 import { browserStorage, encodeStatsCode, importStatsCode, loadPlayerStats, type PlayerStats } from '../session/playerStats';
 import { formatMoney } from '../ui/format';
 import { THEMES, getStoredTheme, setTheme, type ThemeId } from '../ui/themeManager';
@@ -59,6 +68,10 @@ const emit = defineEmits<{
   refreshRooms: [];
   /** 打开「玩法说明」（#109）：首次进站会自动弹一次，这里是不想等/想重看时的入口。 */
   openGuide: [];
+  /** 打开「导入复盘」（#115）：收到别人发来的复盘码时，首页就是入口。 */
+  openReplay: [];
+  /** 打开「地图工坊」（#117）：本机装自定义地图、单机试玩、删掉不要的那张。 */
+  openWorkshop: [];
   local: [mapId: string];
   resume: [];
   abandonPending: [];
@@ -269,7 +282,105 @@ function importStats(): void {
       ? `已合并${outcome.nickname === '' ? '' : `「${outcome.nickname}」的`}战绩，本机原有战绩未受影响。`
       : '这份战绩码之前已经导入过了，没有重复计数。',
   };
+  // 成就与排行都是「战绩的读法」，战绩一变就得跟着重算/重取。
+  void refreshLeaderboard();
 }
+
+// ───────────── 成就（路线图 #116） ─────────────
+// 成就全部由**本机战绩**派生，不新增采集、不发任何网络请求，所以它紧挨着「我的战绩」：
+// 两者本来就是同一份数据的不同读法（换设备后导入战绩码，成就也会一起回来）。
+
+const achievementSummary = computed(() => {
+  const current = playerStats.value;
+  if (current === null) return null;
+  // 地图 id 用「当前已发布」的那份：下架的地图不该继续挂在收集类成就里当未完成项。
+  return deriveAchievements(current, { mapIds: props.activeMaps.map((entry) => entry.ref.id) });
+});
+
+const ACHIEVEMENT_GROUPS: ReadonlyArray<{ id: AchievementGroup; label: string }> = [
+  { id: 'milestone', label: '里程碑' },
+  { id: 'wealth', label: '财富' },
+  { id: 'explorer', label: '地图' },
+];
+
+const achievementGroups = computed(() => {
+  const summary = achievementSummary.value;
+  if (summary === null) return [];
+  return ACHIEVEMENT_GROUPS.map((group) => ({
+    label: group.label,
+    items: summary.achievements.filter((achievement) => achievement.group === group.id),
+  }));
+});
+
+// ───────────── 成就排行榜（路线图 #116） ─────────────
+// 本页唯一会往外发数据的地方，所以规矩直接写在界面上：**不点不上传**。
+// 上传的只有昵称与四个聚合数字（胜场 / 总局数 / 资产峰值 / 玩过的地图数）。
+//
+// 拉取放在组件自己身上，而不是像公开房间列表（#108）那样交给 App：排行榜是一条独立的
+// 同源 HTTP 接口，与会话/房间协议无关，没必要为它铺一串 props + emit。
+// `onMounted` 在 node 测试环境里不会执行，因此这一块对 SSR 渲染契约测试是透明的。
+const leaderboardEntries = ref<readonly LeaderboardEntry[]>([]);
+const leaderboardRank = ref<number | null>(null);
+const leaderboardNotice = ref<{ kind: 'ok' | 'error'; message: string } | null>(null);
+const leaderboardBusy = ref(false);
+const leaderboardLoaded = ref(false);
+
+/** 本机身份标识；存储不可用时为 `null`（那时只读榜单，不上榜）。 */
+function currentPlayerId(): string | null {
+  const storage = browserStorage();
+  return storage === undefined ? null : ensurePlayerId(storage);
+}
+
+async function refreshLeaderboard(): Promise<void> {
+  if (leaderboardBusy.value) return;
+  leaderboardBusy.value = true;
+  const result = await loadLeaderboard({ playerId: currentPlayerId() });
+  leaderboardBusy.value = false;
+  if (!result.ok) {
+    leaderboardNotice.value = { kind: 'error', message: describeLeaderboardFailure(result.reason) };
+    return;
+  }
+  leaderboardEntries.value = result.entries;
+  leaderboardRank.value = result.rank;
+  leaderboardLoaded.value = true;
+  leaderboardNotice.value = result.entries.length === 0
+    ? { kind: 'ok', message: '榜上还没有人，你可以是第一个。' }
+    : null;
+}
+
+async function publishMyStats(): Promise<void> {
+  if (leaderboardBusy.value) return;
+  const storage = browserStorage();
+  const playerId = storage === undefined ? null : ensurePlayerId(storage);
+  if (storage === undefined || playerId === null) {
+    leaderboardNotice.value = { kind: 'error', message: describeLeaderboardFailure('storage') };
+    return;
+  }
+
+  leaderboardBusy.value = true;
+  // 刻意重新读一遍战绩（而不是用 `playerStats.value`）：刚打完一局回来时它可能还是旧值。
+  const result = await publishLeaderboard(
+    buildLeaderboardSubmission(loadPlayerStats(storage), nickname.value, playerId),
+  );
+  leaderboardBusy.value = false;
+  if (!result.ok) {
+    leaderboardNotice.value = { kind: 'error', message: describeLeaderboardFailure(result.reason) };
+    return;
+  }
+  leaderboardEntries.value = result.entries;
+  leaderboardRank.value = result.rank;
+  leaderboardLoaded.value = true;
+  leaderboardNotice.value = {
+    kind: 'ok',
+    message: result.rank === null
+      ? '已提交。这些成绩还没能进前 100 名。'
+      : `已提交，你目前第 ${result.rank} 名。`,
+  };
+}
+
+onMounted(() => {
+  void refreshLeaderboard();
+});
 </script>
 
 <template>
@@ -280,8 +391,16 @@ function importStats(): void {
       <p class="home-copy">用 6 位房间码和好友同桌，或单机游玩开一局。手机、电脑浏览器皆可。</p>
 
       <!-- 玩法说明入口（#109）：首次进站会自动弹一次；这里是「想重看」或「没看到那次弹窗」的兜底。
-           放在标题正下方，是想看说明的人一眼就能找到，不必先滚到页脚。 -->
-      <button type="button" class="home-guide" @click="emit('openGuide')">第一次玩？看玩法说明</button>
+           放在标题正下方，是想看说明的人一眼就能找到，不必先滚到页脚。
+           旁边并列「导入复盘」（#115）：别人发来一段复盘码时，首页就是入口 ——
+           不该逼玩家先随便开一局，才能找到粘贴的地方。
+           再旁边是「地图工坊」（#117）：本机装自定义地图的地方。三条入口都是「不需要先开一局」
+           的动作，归在同一行；地图工坊那条刻意不叫「自定义地图」，因为玩家要装的正是编辑器导出的东西。 -->
+      <div class="home-entry-row">
+        <button type="button" class="home-guide" @click="emit('openGuide')">第一次玩？看玩法说明</button>
+        <button type="button" class="home-guide" @click="emit('openReplay')">收到复盘码？导入回看</button>
+        <button type="button" class="home-guide" @click="emit('openWorkshop')">自己画了图？地图工坊</button>
+      </div>
 
       <p v-if="error" class="home-error" role="alert">{{ error }}</p>
       <p v-if="localSaveError" class="home-error" role="alert">{{ localSaveError }}</p>
@@ -377,6 +496,32 @@ function importStats(): void {
           </div>
         </dl>
 
+        <!-- 成就（#116）：与上面的战绩同源，全部在本机算出，不上传任何东西。 -->
+        <div v-if="achievementSummary" class="achievements">
+          <p class="achievements-summary">
+            <strong>成就 {{ achievementSummary.unlockedCount }} / {{ achievementSummary.total }}</strong>
+            <span class="achievements-next">{{ describeNextAchievement(achievementSummary) }}</span>
+          </p>
+          <div v-for="group in achievementGroups" :key="group.label" class="achievement-group">
+            <span class="achievement-group-label">{{ group.label }}</span>
+            <ul class="achievement-list">
+              <li
+                v-for="achievement in group.items"
+                :key="achievement.id"
+                class="achievement"
+                :class="{ 'achievement-unlocked': achievement.unlocked }"
+              >
+                <span class="achievement-head">
+                  <span class="achievement-mark">{{ achievement.unlocked ? '已解锁' : '未解锁' }}</span>
+                  <span class="achievement-title">{{ achievement.title }}</span>
+                  <span class="achievement-progress">{{ achievement.progress.current }} / {{ achievement.progress.target }}</span>
+                </span>
+                <span class="achievement-desc">{{ achievement.description }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
         <div class="stats-transfer">
           <p class="stats-transfer-hint">
             战绩只存在这台设备上。换设备或清缓存前先导出「战绩码」：它只含昵称与战绩，不需要账号密码；
@@ -416,6 +561,60 @@ function importStats(): void {
             role="status"
           >{{ statsNotice.message }}</p>
         </div>
+      </section>
+
+      <!-- 排行榜（#116）。刻意不在这里写长注释：SSR 的开发构建会把模板注释原样输出，
+           把说明放回脚本里，页面产物就只剩真正要渲染的内容。 -->
+      <section v-if="playerStats" class="leaderboard" aria-labelledby="leaderboard-title">
+        <div class="leaderboard-head">
+          <h2 id="leaderboard-title">成就排行榜</h2>
+          <div class="leaderboard-actions">
+            <button
+              type="button"
+              class="leaderboard-button"
+              :disabled="leaderboardBusy"
+              @click="publishMyStats"
+            >{{ leaderboardBusy ? '处理中…' : '上榜 / 更新我的成绩' }}</button>
+            <button
+              type="button"
+              class="leaderboard-button leaderboard-button-ghost"
+              :disabled="leaderboardBusy"
+              @click="refreshLeaderboard"
+            >刷新榜单</button>
+          </div>
+        </div>
+
+        <p class="leaderboard-hint">
+          榜单按胜场排序。只有点「上榜 / 更新我的成绩」才会把数据发到服务器，内容仅
+          <strong>昵称</strong>与<strong>胜场、总局数、资产峰值、玩过的地图数</strong>这四个数字：
+          没有账号、没有密码、没有对局内容。成就本身完全在本机计算，不会上传。
+        </p>
+
+        <p
+          v-if="leaderboardNotice"
+          class="leaderboard-notice"
+          :class="`leaderboard-notice--${leaderboardNotice.kind}`"
+          role="status"
+        >{{ leaderboardNotice.message }}</p>
+        <p v-else-if="!leaderboardLoaded" class="leaderboard-notice" role="status">正在加载榜单…</p>
+
+        <p v-if="leaderboardRank !== null" class="leaderboard-me" role="status">
+          你目前第 {{ leaderboardRank }} 名。
+        </p>
+
+        <ol v-if="leaderboardEntries.length > 0" class="leaderboard-list">
+          <li
+            v-for="(entry, index) in leaderboardEntries"
+            :key="entry.playerId"
+            class="leaderboard-row"
+            :class="{ 'leaderboard-row-self': leaderboardRank === index + 1 }"
+          >
+            <span class="leaderboard-rank">{{ index + 1 }}</span>
+            <span class="leaderboard-nick">{{ entry.nickname }}</span>
+            <span class="leaderboard-metric">{{ entry.wins }} 胜 / {{ entry.gamesPlayed }} 局</span>
+            <span class="leaderboard-metric">峰值 {{ formatMoney(entry.bestAsset) }}</span>
+          </li>
+        </ol>
       </section>
 
       <form class="home-form" @submit.prevent>
@@ -699,6 +898,239 @@ function importStats(): void {
   color: var(--color-primary);
 }
 
+/* ---- 成就（#116）：与战绩同格，视觉上也是「战绩的延伸」。 ---- */
+.achievements {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.achievements-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.achievements-summary strong {
+  color: var(--color-text);
+}
+
+.achievement-group {
+  display: grid;
+  gap: 4px;
+}
+
+.achievement-group-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+
+.achievement-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.achievement {
+  display: grid;
+  gap: 1px;
+  padding: 5px 8px;
+  border-left: 3px solid var(--color-border);
+  border-radius: 6px;
+  background: rgb(0 0 0 / 3%);
+  opacity: 0.65;
+}
+
+/* 已解锁用绿色左侧条：与「失败/危险」的红完全分开，一眼能扫出拿到了几项。 */
+.achievement-unlocked {
+  border-left-color: var(--player-green);
+  opacity: 1;
+}
+
+.achievement-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.achievement-mark {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--color-muted);
+}
+
+.achievement-unlocked .achievement-mark {
+  color: var(--player-green);
+}
+
+.achievement-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.achievement-progress {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
+.achievement-desc {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+/* ---- 成就排行榜（#116） ---- */
+.leaderboard {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: rgb(255 255 255 / 60%);
+}
+
+.leaderboard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.leaderboard h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.leaderboard-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.leaderboard-button {
+  min-height: 32px;
+  padding-inline: 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--color-accent);
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.leaderboard-button-ghost {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+}
+
+.leaderboard-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.leaderboard-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+
+.leaderboard-notice {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+.leaderboard-notice--ok {
+  color: var(--player-green);
+}
+
+.leaderboard-notice--error {
+  color: var(--color-primary);
+}
+
+.leaderboard-me {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.leaderboard-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgb(0 0 0 / 3%);
+  font-size: 12px;
+}
+
+.leaderboard-row-self {
+  background: var(--event-bg);
+  color: var(--event-text);
+  font-weight: 800;
+}
+
+.leaderboard-rank {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  color: var(--color-muted);
+}
+
+.leaderboard-row-self .leaderboard-rank {
+  color: inherit;
+}
+
+.leaderboard-nick {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.leaderboard-row-self .leaderboard-nick {
+  color: inherit;
+}
+
+.leaderboard-metric {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.leaderboard-row-self .leaderboard-metric {
+  color: inherit;
+}
+
 .home-eyebrow,
 .home-copy,
 .home-field span,
@@ -726,6 +1158,14 @@ function importStats(): void {
 }
 
 /* 玩法说明入口（#109）：次要动作，所以是描边胶囊而不是实心主按钮。 */
+.home-entry-row {
+  /* 三条入口并列，窄屏自动折行；整行仍靠左，保持与标题对齐。 */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-self: start;
+}
+
 .home-guide {
   justify-self: start;
   min-height: 36px;

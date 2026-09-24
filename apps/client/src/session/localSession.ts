@@ -6,9 +6,10 @@ import { getActiveMapPack, listActiveMaps, type GameConfig, type MapPack, type M
 import type { ChatMessage, PublicRoomState } from '@richman/protocol';
 import { resolveLocalGameState } from '../game/mapResolver';
 import { getPendingCardChoice, type ClientAction, type DisplayCard } from '../game/clientGame';
-import type { ConnectionStatus, GameSession, RenderableGameState, TransientNotice } from './gameSession';
+import type { ConnectionStatus, GameSession, RenderableGameState, ReplayExportOutcome, TransientNotice } from './gameSession';
 import { createGamePresenter } from './gamePresenter';
 import { paceMultiplier } from './playbackPace';
+import { describeReplayExport, exportReplay } from './replayCode';
 import type { LocalGamePersistence, LocalSaveIdentity } from './localGameSave';
 
 export type { LocalGamePersistence } from './localGameSave';
@@ -27,6 +28,19 @@ export interface CreateLocalSessionOptions {
   config?: Partial<GameConfig>;
   restoreState?: GameState;
   persistence?: LocalGamePersistence;
+  /**
+   * 复盘回看（#115）：把一份已校验的复盘条目预填进 actionLog，于是「回放」按钮能整局重演。
+   * 一旦传入，这个会话就进入**回看模式**（`isPlayback`）：不自动走电脑、不接受任何操作 ——
+   * 回看会话里的「对局」是死的，只是给 `replay()` 提供素材。
+   */
+  replayLog?: readonly LocalActionLogEntry[];
+}
+
+/** 一条已执行的动作记录：意图 + 它产生的事件 + 结果态。悔棋/回放/复盘回看共用这一个形状。 */
+export interface LocalActionLogEntry {
+  readonly intent: Intent;
+  readonly events: GameEvent[];
+  readonly resultingState: GameState;
 }
 
 export interface LocalSession extends GameSession {
@@ -53,6 +67,19 @@ export interface LocalSession extends GameSession {
   readonly canReplay: Ref<boolean>;
   undo(): Promise<void>;
   replay(): Promise<void>;
+  // 复盘导出（#115）：起始态 + 有序意图 + 地图包 + 开局配方。联机以服务端为权威态、
+  // 没有逐房意图日志，因此这些只在本地会话提供（不做成可选，避免调用方到处写 `?.`）。
+  readonly initialState: GameState;
+  readonly intents: ComputedRef<readonly Intent[]>;
+  readonly mapPack: MapPack;
+  /** 开局配方；从存档恢复的对局拿不到（存档只存局面），此时为 null → 无法导出复盘。 */
+  readonly createRecipe: LocalGameRecipe | null;
+  /** 回看会话（#115）：整局只用于重演，不接受操作、不自动走电脑。 */
+  readonly isPlayback: boolean;
+  /** 回看会话总步数（横幅文案用）。 */
+  readonly replaySteps: ComputedRef<number>;
+  /** 导出本局复盘码（#115）；导不出来时 `reason` 说明原因。 */
+  buildReplayExport(): ReplayExportOutcome;
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -69,7 +96,52 @@ function canSendDuringDebt(intent: Intent): boolean {
 /** 悔棋历史上限：超出后丢弃最旧的一步。回放日志不设上限（整局回放需要全部动作）。 */
 const HISTORY_LIMIT = 200;
 
-function createInitialGameState(options: CreateLocalSessionOptions, mapPack: MapPack): GameState {
+/**
+ * 开局配方（#115 复盘导出）：`createGame` 的「随机性入参」——种子与**原始输入顺序**的玩家表。
+ *
+ * 为什么不能只存 `initialState.seed`（踩过的坑，务必记住）：
+ *   `GameState.seed` 是**创建之后**的 RNG 状态 —— `createGame` 会先 `hashSeed(seed)`，
+ *   再用它消耗掉「定序掷骰」与「两副牌洗乱」，最后把剩余状态写进 `state.seed`。
+ *   把 `state.seed` 当输入种子回喂，会先被再哈希一次，得到的完全是另一局
+ *   （实测：重建后 currentPlayerId 从 p3 变成 p2、RNG 状态也不同）。
+ *
+ * 为什么玩家表要存**输入顺序**而不是 `initialState.players`（落座后的顺序）：
+ *   定序掷骰是按输入下标发点数的，喂进落座后的顺序会让同一串点数落到不同玩家头上，
+ *   座次被重新排列。两者都必须是「创建时的原样」才谈得上复现。
+ *
+ * `restoreState` 恢复的对局拿不到配方（存档里只有局面，没有开局入参），因此 recipe 为 null。
+ */
+export interface LocalGameRecipe {
+  readonly seed: string;
+  readonly players: readonly { id: string; nickname: string; isBot?: boolean }[];
+}
+
+/** 本地热座默认阵容（`players` 未传时）；提出来是为了让 recipe 能如实记录「当时到底用了谁」。 */
+function resolveInputPlayers(options: CreateLocalSessionOptions): { id: string; nickname: string; isBot?: boolean }[] {
+  return options.players ?? [
+    { id: 'p1', nickname: '玩家一' },
+    { id: 'p2', nickname: '电脑A', isBot: true },
+    { id: 'p3', nickname: '电脑B', isBot: true },
+  ];
+}
+
+/**
+ * 算出一局的「开局配方」。种子与玩家表必须**一次算好再复用**：
+ * 默认种子带 `Date.now()` + 随机后缀，算两次就是两局不同的牌。
+ */
+export function resolveLocalGameRecipe(options: CreateLocalSessionOptions): LocalGameRecipe {
+  const isDefaultDemo = options.players === undefined;
+  return {
+    seed: options.seed ?? (isDefaultDemo ? 'm3-static-board-demo' : createLocalSessionSeed()),
+    players: resolveInputPlayers(options).map((player) => ({ ...player })),
+  };
+}
+
+function createInitialGameState(
+  options: CreateLocalSessionOptions,
+  mapPack: MapPack,
+  recipe: LocalGameRecipe = resolveLocalGameRecipe(options),
+): GameState {
   const isDefaultDemo = options.players === undefined;
   // 规则自定义（P2-10）：以地图默认 config 为基，叠加玩家覆盖项；覆盖不改变地图 contentHash，
   // 因为本地建局直接把 config 传给 createGame，不经地图校验（与经典 cashGoal 逻辑一致）。
@@ -85,12 +157,8 @@ function createInitialGameState(options: CreateLocalSessionOptions, mapPack: Map
     board: mapPack.game.board,
     cards: mapPack.game.cards,
     config,
-    players: options.players ?? [
-      { id: 'p1', nickname: '玩家一' },
-      { id: 'p2', nickname: '电脑A', isBot: true },
-      { id: 'p3', nickname: '电脑B', isBot: true },
-    ],
-    seed: options.seed ?? (isDefaultDemo ? 'm3-static-board-demo' : createLocalSessionSeed()),
+    players: recipe.players,
+    seed: recipe.seed,
     cashGoal: isDefaultDemo ? 30000 : options.cashGoal ?? null,
     // 单机真人作弊：本地对局的非电脑玩家抽卡前暂停，等待接受/重抽。联机与电脑玩家不经过这里。
     cardChoiceMode: 'local-human',
@@ -142,7 +210,10 @@ export function createLocalSession(options: CreateLocalSessionOptions = {}): Loc
   const botDelay = options.botDelay ?? createBotActionDelay;
   const mapPack = options.mapPack ?? defaultMapPack();
   const persistence = options.persistence;
-  let engineState = options.restoreState ?? createInitialGameState(options, mapPack);
+  // 开局配方先算好再传给 createInitialGameState：默认种子带时间戳与随机后缀，
+  // 各算一次就会得到两个不同的种子 —— 那正是「导出的复盘复现不出来」的经典成因。
+  const createRecipe = options.restoreState === undefined ? resolveLocalGameRecipe(options) : null;
+  let engineState = options.restoreState ?? createInitialGameState(options, mapPack, createRecipe ?? undefined);
   if (options.restoreState !== undefined && options.restoreState.cardChoice === undefined) {
     // 旧存档（本功能之前创建）没有 cardChoice 字段：本地会话统一升级为单机真人确认模式。
     engineState = { ...engineState, cardChoice: { mode: 'local-human', pending: null } };
@@ -174,8 +245,11 @@ export function createLocalSession(options: CreateLocalSessionOptions = {}): Loc
   // 二者同序增长，undo 各弹一个即回退一步；replay 用 initialState 从头动画推演 actionLog。
   // 用 shallowRef 避免 GameState 递归类型触发 vue-tsc 的深层展开上限；以不可变重赋值保持响应性。
   const history = shallowRef<GameState[]>([]);
-  const actionLog = shallowRef<{ intent: Intent; events: GameEvent[]; resultingState: GameState }[]>([]);
+  const actionLog = shallowRef<LocalActionLogEntry[]>([]);
   const replaying = ref(false);
+  // 回看模式（#115）：由 replayLog 预填动作日志，整局只用于重演。
+  const isPlayback = options.replayLog !== undefined;
+  if (options.replayLog !== undefined) actionLog.value = [...options.replayLog];
   // 本局起始状态（会话创建时的 engineState 引用），不会被后续 reassin 影响；回放从此重新推演。
   const initialState = engineState;
   // 注意两个坑，踩过：
@@ -289,6 +363,11 @@ export function createLocalSession(options: CreateLocalSessionOptions = {}): Loc
   }
 
   async function sendIntent(intent: Intent): Promise<void> {
+    if (isPlayback) {
+      // 回看会话不是活的：允许落子会让棋盘与刚刚重演的历史脱节。
+      lastError.value = '这是复盘回看，不能操作';
+      return;
+    }
     await applyLocalIntent(intent, false);
   }
 
@@ -376,6 +455,7 @@ export function createLocalSession(options: CreateLocalSessionOptions = {}): Loc
   }
 
   async function runBotTurnIfNeeded(): Promise<void> {
+    if (isPlayback) return; // 回看模式：电脑不自动行动，整局由「回放」驱动。
     if (disposed || staleSession.value || isPersisting.value || !autoPlayBots || presenter.isAnimating.value || isBotThinking.value || engineState.phase === 'game_over') return;
     const actor = getActor(engineState);
     if (!actor?.isBot) return;
@@ -432,6 +512,38 @@ export function createLocalSession(options: CreateLocalSessionOptions = {}): Loc
     presenter.isAnimating.value || isBotThinking.value || isPersisting.value || staleSession.value ? [] : presenter.availableActions.value
   ));
 
+  // 复盘导出（#115）：只暴露「够重建整局」的三样东西 —— 起始态、有序意图、地图包。
+  // 刻意不暴露 actionLog 本身：events / resultingState 体积大且对复盘无用（引擎是确定性的，
+  // 重放意图即可复现），导出路径拿不到它们就不会误存。
+  const intents = computed<readonly Intent[]>(() => actionLog.value.map((entry) => entry.intent));
+  const replaySteps = computed(() => actionLog.value.length);
+
+  /**
+   * 导出本局复盘码（#115）。
+   *
+   * 导出前**先本地整局重放一遍做自校验**（`exportReplay` 内部完成）：宁可当场告诉玩家「导不出来」，
+   * 也不能给出一份到了别人机器上才发现跑不通的码 —— 那会变成最难排查的一类反馈。
+   *
+   * 因此这个函数是 O(步数) 的，**只能按需调用**（打开弹窗时一次），绝不能挂进 computed：
+   * 那样每走一步都会整局重算，几百步的对局直接把主线程算死。
+   */
+  function buildReplayExport(): ReplayExportOutcome {
+    if (isPlayback) {
+      return { code: null, steps: 0, reason: '这是正在回看的复盘，本身不再导出；要看原局请让对方再发一次码。' };
+    }
+    if (createRecipe === null) {
+      return { code: null, steps: 0, reason: '这一局来自存档恢复，缺了开局的种子与座次，无法导出复盘。' };
+    }
+    const result = exportReplay({
+      initialState,
+      createRecipe,
+      intents: intents.value,
+      mapPack,
+    }, Date.now());
+    if (!result.ok) return { code: null, steps: 0, reason: describeReplayExport(result) };
+    return { code: result.code, steps: result.steps, reason: '' };
+  }
+
   return {
     mode: 'local',
     state: presenter.state,
@@ -464,5 +576,12 @@ export function createLocalSession(options: CreateLocalSessionOptions = {}): Loc
     canReplay,
     undo,
     replay,
+    initialState,
+    intents,
+    mapPack,
+    createRecipe,
+    isPlayback,
+    replaySteps,
+    buildReplayExport,
   };
 }
