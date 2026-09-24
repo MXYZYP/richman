@@ -3,7 +3,7 @@ import { ACTIVE_ONLINE_SESSION_KEY, PENDING_ROOM_REQUEST_KEY } from './sessionSt
 import { createOnlineSession, type OnlineGameSession } from './onlineSession';
 import { createGame } from '@richman/engine';
 import { getActiveMapPack } from '@richman/board-data';
-import type { ChatMessage, PublicGameSnapshot } from '@richman/protocol';
+import type { ChatMessage, PublicGameSnapshot, PublicRoomSummary } from '@richman/protocol';
 
 const chinaMapPack = getActiveMapPack('china-tour');
 const CHINA_ROOM_MAP = { ref: chinaMapPack.ref, title: chinaMapPack.metadata.title };
@@ -110,6 +110,8 @@ describe('online session', () => {
     expect([...listeners.keys()]).toEqual([
       'room:state', 'player:connection', 'room:closed', 'game:events', 'game:snapshot', 'room:chat_broadcast', 'room:chat_history', 'room:settings',
       'room:undo_request', 'room:undo_result', 'room:undo_available',
+      // 每回合限时（#107）：两条都要在**任何操作之前**注册好，否则最前面那几步会漏收倒计时。
+      'room:turn_deadline', 'room:turn_timeout',
       'connect', 'disconnect', 'connect_error',
     ]);
     const staleRoomState = listeners.get('room:state');
@@ -3033,5 +3035,110 @@ describe('online session minimal undo', () => {
 
     expect(harness.emissions.slice(before)).toEqual([]);
     harness.session.dispose();
+  });
+});
+
+/**
+ * 公开房间列表（路线图 #108）。
+ *
+ * `listRooms` 刻意**不走** `emitAck`：那套封装绑定的是「房间内的一条大厅变更」
+ * （同操作互斥锁、房间和解、持久错误位），而列表是**还没进任何房间的人**用的 ——
+ * 走那套会被 `canIssueActiveCommands()` 判成 SESSION_NOT_RECOVERED 而永远发不出去。
+ * 所以本条第一个用例就是「没有存档也能拉到列表」。
+ */
+describe('online session public room list', () => {
+  const summary: PublicRoomSummary = {
+    roomCode: '000007',
+    hostNickname: '房主甲',
+    mapTitle: CHINA_ROOM_MAP.title,
+    status: 'lobby',
+    playerCount: 2,
+    spectatorCount: 0,
+    playerLimit: 6,
+    spectatorLimit: 3,
+    joinable: true,
+    spectatable: true,
+    turnTimeLimitSec: 0,
+    botDifficulty: 'normal',
+  };
+
+  it('可以在没有任何存档的情况下拉取列表，且请求体里没有幂等键', async () => {
+    const emissions: unknown[][] = [];
+    const socket = {
+      connected: true,
+      on() { return this; },
+      off() { return this; },
+      emit(...args: unknown[]) {
+        emissions.push(args);
+        if (args[0] === 'room:list') (args[1] as (response: unknown) => void)({ ok: true, rooms: [summary] });
+        return this;
+      },
+      disconnect() { return this; },
+    };
+    const session = createOnlineSession({ storage: new MemoryStorage(), socketFactory: () => socket as never });
+
+    await expect(session.listRooms()).resolves.toEqual({ ok: true, rooms: [summary] });
+
+    expect(emissions).toHaveLength(1);
+    expect(emissions[0]?.[0]).toBe('room:list');
+    // 只带 ack 回调：列表是只读查询，重试没有副作用，不需要 requestId 幂等键。
+    expect(emissions[0]).toHaveLength(2);
+    session.dispose();
+  });
+
+  it('socket 没连上时给出可重试的失败，而不是把首屏一直挂在那儿', async () => {
+    const emissions: unknown[][] = [];
+    const socket = {
+      connected: false,
+      on() { return this; },
+      off() { return this; },
+      emit(...args: unknown[]) { emissions.push(args); return this; },
+      connect() { return this; },
+      disconnect() { return this; },
+    };
+    const session = createOnlineSession({
+      storage: new MemoryStorage(),
+      ackTimeoutMs: 1,
+      socketFactory: () => socket as never,
+    });
+
+    await expect(session.listRooms()).resolves.toEqual({ ok: false, code: 'DISCONNECTED', message: '' });
+    // 连接都没建立，一个字节都不该发出去。
+    expect(emissions).toEqual([]);
+    session.dispose();
+  });
+
+  it('服务端不回 ack 时以超时收场，让首页能提示「刷新失败」而不是显示空列表', async () => {
+    const socket = {
+      connected: true,
+      on() { return this; },
+      off() { return this; },
+      emit() { return this; },
+      disconnect() { return this; },
+    };
+    const session = createOnlineSession({
+      storage: new MemoryStorage(),
+      ackTimeoutMs: 1,
+      socketFactory: () => socket as never,
+    });
+
+    await expect(session.listRooms()).resolves.toEqual({ ok: false, code: 'REQUEST_TIMEOUT', message: '' });
+    session.dispose();
+  });
+
+  it('dispose 之后不再发请求：迟到的按钮点击不该打到已销毁的会话上', async () => {
+    const emissions: unknown[][] = [];
+    const socket = {
+      connected: true,
+      on() { return this; },
+      off() { return this; },
+      emit(...args: unknown[]) { emissions.push(args); return this; },
+      disconnect() { return this; },
+    };
+    const session = createOnlineSession({ storage: new MemoryStorage(), socketFactory: () => socket as never });
+    session.dispose();
+
+    await expect(session.listRooms()).resolves.toEqual({ ok: false, code: 'DISCONNECTED', message: '' });
+    expect(emissions).toEqual([]);
   });
 });

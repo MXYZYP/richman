@@ -114,7 +114,18 @@ export interface RoomRuleConfig {
   mortgageInterestRate: number;
 }
 
-/** 房间级的可调设置（#4 / #6 / #101 / #106）：房主在大厅里设定，随房间存在，开局时生效。 */
+/**
+ * 每回合限时（#107）：房主可选的档位（秒）。`0` = 不限时（默认）。
+ *
+ * 只给出「几档人话」，不接受任意秒数——限时是给「防挂机」用的，不是精细调节项，
+ * 开放任意值只会让房主误设成 3 秒把整局变成自动演示。
+ */
+export const TURN_TIME_LIMIT_OPTIONS = [0, 30, 60, 120] as const;
+
+/** 限时上限（秒）：即便将来加了自定义输入，也绝不接受超过这个数（>10 分钟的限时等于没限时）。 */
+export const TURN_TIME_LIMIT_MAX_SEC = 600;
+
+/** 房间级的可调设置（#4 / #6 / #101 / #106 / #107）：房主在大厅里设定，随房间存在，开局时生效。 */
 export interface RoomSettings {
   botDifficulty: BotDifficulty;
   /** null = 用地图默认规则（房主没有自定义任何一项）。 */
@@ -129,6 +140,19 @@ export interface RoomSettings {
    * 该地产由**其他**玩家按座次轮流叫价（放弃者自己不参与），无人出价即流拍。默认关闭。
    */
   auctionOnDecline: boolean;
+  /**
+   * 每回合限时（#107）：秒；`0` = 不限时。到点由服务端按电脑策略替该玩家走一步
+   * （与「离线托管」同一套决策，区别只是触发者是「在线但在挂机的真人」）。
+   */
+  turnTimeLimitSec: number;
+  /**
+   * 是否允许被「公开房间列表」发现（#108）。默认 `false`。
+   *
+   * 默认关闭是刻意的：房间码是 6 位数字，本来就靠「知道码」才能进来；把既有房间
+   * 突然变成可被全网列举，等于替房主做了一个他没做过的隐私决定。所以「可被列表发现」
+   * 必须是房主在大厅显式打开的选项。
+   */
+  isPublic: boolean;
 }
 
 /** 增量更新房间设置；`ruleConfig: null` 明确表示「回到地图默认」。 */
@@ -137,6 +161,53 @@ export interface RoomSettingsPatch {
   ruleConfig?: RoomRuleConfig | null;
   minimalUndoEnabled?: boolean;
   auctionOnDecline?: boolean;
+  turnTimeLimitSec?: number;
+  isPublic?: boolean;
+}
+
+/**
+ * 「公开房间列表」里的一行（#108）。
+ *
+ * 刻意只放**摘要**，不放 `PublicRoomState`：列表是给未加入的人看的，不该顺带泄露
+ * 房间内的完整成员名单、观战者 id、托管状态等——那些只有真正进入房间才该拿到。
+ * 房主昵称是唯一暴露的身份信息，且列表本身就靠它给人「这局是跟谁玩」的判断。
+ */
+export interface PublicRoomSummary {
+  roomCode: string;
+  hostNickname: string;
+  mapTitle: string;
+  status: RoomStatus;
+  playerCount: number;
+  spectatorCount: number;
+  /** 座位上限（含电脑），用于显示「2/6 人」。 */
+  playerLimit: number;
+  spectatorLimit: number;
+  /** 服务端权威判断：此刻能否以「玩家」身份加入（仅大厅、且还有空位）。 */
+  joinable: boolean;
+  /** 服务端权威判断：此刻能否以「观战」身份加入（还有观战位）。 */
+  spectatable: boolean;
+  turnTimeLimitSec: number;
+  botDifficulty: BotDifficulty;
+}
+
+/** 「公开房间列表」应答（#108）。 */
+export interface RoomListAck {
+  rooms: PublicRoomSummary[];
+}
+
+/**
+ * 「此刻谁的回合钟在走」（#107）。
+ *
+ * `playerId === null` 表示此刻**没有**倒计时，三种情形都会落到这里：
+ * 房间没开限时、此刻轮到电脑（由自动化框架推进）、此刻的行动者已离线（由离线托管推进）。
+ * 客户端因此只需按 `deadlineAt` 画一根进度条，`null` 就不画。
+ */
+export interface TurnDeadlineInfo {
+  playerId: string | null;
+  /** 截止时间戳（ms）；`playerId === null` 时为 `null`。 */
+  deadlineAt: number | null;
+  /** 本房间的限时档位（秒）；`0` = 不限时。有了它客户端不必再读 room:settings。 */
+  limitSec: number;
 }
 
 /**
@@ -194,6 +265,11 @@ export interface ClientToServerEvents {
   ) => void;
   'room:create': (payload: CreateRoomPayload, ack: (response: Ack<CreateRoomAck>) => void) => void;
   'room:join': (payload: JoinRoomPayload, ack: (response: Ack<JoinRoomAck>) => void) => void;
+  /**
+   * 拉取「公开房间列表」（#108）：不需要已在任何房间里，未加入的人也能调。
+   * 只返回 `isPublic` 且未结束的房间摘要；按「可加入的大厅 → 可旁观的对局 → 其余」排序。
+   */
+  'room:list': (ack: (response: Ack<RoomListAck>) => void) => void;
   'room:add_bot': (ack: (response: Ack<Record<string, never>>) => void) => void;
   'room:remove_bot': (payload: { playerId: string }, ack: (response: Ack<Record<string, never>>) => void) => void;
   'room:rename_bot': (payload: { playerId: string; nickname: string }, ack: (response: Ack<Record<string, never>>) => void) => void;
@@ -252,6 +328,17 @@ export interface ServerToClientEvents {
    * 所有既有全等断言与落盘快照一起变红（同 `room:settings` 的理由）。
    */
   'room:undo_available': (payload: { playerId: string | null }) => void;
+  /**
+   * 「此刻谁的回合钟在走、走到几点」（#107）：进入房间时单播一次，此后每次行动者 / 回合
+   * 变化时广播。与 `room:undo_available` 同样走独立事件——它是围绕「当前这一步」的旁路信息，
+   * 塞进 `PublicRoomState` 会让所有既有全等断言与落盘快照一起变红。
+   */
+  'room:turn_deadline': (payload: TurnDeadlineInfo) => void;
+  /**
+   * 有人被回合限时判超时、由服务端代走了一步（#107）。**只作通报**：真正的状态变化
+   * 紧跟在 `game:events` / `game:snapshot` 里，客户端靠这条给出一句「谁超时了」的人话提示。
+   */
+  'room:turn_timeout': (payload: { playerId: string; nickname: string }) => void;
 }
 
 export interface InterServerEvents {}

@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { io as connectSocket, type Socket as ClientSocket } from 'socket.io-client';
 import { createRoomServer } from '../server';
-import type { Ack, ChatMessage, ClientToServerEvents, CreateRoomAck, JoinRoomAck, PublicRoomState, RoomSettings, RoomSettingsPatch, ServerToClientEvents } from '@richman/protocol';
+import type { Ack, ChatMessage, ClientToServerEvents, CreateRoomAck, JoinRoomAck, PublicRoomState, RoomListAck, RoomSettings, RoomSettingsPatch, ServerToClientEvents, TurnDeadlineInfo } from '@richman/protocol';
 import { CHAT_HISTORY_LIMIT } from '@richman/protocol';
 import { RoomManager } from '../rooms/roomManager';
 import type { CreateRoomRateLimit } from '../socket/roomSocketAdapter';
@@ -1291,11 +1291,16 @@ describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
     // 悔棋（#101）默认关闭——它是房主在大厅显式选择加入的能力，不是默认项；
     // 拍卖（#106）同理默认关闭——「放弃购买即拍卖」是房规，不默认开启，
     // 否则会改变所有人对「不买这块地」的既有预期。
+    // 每回合限时（#107）默认 0 = 不限时；公开房间列表（#108）默认不公开。
+    // 这两项都是房间级设置（挂在 Room 上、不进 GameConfig），但同样必须随
+    // `room:settings` 一起到达客户端，否则大厅面板会渲染成「已限时/已公开」的错误状态。
     expect(await settingsPromise).toEqual({
       botDifficulty: 'normal',
       ruleConfig: null,
       minimalUndoEnabled: false,
       auctionOnDecline: false,
+      turnTimeLimitSec: 0,
+      isPublic: false,
     });
     // 顺序是硬要求：ack 之后才发，才不会被客户端 ack 处理里的 resetSession() 清掉。
     expect(order).toEqual(['ack', 'settings']);
@@ -1318,6 +1323,8 @@ describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
       ruleConfig: null,
       minimalUndoEnabled: false,
       auctionOnDecline: false,
+      turnTimeLimitSec: 0,
+      isPublic: false,
     });
   });
 
@@ -1348,6 +1355,8 @@ describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
       ruleConfig: { initialCash: 25_000, maxHouseLevel: 3, mortgageInterestRate: 0.12 },
       minimalUndoEnabled: false,
       auctionOnDecline: false,
+      turnTimeLimitSec: 0,
+      isPublic: false,
     });
     expect(order).toEqual(['ack', 'settings']);
   });
@@ -1378,6 +1387,8 @@ describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
       ruleConfig: null,
       minimalUndoEnabled: false,
       auctionOnDecline: false,
+      turnTimeLimitSec: 0,
+      isPublic: false,
     });
   });
 
@@ -1416,6 +1427,147 @@ describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
     expect(malformed.ok).toBe(false);
     if (malformed.ok) throw new Error('expected a malformed update to be rejected');
     expect(malformed.code).toBe('INVALID_ROOM_ACTION');
+  });
+});
+
+describe('Socket.IO turn clock wiring (#107)', () => {
+  // 倒计时不能在「刷新 / 掉线重连」后消失。`room:turn_deadline` 只在行动者变化时广播，
+  // 而那一次广播早于本次连接 —— 所以每个进入房间的路径都必须补一次单播。
+  test('room:create and room:join unicast the current clock, and room:start broadcasts the armed clock (#107)', async () => {
+    const { url } = await startTestServer();
+    const host = await connectClient(url);
+
+    // 不限时的房间也要发：内容是 {playerId:null, deadlineAt:null, limitSec:0}，
+    // 客户端据此把倒计时收起来。**不发**的话，客户端就分不清「不限时」与「还没收到钟」。
+    const clockAfterCreate = nextTurnDeadline(host, 'room:turn_deadline after room:create');
+    const create = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' });
+    expectCreateRoomSuccess(create);
+    expect(await clockAfterCreate).toEqual({ playerId: null, deadlineAt: null, limitSec: 0 });
+
+    const guest = await connectClient(url);
+    const clockAfterJoin = nextTurnDeadline(guest, 'room:turn_deadline after room:join');
+    const join = await emitAck(guest, 'room:join', { roomCode: create.roomCode, nickname: '玩家二' });
+    expectJoinRoomSuccess(join);
+    expect(await clockAfterJoin).toEqual({ playerId: null, deadlineAt: null, limitSec: 0 });
+
+    // 大厅里把限时开到 60s（此时还没开局，不排钟），开局那一刻才必须为行动者排钟。
+    const update = await emitUpdateSettings(host, { turnTimeLimitSec: 60 });
+    expect(update.ok).toBe(true);
+    if (!update.ok) throw new Error('expected room:update_settings to succeed');
+    expect(update.turnTimeLimitSec).toBe(60);
+
+    // 开局行动者由地图与随机种子决定，**未必是房主** —— 因此两端各挂一次监听，
+    // 谁收到就是谁，再断言两端拿到的是同一份钟（否则旁座会看到与行动者不一样的倒计时）。
+    const armedForHost = nextTurnDeadline(host, 'host sees the armed clock');
+    const armedForGuest = nextTurnDeadline(guest, 'guest sees the armed clock');
+    const started = await emitStart(host);
+    expect(started.ok).toBe(true);
+
+    const info = await armedForHost;
+    expect(['player-host', 'player-guest']).toContain(info.playerId);
+    expect(info.limitSec).toBe(60);
+    expect(typeof info.deadlineAt).toBe('number');
+    expect(await armedForGuest).toEqual(info);
+  });
+});
+
+describe('Socket.IO public room list (#108)', () => {
+  test('a room stays out of the list until the host publishes it, and the summary is what the list can render', async () => {
+    const { url } = await startTestServer({ roomNumbers: [7, 8] });
+    const host = await connectClient(url);
+    const create = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' });
+    expectCreateRoomSuccess(create);
+    // 再建一个**不公开**的房间：用来证明列表是过滤后的结果，而不是「当前所有房间」。
+    const lurking = await connectClient(url);
+    const hidden = await emitAck(lurking, 'room:create', { mapId: 'china-tour', nickname: '不愿上镜' });
+    expectCreateRoomSuccess(hidden);
+
+    // 默认不公开，而且**未加入任何房间的人也能查**（这条不受 socketBindings 约束）。
+    const fromOutside = await connectClient(url);
+    const before = await emitListRooms(fromOutside);
+    expect(before.ok).toBe(true);
+    if (!before.ok) throw new Error('expected room:list to succeed');
+    expect(before.rooms).toEqual([]);
+
+    const updated = await emitUpdateSettings(host, { isPublic: true });
+    expect(updated.ok).toBe(true);
+    if (!updated.ok) throw new Error('expected room:update_settings to succeed');
+    expect(updated.isPublic).toBe(true);
+
+    const after = await emitListRooms(fromOutside);
+    expect(after.ok).toBe(true);
+    if (!after.ok) throw new Error('expected room:list to succeed');
+    // 摘要是刻意「瘦」的：不含成员 id 名单 / 观战者 id / 托管状态 ——
+    // 列表是给还没加入的人看的，泄露名单没有任何用处。
+    expect(after.rooms).toEqual([
+      {
+        roomCode: create.roomCode,
+        hostNickname: '房主',
+        mapTitle: CHINA_MAP_SUMMARY.title,
+        status: 'lobby',
+        playerCount: 1,
+        spectatorCount: 0,
+        playerLimit: 6,
+        spectatorLimit: 3,
+        joinable: true,
+        spectatable: true,
+        turnTimeLimitSec: 0,
+        botDifficulty: 'normal',
+      },
+    ]);
+
+    // 公开可以在大厅里随时收回：想撤就撤，不必等这局结束。
+    expect((await emitUpdateSettings(host, { isPublic: false })).ok).toBe(true);
+    const revoked = await emitListRooms(fromOutside);
+    expect(revoked.ok).toBe(true);
+    if (!revoked.ok) throw new Error('expected room:list to succeed');
+    expect(revoked.rooms).toEqual([]);
+  });
+
+  test('a started public room is spectatable but no longer joinable (#108)', async () => {
+    const { url } = await startTestServer();
+    const host = await connectClient(url);
+    const create = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' });
+    expectCreateRoomSuccess(create);
+    const guest = await connectClient(url);
+    expectJoinRoomSuccess(await emitAck(guest, 'room:join', { roomCode: create.roomCode, nickname: '玩家二' }));
+    expect((await emitUpdateSettings(host, { isPublic: true })).ok).toBe(true);
+    expect((await emitUpdateSettings(host, { turnTimeLimitSec: 60 })).ok).toBe(true);
+    expect((await emitStart(host)).ok).toBe(true);
+
+    const listed = await emitListRooms(host);
+    expect(listed.ok).toBe(true);
+    if (!listed.ok) throw new Error('expected room:list to succeed');
+    expect(listed.rooms).toHaveLength(1);
+    const [summary] = listed.rooms;
+    expect(summary.status).toBe('playing');
+    expect(summary.playerCount).toBe(2);
+    expect(summary.turnTimeLimitSec).toBe(60);
+    // 开局后不能再以玩家身份挤进来（会打乱座次与已发的起始资源），但可以旁观。
+    expect(summary.joinable).toBe(false);
+    expect(summary.spectatable).toBe(true);
+  });
+
+  test('room:list is rate limited per client so the endpoint cannot be used to enumerate every room code', async () => {
+    const { url } = await startTestServer({
+      // 只要不是 `false` 就启用（列表与建房共用一个开关）；这里的阈值只影响建房，
+      // 列表走自己的固定阈值：10s 内 30 次。
+      rateLimit: { windowMs: 60_000, maxPerWindow: 100 },
+      now: () => 1_000_000,
+    });
+    const client = await connectClient(url);
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const response = await emitListRooms(client);
+      expect(response.ok).toBe(true);
+    }
+
+    // 必须是独立错误码：它不是「你无权做这件事」，只是「刷太快了」，客户端据此提示重试。
+    expect(await emitListRooms(client)).toEqual({
+      ok: false,
+      code: 'ROOM_LIST_RATE_LIMITED',
+      message: '刷新房间列表过于频繁，请稍后再试。',
+    });
   });
 });
 
@@ -1698,6 +1850,20 @@ function emitUpdateSettings(socket: RoomClient, patch: RoomSettingsPatch): Promi
   );
 }
 
+/**
+ * 公开房间列表（#108）。注意这条**没有载荷**：它面向「还没进任何房间的人」，
+ * 因此不像其它房间操作那样需要 `requestId` 幂等键。
+ */
+function emitListRooms(socket: RoomClient): Promise<Ack<RoomListAck>> {
+  const untypedSocket: ClientSocket = socket;
+  return withEventTimeout(
+    new Promise<Ack<RoomListAck>>((resolve) => {
+      untypedSocket.emit('room:list', resolve);
+    }),
+    'room:list ack',
+  );
+}
+
 function emitRemoveBot(socket: RoomClient, payload: RemoveBotPayload): Promise<EmptyAckResponse> {
   const untypedSocket: ClientSocket = socket;
   return withEventTimeout(
@@ -1896,6 +2062,17 @@ function nextRoomSettings(socket: RoomClient, label: string): Promise<RoomSettin
   return withEventTimeout(
     new Promise<RoomSettings>((resolve) => {
       socket.once('room:settings', resolve);
+    }),
+    label,
+  );
+}
+
+// 每回合限时（#107）的「钟」走独立事件，不塞进 PublicRoomState：
+// 改 PublicRoomState 的形状会让所有既有全等断言与已落盘快照一起变红。
+function nextTurnDeadline(socket: RoomClient, label: string): Promise<TurnDeadlineInfo> {
+  return withEventTimeout(
+    new Promise<TurnDeadlineInfo>((resolve) => {
+      socket.once('room:turn_deadline', resolve);
     }),
     label,
   );

@@ -81,6 +81,20 @@ export interface RoomSnapshotRecord {
    * （没开 = 关），而抬版本号会连带把「在本字段引入之前写下」的进行中对局整间丢掉。
    */
   auctionOnDecline?: boolean;
+  /**
+   * 每回合限时（#107，秒）；**缺省即 `0` = 不限时**。
+   *
+   * 与上三个字段同样的理由保持**可选**（`schemaVersion` 继续停在 1）：缺省语义明确
+   * （没设 = 不限时），而抬版本号会连带把「在本字段引入之前写下」的进行中对局整间丢掉。
+   * 范围校验（上限 TURN_TIME_LIMIT_MAX_SEC）放在 `RoomManager.updateRoomSettings` 入口，
+   * 这里只保证结构可读。
+   */
+  turnTimeLimitSec?: number;
+  /**
+   * 是否允许被公开房间列表发现（#108）。同上：**可选**，老快照缺这个字段一律按
+   * 「不公开」处理（隐私优先——升级不能让原本私密的房间突然出现在全网列表里）。
+   */
+  isPublic?: boolean;
   players: RoomSnapshotPlayerRecord[];
   spectators: RoomSnapshotSpectatorRecord[];
   createRequestId: string | null;
@@ -309,6 +323,9 @@ export function isRoomSnapshotRecord(value: unknown): value is RoomSnapshotRecor
   if (typeof value.botDifficulty !== 'string' || !BOT_DIFFICULTIES.has(value.botDifficulty)) return false;
   if (value.minimalUndoEnabled !== undefined && typeof value.minimalUndoEnabled !== 'boolean') return false;
   if (value.auctionOnDecline !== undefined && typeof value.auctionOnDecline !== 'boolean') return false;
+  if (value.turnTimeLimitSec !== undefined
+    && (typeof value.turnTimeLimitSec !== 'number' || !Number.isFinite(value.turnTimeLimitSec))) return false;
+  if (value.isPublic !== undefined && typeof value.isPublic !== 'boolean') return false;
   if (!Array.isArray(value.players) || value.players.length === 0) return false;
   if (!value.players.every(isPlayerRecord)) return false;
   if (!Array.isArray(value.spectators) || !value.spectators.every(isSpectatorRecord)) return false;

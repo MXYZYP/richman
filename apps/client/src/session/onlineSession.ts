@@ -12,15 +12,19 @@ import type {
   JoinRoomAck,
   PublicGameSnapshot,
   PublicRoomState,
+  PublicRoomSummary,
   ResumeAck,
+  RoomListAck,
   RoomRole,
   RoomSettings,
   RoomSettingsPatch,
   ServerToClientEvents,
+  TurnDeadlineInfo,
   UndoOutcome,
   UndoRequestInfo,
 } from '@richman/protocol';
 import { CHAT_TEXT_MAX_LENGTH } from '@richman/protocol';
+import { normalizeTurnDeadline, normalizeTurnTimeLimitSec } from './turnTimer';
 import type { ClientAction, DisplayCard } from '../game/clientGame';
 import { resolvePublicGameSnapshot } from '../game/mapResolver';
 import type { CashNotice, ConnectionStatus, GameSession, RenderableGameState, TransientNotice } from './gameSession';
@@ -147,6 +151,13 @@ export interface OnlineGameSession extends GameSession {
   readonly roomSettings: Ref<RoomSettings | null>;
   /** 房主修改房间设置（仅大厅阶段生效；服务端会拒绝非房主与已开局房间）。 */
   updateRoomSettings(patch: RoomSettingsPatch): Promise<void>;
+  /**
+   * 拉取公开房间列表（#108）。**不需要已在房间里**——首页「公开房间」区块正是这么用的。
+   *
+   * 返回 ack 而不是直接抛错：列表刷不出来是很轻的失败（用户完全可以手输房间码），
+   * 调用方据此给一句可重试的提示即可，不该像建房/加入那样占住持久错误位。
+   */
+  listRooms(): Promise<Ack<RoomListAck>>;
   /**
    * 悔棋（#101）：当前悬而未决的悔棋请求（服务端权威副本），`null` = 没有。
    * 发起者据此显示「等待对手确认」，对手据此显示「同意 / 拒绝」。
@@ -330,6 +341,12 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
    */
   const undoAvailability = ref<string | null>(null);
   /**
+   * 回合限时（#107）：服务端给出的「此刻谁的回合钟在走、走到几点」。
+   * 由 `room:turn_deadline` 驱动（进入房间 / 重连时服务端还会单播一次），
+   * 因此刷新页面不会把倒计时弄丢。`playerId === null` = 此刻不限时（未开启 / 轮到电脑 / 行动者离线）。
+   */
+  const turnDeadline = ref<TurnDeadlineInfo | null>(null);
+  /**
    * 悔棋回退后紧接着到达的那份 `game:snapshot` 必须按**硬重置**处理：
    * 对局时间线倒退了，当成增量去播会把动画播歪。
    * `room:undo_result`(applied) 恒先于那份快照到达，靠它立这个标记。
@@ -474,6 +491,7 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     roomSettings.value = null;
     undoRequest.value = null;
     undoAvailability.value = null;
+    turnDeadline.value = null;
     pendingUndoReset = false;
     chatLog.value = [];
     clearTransientFeedback();
@@ -681,6 +699,62 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
   const isUndoRequester = computed(() =>
     undoRequest.value !== null && undoRequest.value.requesterId === localPlayerId.value,
   );
+  /**
+   * 等 socket 连上（最多 `ackTimeoutMs`）。
+   *
+   * 抽出来是因为有两条路径需要它：`emitAck`（房间内命令）和 `listRooms`（进房前的查询）。
+   * 首页一打开就会去拉公开房间列表，那一刻握手很可能还没完成——不等待就会直接判定「连不上」。
+   *
+   * ★ 已经连上时返回 `null` 而**不是**一个已 resolve 的 Promise：调用点写成
+   * `const wait = waitForConnection(); if (wait !== null) await wait;`，于是「已连接」这条
+   * 最常见路径上不会因为一个多余的 `await` 而凭空多出一个微任务 tick（本文件的测试是逐 tick
+   * 精确推进的，多一个 tick 就会让「发射顺序 / ack 落点」的断言整体错位）。
+   */
+  const waitForConnection = (): Promise<void> | null => {
+    if (socket.connected || disposed) return null;
+    const connectionTimeout = deferred<void>();
+    const waiter: ConnectionWaiter = {
+      timer: globalThis.setTimeout(connectionTimeout.resolve, ackTimeoutMs),
+      resolve: connectionTimeout.resolve,
+    };
+    preconnectWaiters.add(waiter);
+    return Promise.race([connectionReady.promise, connectionTimeout.promise]).then(() => {
+      globalThis.clearTimeout(waiter.timer);
+      preconnectWaiters.delete(waiter);
+    });
+  };
+
+  /**
+   * 拉取公开房间列表（#108）。
+   *
+   * 刻意**不走 `emitAck`**：那套机制绑定在「房间内的一条大厅变更」上（同操作互斥锁、房间状态
+   * 和解、持久错误位、超时后的重连补偿），而房间列表恰恰是**还没进任何房间的人**用的，
+   * 走那套会在 `canIssueActiveCommands()` 上直接被判成 SESSION_NOT_RECOVERED。
+   * 这里只要一个「连上就发、到点算超时」的最小实现，失败也**不写持久错误位**——
+   * 列表刷不出来不该妨碍用户直接手输房间码进屋。
+   */
+  const listRooms = async (): Promise<Ack<RoomListAck>> => {
+    if (disposed) return { ok: false, code: 'DISCONNECTED', message: '' };
+    const wait = waitForConnection();
+    if (wait !== null) await wait;
+    if (disposed || !socket.connected) return { ok: false, code: 'DISCONNECTED', message: '' };
+    return await new Promise<Ack<RoomListAck>>((resolve) => {
+      let settled = false;
+      let timer: Parameters<typeof globalThis.clearTimeout>[0] | undefined;
+      const finish = (response: Ack<RoomListAck>): void => {
+        if (settled) return;
+        settled = true;
+        if (timer !== undefined) globalThis.clearTimeout(timer);
+        resolve(response);
+      };
+      timer = globalThis.setTimeout(
+        () => finish({ ok: false, code: 'REQUEST_TIMEOUT', message: '' }),
+        ackTimeoutMs,
+      );
+      socket.emit('room:list', finish);
+    });
+  };
+
   const emitAck = async <T extends object>(operation: Operation, event: keyof ClientToServerEvents, ...args: unknown[]): Promise<Ack<T>> => {
     const commandGeneration = generation;
     const noticeIdAtStart = transientNotice.value?.id;
@@ -688,17 +762,8 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
       handleFailure(operation, 'SESSION_NOT_RECOVERED');
       return { ok: false, code: 'SESSION_NOT_RECOVERED', message: '' };
     }
-    if (!socket.connected && !disposed) {
-      const connectionTimeout = deferred<void>();
-      const waiter: ConnectionWaiter = {
-        timer: globalThis.setTimeout(connectionTimeout.resolve, ackTimeoutMs),
-        resolve: connectionTimeout.resolve,
-      };
-      preconnectWaiters.add(waiter);
-      await Promise.race([connectionReady.promise, connectionTimeout.promise]);
-      globalThis.clearTimeout(waiter.timer);
-      preconnectWaiters.delete(waiter);
-    }
+    const connectionWait = waitForConnection();
+    if (connectionWait !== null) await connectionWait;
     if (disposed || commandGeneration !== generation || !socket.connected) {
       handleFailure(operation, 'DISCONNECTED');
       return { ok: false, code: 'DISCONNECTED', message: '' };
@@ -947,15 +1012,21 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     if (!Array.isArray(payload?.messages)) return;
     chatLog.value = payload.messages.slice(-200);
   };
+  // 房间设置的唯一收敛点（#4 / #6 / #101 / #106 / #107 / #108）：广播与 update 的 ack
+  // 两条路径都走它。少了这一层，每加一个设置项就要在兩处同步补字段，
+  // 而「一边补了、另一边忘了」不会报错，只会让刷新前后看到不同的设置。
+  const normalizeRoomSettings = (settings: RoomSettings): RoomSettings => ({
+    botDifficulty: settings.botDifficulty,
+    ruleConfig: settings.ruleConfig ?? null,
+    minimalUndoEnabled: settings.minimalUndoEnabled === true,
+    auctionOnDecline: settings.auctionOnDecline === true,
+    turnTimeLimitSec: normalizeTurnTimeLimitSec(settings.turnTimeLimitSec),
+    isPublic: settings.isPublic === true,
+  });
   // 房间设置（#4 / #6）由服务端广播/单播，整间共用一份：直接整体覆盖即可（低频、幂等）。
   const onRoomSettings = (settings: RoomSettings): void => {
     if (disposed) return;
-    roomSettings.value = {
-      botDifficulty: settings.botDifficulty,
-      ruleConfig: settings.ruleConfig ?? null,
-      minimalUndoEnabled: settings.minimalUndoEnabled === true,
-      auctionOnDecline: settings.auctionOnDecline === true,
-    };
+    roomSettings.value = normalizeRoomSettings(settings);
   };
   // 悔棋（#101）三条广播：请求本身 / 谁可悔 / 结果。同样整体覆盖（低频、幂等）。
   const onUndoRequest = (payload: UndoRequestInfo): void => {
@@ -965,6 +1036,22 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
   const onUndoAvailable = (payload: { playerId: string | null }): void => {
     if (disposed) return;
     undoAvailability.value = payload?.playerId ?? null;
+  };
+  /**
+   * 回合限时（#107）：服务端每次重新排钟都会广播一次，这里整体覆盖。
+   *
+   * 刻意**不做本地推算**：`deadlineAt` 是服务端的时钟，客户端只负责把它换算成剩余秒数。
+   * 想要「本地时钟与服务端有偏差」的情况下也不出错，唯一稳的做法就是认服务端的数。
+   */
+  const onTurnDeadline = (payload: TurnDeadlineInfo): void => {
+    if (disposed) return;
+    turnDeadline.value = normalizeTurnDeadline(payload);
+  };
+  /** 有人被限时判超时、服务端代走了一步：只给一句人话提示，真正的状态走 game:events。 */
+  const onTurnTimeout = (payload: { playerId: string; nickname: string }): void => {
+    if (disposed || payload === null || typeof payload !== 'object') return;
+    const nickname = typeof payload.nickname === 'string' && payload.nickname.length > 0 ? payload.nickname : '有玩家';
+    showTransientMessage(`${nickname} 超时，已自动代走一步`);
   };
   /** 四种结局各给一句人话。对全房间广播，所以措辞是「中立叙述」而非「针对你」。 */
   const UNDO_OUTCOME_MESSAGES: Readonly<Record<UndoOutcome, string>> = {
@@ -1023,6 +1110,8 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
   socket.on('room:undo_request', onUndoRequest);
   socket.on('room:undo_result', onUndoResult);
   socket.on('room:undo_available', onUndoAvailable);
+  socket.on('room:turn_deadline', onTurnDeadline);
+  socket.on('room:turn_timeout', onTurnTimeout);
   socket.on('connect', onConnect);
   socket.on('disconnect', onDisconnect);
   socket.on('connect_error', onConnectError);
@@ -1231,12 +1320,7 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     await runLobbyCommand('updateSettings', async () => {
       const response = await emitAck<RoomSettings>('updateSettings', 'room:update_settings', patch);
       if (!response.ok) return response;
-      roomSettings.value = {
-        botDifficulty: response.botDifficulty,
-        ruleConfig: response.ruleConfig ?? null,
-        minimalUndoEnabled: response.minimalUndoEnabled === true,
-        auctionOnDecline: response.auctionOnDecline === true,
-      };
+      roomSettings.value = normalizeRoomSettings(response);
       return { ok: true };
     });
   };
@@ -1349,6 +1433,8 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     socket.off('room:undo_request', onUndoRequest);
     socket.off('room:undo_result', onUndoResult);
     socket.off('room:undo_available', onUndoAvailable);
+    socket.off('room:turn_deadline', onTurnDeadline);
+    socket.off('room:turn_timeout', onTurnTimeout);
     socket.off('connect', onConnect);
     socket.off('disconnect', onDisconnect);
     socket.off('connect_error', onConnectError);
@@ -1360,8 +1446,9 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     isAnimating, isBotThinking, lastError, compatibilityError, cashNotices, displayCash, transientNotice, entryFailure, availableActions: computed<ClientAction[]>(() => (
       canControlActiveActor.value && state.value !== null ? getAvailableActions(state.value) : []
     )),
-    chatLog, sendChat, create, retryPending, retryResume, deferResume, join, start, addBot, removeBot, renameBot, roomSettings, updateRoomSettings, kickPlayer, sendIntent, skipOfflineTurn, leave, dispose,
+    chatLog, sendChat, create, retryPending, retryResume, deferResume, join, start, addBot, removeBot, renameBot, roomSettings, updateRoomSettings, listRooms, kickPlayer, sendIntent, skipOfflineTurn, leave, dispose,
     undoRequest, undoAvailability, canRequestUndo, canVoteUndo, isUndoRequester, requestUndo, voteUndo, cancelUndo,
+    turnDeadline,
     abortEntry, discardStoredSession, abandon, isHost, isSpectator, isLobbyCommandReady, pendingCommand, startBlockedReason,
   };
 }

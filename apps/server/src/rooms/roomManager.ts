@@ -5,7 +5,8 @@ import { currentPendingAuction, currentPendingTrade } from '@richman/engine';
 import type { BotDifficulty, GameState } from '@richman/engine';
 import { applyGameIntent as applyRuntimeGameIntent, chooseTakeoverIntent, createInitialGame, defaultGameGateway, skipOfflineTakeoverTurn } from '../game/gameRuntime';
 import type { GameRuntimeGateway } from '../game/gameRuntime';
-import type { PublicRoomState, RoomRole, RoomRuleConfig, RoomSettings, RoomSettingsPatch, UndoOutcome, UndoRequestInfo } from '@richman/protocol';
+import type { PublicRoomState, PublicRoomSummary, RoomRole, RoomRuleConfig, RoomSettings, RoomSettingsPatch, TurnDeadlineInfo, UndoOutcome, UndoRequestInfo } from '@richman/protocol';
+import { TURN_TIME_LIMIT_MAX_SEC } from '@richman/protocol';
 import { gameFailure, roomFailure } from './roomErrors';
 import type { RoomFailure, WireFailure } from './roomErrors';
 import { ROOM_SNAPSHOT_SCHEMA_VERSION } from './roomSnapshotStore';
@@ -54,6 +55,18 @@ type PendingUndo = {
   point: UndoPoint;
 };
 
+/**
+ * 正在走的回合钟（#107）。
+ *
+ * 三个字段全是**自检用**的：计时器到点时必须回头核对「还是不是同一个行动者在同一个回合」，
+ * 否则一次迟到（比如悔棋回退把 turn 调回去又推进回来）就会把别人的回合代走一步。
+ */
+type TurnDeadline = {
+  playerId: string;
+  turn: number;
+  deadlineAt: number;
+};
+
 function copyMapRef(ref: MapRef): MapRef {
   return Object.freeze({ id: ref.id, version: ref.version, contentHash: ref.contentHash });
 }
@@ -89,6 +102,16 @@ export class RoomManager<TTimerHandle = unknown> {
   readonly #undoPoints = new Map<string, UndoPoint>();
   readonly #undoRequests = new Map<string, PendingUndo>();
   readonly #undoTimers = new Map<string, TTimerHandle>();
+  /**
+   * 回合限时计时器（#107）：只对**在线真人**当前要走的这一步计时。
+   *
+   * 刻意与 `#automation` / `#gameAutomationTimers` 分开两张表：那个框架是「代理决策」
+   * （电脑 / 离线真人，必然产出一个意图并推进），而这里是「催一个本来该自己走的人」。
+   * 混在一张表里会让 `#clearAutomation` / `#modeEligible` 的既有判据全部需要重写，
+   * 而两套计时器的生命周期并不一致（限时在每次行动者变化时重排，托管只在掉线时起）。
+   */
+  readonly #turnTimers = new Map<string, TTimerHandle>();
+  readonly #turnDeadlines = new Map<string, TurnDeadline>();
   readonly #gateway: GameRuntimeGateway;
   readonly #mapResolver: RoomMapResolver;
   /** 房间落盘快照（C-③）：为 null 时纯内存运行，行为与引入前完全一致。 */
@@ -143,6 +166,10 @@ export class RoomManager<TTimerHandle = unknown> {
       // 「放弃购买即拍卖」默认关闭（#106）：它就是既有语义（放弃 = 流拍），
       // 开启是房主显式选择的房规，与地图自带的规则无关。
       auctionOnDecline: false,
+      // 回合限时默认关闭（#107）：不限时才是既有的默认节奏，房主显式选择才开启。
+      turnTimeLimitSec: 0,
+      // 公开房间列表默认关闭（#108）：房间码本就是准入凭据，可被全网列举必须是房主显式打开的。
+      isPublic: false,
       players: [
         {
           id: playerId,
@@ -374,6 +401,30 @@ export class RoomManager<TTimerHandle = unknown> {
       room.auctionOnDecline = patch.auctionOnDecline;
     }
 
+    // 回合限时（#107）：只认 0 或正整数，且不得超过 TURN_TIME_LIMIT_MAX_SEC。
+    // 0 是合法值（= 不限时），所以不能写成 `if (!value)`——那会把「关掉限时」也判成非法。
+    if (patch.turnTimeLimitSec !== undefined) {
+      const limit = patch.turnTimeLimitSec;
+      if (typeof limit !== 'number' || !Number.isSafeInteger(limit) || limit < 0 || limit > TURN_TIME_LIMIT_MAX_SEC) {
+        return roomFailure(
+          'INVALID_ROOM_ACTION',
+          `turnTimeLimitSec must be an integer within 0-${TURN_TIME_LIMIT_MAX_SEC} (0 disables the limit).`,
+        );
+      }
+      room.turnTimeLimitSec = limit;
+    }
+
+    // 可被公开房间列表发现（#108）：只认布尔值。
+    // 沿用本方法的既有门禁（仅房主、仅大厅），没有为它单开一条「对局中也能改」的通道：
+    // 一旦公开，房间从大厅到对局期间都留在列表里（对局中的房主正是「可被旁观」的那类），
+    // 想收回只能等这一局结束——这比让列表里出现「刚还在、点进去却不存在」的房间更可预期。
+    if (patch.isPublic !== undefined) {
+      if (typeof patch.isPublic !== 'boolean') {
+        return roomFailure('INVALID_ROOM_ACTION', 'isPublic must be a boolean.');
+      }
+      room.isPublic = patch.isPublic;
+    }
+
     // 先把设置本身落盘，再产出广播事件：这样即便广播失败，重启后读到的也是最新设置。
     this.#persistRoom(room);
     const settings = projectRoomSettings(room);
@@ -391,6 +442,45 @@ export class RoomManager<TTimerHandle = unknown> {
   getRoomSettings(roomCode: string): RoomSettings | null {
     const room = this.#rooms.get(roomCode);
     return room === undefined ? null : projectRoomSettings(room);
+  }
+
+  // ───────────────────────── 公开房间列表（#108） ─────────────────────────
+
+  /**
+   * 公开房间列表：只列**房主显式公开**且**尚未结束**的房间。
+   *
+   * 三条刻意为之的取舍：
+   *  1. `isPublic` 是唯一准入条件——房间码本身仍可加入，列表只是「多一条发现途径」，
+   *     不是把房间可见性改成「只能从列表进」。
+   *  2. 已结束的房间不进列表（`status === 'ended'`）：那种房间连 `room:join` 都会被拒，
+   *     列出来只会让人点进去吃一个错误。
+   *  3. 排序**稳定且有意**：先「还能以玩家加入的大厅」，再「可旁观的对局」，最后其余。
+   *     列表是用来「找一局能玩的」的，把点不进去的排在前面等于制造挫败感。
+   *
+   * 返回的是摘要：不含成员 id 名单、观战者 id、托管状态等只在房间里才该拿到的信息。
+   */
+  listPublicRooms(): PublicRoomSummary[] {
+    const summaries: PublicRoomSummary[] = [];
+    for (const room of this.#rooms.values()) {
+      if (!room.isPublic || room.status === 'ended') continue;
+      const playerCount = room.players.length;
+      const spectatorCount = room.spectators.length;
+      summaries.push({
+        roomCode: room.code,
+        hostNickname: room.players.find((player) => player.id === room.hostId)?.nickname ?? '房主',
+        mapTitle: room.mapTitle,
+        status: room.status,
+        playerCount,
+        spectatorCount,
+        playerLimit: MAX_PLAYERS,
+        spectatorLimit: MAX_SPECTATORS,
+        joinable: room.status === 'lobby' && playerCount < MAX_PLAYERS,
+        spectatable: spectatorCount < MAX_SPECTATORS,
+        turnTimeLimitSec: room.turnTimeLimitSec,
+        botDifficulty: room.botDifficulty,
+      });
+    }
+    return summaries.sort(compareRoomSummaries);
   }
 
   // ───────────────────────── 联机最小悔棋（#101） ─────────────────────────
@@ -609,6 +699,138 @@ export class RoomManager<TTimerHandle = unknown> {
     this.#undoPoints.delete(roomCode);
   }
 
+  // ───────────────────────── 每回合限时（#107） ─────────────────────────
+
+  /** 单播用：把「此刻谁的钟在走」投影成对外的形状（进入房间时发一次，之后靠广播同步）。 */
+  getTurnDeadline(roomCode: string): TurnDeadlineInfo | null {
+    const room = this.#rooms.get(roomCode);
+    return room === undefined ? null : this.#turnDeadlineInfo(room);
+  }
+
+  #turnDeadlineInfo(room: Room): TurnDeadlineInfo {
+    const pending = this.#turnDeadlines.get(room.code);
+    return {
+      playerId: pending?.playerId ?? null,
+      deadlineAt: pending?.deadlineAt ?? null,
+      limitSec: room.turnTimeLimitSec,
+    };
+  }
+
+  /** 取消回合钟；返回「原本确实有钟在走」（用于决定要不要为此多播一条 `turn_deadline`）。 */
+  #cancelTurnTimer(roomCode: string): boolean {
+    const handle = this.#turnTimers.get(roomCode);
+    const had = handle !== undefined || this.#turnDeadlines.has(roomCode);
+    if (handle !== undefined) {
+      this.#dependencies.clearTimer(handle);
+      this.#turnTimers.delete(roomCode);
+    }
+    this.#turnDeadlines.delete(roomCode);
+    return had;
+  }
+
+  /**
+   * 重排回合钟（#107）。**每个可能改变「当前行动者」的时刻都要调它**：
+   * 开局、每次状态推进、有人掉线、有人重连、重启恢复。返回一条待广播的 `turn_deadline`
+   * （没有钟在走、且原本也没有钟时返回 `null`，这样不限时的房间一个字节都不多发）。
+   *
+   * 只给「在线真人」计时，另外两类行动者各自已有推进机制，绝不能再叠一层：
+   *  - 电脑玩家 → `#automation`（bot 模式）会立刻排一步；
+   *  - 离线真人 → `#maybeAutoTakeover` 的 15s 宽限 + `offline_takeover`。
+   * 若在这里也排钟，两套计时器会互相顶替：限时一到就把正在托管的局面夺过来重算一次。
+   */
+  #rescheduleTurnTimer(room: Room): RoomDomainEvent | null {
+    const had = this.#cancelTurnTimer(room.code);
+    const state = room.gameState;
+    const inactive = room.status !== 'playing'
+      || state === null
+      || state.phase === 'game_over'
+      || room.turnTimeLimitSec <= 0;
+    if (inactive) {
+      return had ? this.#turnDeadlineEvent(room) : null;
+    }
+
+    const actorId = this.#engineActor(state as GameState);
+    const actor = (state as GameState).players.find((player) => player.id === actorId);
+    if (actor === undefined || actor.isBot || !actor.online) {
+      return had ? this.#turnDeadlineEvent(room) : null;
+    }
+
+    const turn = (state as GameState).turn;
+    const limitMs = room.turnTimeLimitSec * 1000;
+    const deadlineAt = Date.now() + limitMs;
+    let handle: TTimerHandle;
+    handle = this.#dependencies.setTimer(() => {
+      if (this.#turnTimers.get(room.code) !== handle) return;
+      this.#turnTimers.delete(room.code);
+      this.#turnDeadlines.delete(room.code);
+      // 已触发的钟要显式注销掉这个 handle：它此刻仍在依赖方的计时器表里，
+      // 不注销就会留下一个「已经跑完、却仍被当成在走」的计时器（测试里表现为
+      // 「同一档位有两根活跃钟」，真实实现里则是白占一个句柄）。
+      this.#dependencies.clearTimer(handle);
+      this.#runTurnTimeout(room.code, actorId, turn);
+    }, limitMs);
+    this.#turnTimers.set(room.code, handle);
+    this.#turnDeadlines.set(room.code, { playerId: actorId, turn, deadlineAt });
+    return this.#turnDeadlineEvent(room);
+  }
+
+  #turnDeadlineEvent(room: Room): RoomDomainEvent {
+    return { type: 'turn_deadline', roomCode: room.code, info: this.#turnDeadlineInfo(room) };
+  }
+
+  /**
+   * 回合钟到点（#107）：按电脑策略替这位**在线**玩家走一步。
+   *
+   * 三层核对缺一不可，任一不满足就直接放弃（而不是硬走一步）：
+   *  1. 房间还在对局中、且没结束；
+   *  2. 还是「同一个回合 + 同一个行动者」——悔棋回退会把 turn 调回去再推进，
+   *     迟到的计时器绝不能把已经换人的回合再代走一步；
+   *  3. 行动者仍是在线真人——中途他掉线了就该交给离线托管（那套有 15s 宽限），
+   *     中途他操作了、回合已经推进过了由第 2 条拦住。
+   *
+   * 决策复用 `chooseTakeoverIntent`：它已经覆盖债务 / 交易 / 拍卖 / 规则模块待选动作四类
+   * 特殊阶段，与离线托管同源，不会出现「限时把玩家卡在拍卖里」这种只有一条路径才会踩到的坑。
+   */
+  #runTurnTimeout(roomCode: string, actorId: string, turn: number): void {
+    const room = this.#rooms.get(roomCode);
+    if (room === undefined || room.status !== 'playing') return;
+    const state = room.gameState;
+    if (state === null || state.phase === 'game_over') return;
+    if (state.turn !== turn) return;
+    if (this.#engineActor(state) !== actorId) return;
+    const actor = state.players.find((player) => player.id === actorId);
+    if (actor === undefined || actor.isBot || !actor.online) return;
+
+    let intent: Intent | null;
+    try {
+      intent = chooseTakeoverIntent(state, room.botDifficulty);
+    } catch (error) {
+      this.#dependencies.onServerError?.(`turn timeout choose intent threw in room ${roomCode}`, error);
+      return;
+    }
+    // 与离线托管同样的理由：`chooseTakeoverIntent` 绝不能返回 null（null 会被当成
+    // 「跳过这一回合」，玩家会永远停在世界巡游的机场格上）。留这道守卫只是防御性写法，
+    // 真返回 null 时应重新排钟而不是把回合卡住。
+    if (intent === null) {
+      const retry = this.#rescheduleTurnTimer(room);
+      this.#dependencies.onAsyncEvents(retry === null ? [] : [retry]);
+      return;
+    }
+
+    const outcome = this.#commitTransition(room, actorId, intent, 'turn_timeout');
+    if (!outcome.ok) {
+      this.#dependencies.onServerError?.(`turn timeout commit failed in room ${roomCode}: ${outcome.code}`, outcome);
+      // 提交失败（例如阶段已变）不永久停摆：重排一次钟，下一拍到点再试。
+      const retry = this.#rescheduleTurnTimer(room);
+      this.#dependencies.onAsyncEvents(retry === null ? [] : [retry]);
+      return;
+    }
+
+    const notice: RoomDomainEvent = { type: 'turn_timeout', roomCode, playerId: actorId, nickname: actor.nickname };
+    // 通报排在状态事件之前：客户端先弹「谁超时了」，再按增量播放这一步。
+    this.#dependencies.onAsyncEvents([notice, ...outcome.events]);
+  }
+
   startRoom(roomCode: string, requesterId: string): RoomResult<PublicRoomState> {
     const existingRoom = this.#rooms.get(roomCode);
     if (existingRoom?.status === 'ended') {
@@ -679,7 +901,7 @@ export class RoomManager<TTimerHandle = unknown> {
     this.#cancelLobbyDisconnectTimersForRoom(room.code);
     room.gameState = state;
     room.status = 'playing';
-    this.#reconcileAfterStart(room, state);
+    const reconcileEvents = this.#reconcileAfterStart(room, state);
     this.#persistRoom(room);
 
     const publicRoom = this.#projectPublicRoom(room);
@@ -689,6 +911,7 @@ export class RoomManager<TTimerHandle = unknown> {
       events: [
         { type: 'room_state', roomCode: room.code, room: publicRoom },
         { type: 'game_snapshot', roomCode: room.code, state },
+        ...reconcileEvents,
       ],
     };
   }
@@ -959,6 +1182,10 @@ export class RoomManager<TTimerHandle = unknown> {
       room.hostId = playerId;
       events.push({ type: 'room_state', roomCode, room: this.#projectPublicRoom(room) });
     }
+    // 重连后重新排钟（#107）：他掉线时那根钟已被停掉；人回来了就该重新开始计时，
+    // 否则「掉线 → 重连」会变成免费获得无限思考时间的一条后门。
+    const turnEvent = this.#rescheduleTurnTimer(room);
+    if (turnEvent !== null) events.push(turnEvent);
 
     return {
       ok: true,
@@ -1042,6 +1269,12 @@ export class RoomManager<TTimerHandle = unknown> {
     }
     this.#undoRequests.clear();
     this.#undoPoints.clear();
+    // 回合限时（#107）：同样先逐个清计时器再清表，避免留下会去操作已销毁房间的回调。
+    for (const roomCode of [...this.#turnTimers.keys()]) {
+      this.#cancelTurnTimer(roomCode);
+    }
+    this.#turnTimers.clear();
+    this.#turnDeadlines.clear();
     this.#createRequestIndex.clear();
     this.#joinRequestIndex.clear();
   }
@@ -1146,6 +1379,12 @@ export class RoomManager<TTimerHandle = unknown> {
       minimalUndoEnabled: record.minimalUndoEnabled === true,
       // 同上（#106）：本字段引入之前的快照里没有它，缺省按「关闭」处理。
       auctionOnDecline: record.auctionOnDecline === true,
+      // 同上（#107）：缺省按「不限时」处理（0）。负数 / NaN 这类畸形值一律归零，
+      // 否则 `setTimer` 会收到一个负数延迟从而立刻触发，一重启就把所有人的回合代走一步。
+      turnTimeLimitSec: normalizeTurnTimeLimit(record.turnTimeLimitSec),
+      // 同上（#108）：缺省按「不公开」处理。用 `=== true` 而不是裸取值，
+      // 于是任何非 true 的畸形值都退化成最保守的「不公开」。
+      isPublic: record.isPublic === true,
       players,
       spectators,
       gameState: gameState === null
@@ -1190,6 +1429,10 @@ export class RoomManager<TTimerHandle = unknown> {
       const actorId = this.#engineActor(room.gameState);
       this.#startBotIfActorIsBot(room, room.gameState, actorId);
       this.#maybeAutoTakeover(room, room.gameState, actorId);
+      // 回合钟也一并重排（#107）：此刻所有真人都被标成离线，所以这一步实际只会「清掉钟」，
+      // 真正的倒计时会等各自 `session:resume` 回来时才开始走（见 resumeRoom）。
+      // 写在这里是为了让「重启后房间没有任何残留计时器」成为一条不变式。
+      this.#rescheduleTurnTimer(room);
     }
 
     return true;
@@ -1240,6 +1483,12 @@ export class RoomManager<TTimerHandle = unknown> {
       // 房规「放弃购买即拍卖」也落盘（#106）：不写它，重启后房主开过的拍卖会悄悄变回关闭，
       // 于是「放弃购买」又回到「直接流拍」的旧语义，与客户端的认知对不上。
       auctionOnDecline: room.auctionOnDecline,
+      // 回合限时也落盘（#107）：不写它，重启后房主设的限时会悄悄变回「不限时」，
+      // 而客户端在大厅里看到的仍是「已开启」的旧认知。
+      turnTimeLimitSec: room.turnTimeLimitSec,
+      // 可被发现与否也落盘（#108）：不写它，重启后房主公开过的房间会从列表里消失，
+      // 而对局本身仍在继续——「房间在跑但列表里找不到」是最难排查的一类不一致。
+      isPublic: room.isPublic,
       players: room.players.map((player) => ({ ...player })),
       spectators: room.spectators.map((spectator) => ({ ...spectator })),
       createRequestId: room.createRequestId,
@@ -1356,6 +1605,8 @@ export class RoomManager<TTimerHandle = unknown> {
     // 房间解散：悔棋点 / 悬而未决的请求 / 投票计时器一并丢掉，
     // 不然那个 20 秒计时器到点后会去操作一个已经不存在的房间。
     this.#forgetUndo(roomCode);
+    // 同理（#107）：回合钟也必须停，否则它到点时会去推进一个已解散的房间。
+    this.#cancelTurnTimer(roomCode);
     this.#forgetRoom(roomCode);
   }
 
@@ -1390,12 +1641,15 @@ export class RoomManager<TTimerHandle = unknown> {
     const autoEvents = (room.status === 'playing' && room.gameState !== null)
       ? this.#maybeAutoTakeover(room, room.gameState, this.#engineActor(room.gameState))
       : [];
+    // 掉线的若正是当前行动者，他这根回合钟必须停（#107）——人都不在了，还催他倒计时毫无意义，
+    // 而且到点时代走一步会和 15s 后的离线托管撞在一起、把同一回合推进两次。
+    const turnEvent = this.#rescheduleTurnTimer(room);
 
     this.#persistRoom(room);
     return {
       ok: true,
       value: this.#projectPublicRoom(room),
-      events: [...events, ...autoEvents],
+      events: [...events, ...autoEvents, ...(turnEvent === null ? [] : [turnEvent])],
     };
   }
 
@@ -1459,6 +1713,13 @@ export class RoomManager<TTimerHandle = unknown> {
       events.push(...this.#reconcileAfterTransition(room, source));
     }
 
+    // 回合钟随状态一起重排（#107）：行动者可能换了人、回合可能推进了、对局可能结束了——
+    // 三种情形都由 #rescheduleTurnTimer 自己识别（结束 / 轮到电脑时它会清掉钟并广播一次，
+    // 让客户端把倒计时收起来）。放在 reconcile 之后：那一步可能刚给电脑排好自动化，
+    // 这里才能正确地判定「现在是电脑在走、不该再叠一层限时」。
+    const turnEvent = this.#rescheduleTurnTimer(room);
+    if (turnEvent !== null) events.push(turnEvent);
+
     // 电脑 / 离线托管推进的一步会作废上一步的可悔权，这里把「现在没人可悔」显式广播出去。
     // 少了这一条，客户端会一直挂着一个「发起悔棋」按钮，直到玩家点下去被服务端拒绝才知道过期。
     if (room.minimalUndoEnabled && source !== 'manual') {
@@ -1515,8 +1776,12 @@ export class RoomManager<TTimerHandle = unknown> {
     return this.#maybeAutoTakeover(room, state, actorId);
   }
 
-  #reconcileAfterStart(room: Room, state: GameState): void {
+  #reconcileAfterStart(room: Room, state: GameState): RoomDomainEvent[] {
     this.#startBotIfActorIsBot(room, state, this.#engineActor(state));
+    // 开局就排上第一个回合钟（#107）：若开局行动者是真人，这就是本局的第一根倒计时；
+    // 是电脑则返回「此刻不限时」，客户端不会画进度条。
+    const turnEvent = this.#rescheduleTurnTimer(room);
+    return turnEvent === null ? [] : [turnEvent];
   }
 
   #startBotIfActorIsBot(room: Room, state: GameState, actorId: string): void {
@@ -1835,14 +2100,43 @@ function normalizeRoomRuleConfig(rule: RoomRuleConfig, mapMaxHouseLevel: number)
   return { initialCash, maxHouseLevel, mortgageInterestRate };
 }
 
-/** 房间设置投影：拷一份出去，避免外部拿到内部可变引用（ruleConfig 是唯一可变嵌套对象）。 */
-function projectRoomSettings(room: Room): RoomSettings {
+/**
+ * 把快照里的回合限时（#107）规整成一个可用的秒数；任何不可用值一律归零（= 不限时）。
+ *
+ * 快照文件落在磁盘上、可被外部改动，而 `turnTimeLimitSec` 会直接喂给 `setTimer`：
+ * 负数或 `NaN` 会让计时器立刻触发，一重启就把当前行动者的这一步代走 —— 宁可当作没设。
+ */
+function normalizeTurnTimeLimit(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) return 0;
+  return value >= 0 && value <= TURN_TIME_LIMIT_MAX_SEC ? value : 0;
+}
+
+/** 房间设置投影：拷一份出去，避免外部拿到内部可变引用（ruleConfig 是唯一可变嵌套对象）。 */function projectRoomSettings(room: Room): RoomSettings {
   return {
     botDifficulty: room.botDifficulty,
     ruleConfig: room.ruleConfig === null ? null : { ...room.ruleConfig },
     minimalUndoEnabled: room.minimalUndoEnabled,
     auctionOnDecline: room.auctionOnDecline,
+    turnTimeLimitSec: room.turnTimeLimitSec,
+    isPublic: room.isPublic,
   };
+}
+
+/**
+ * 公开房间列表的排序（#108）：先能加入的大厅 → 可旁观的对局 → 其余，组内按房间码升序。
+ *
+ * 组内用房间码而不是「加入时间」：房间里没有创建时间戳，而房间码是 6 位数字，
+ * 升序恰好接近「先开的排前面」。更重要的是它**确定性**——列表顺序每次刷新都一样，
+ * 否则测试无法断言，用户也会觉得列表在乱跳。
+ */
+function compareRoomSummaries(a: PublicRoomSummary, b: PublicRoomSummary): number {
+  const rank = (summary: PublicRoomSummary): number => {
+    if (summary.joinable) return 0;
+    if (summary.spectatable) return 1;
+    return 2;
+  };
+  const byRank = rank(a) - rank(b);
+  return byRank !== 0 ? byRank : a.roomCode.localeCompare(b.roomCode);
 }
 
 /**

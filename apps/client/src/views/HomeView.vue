@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import type { RoomRole } from '@richman/protocol';
+import type { PublicRoomSummary, RoomRole } from '@richman/protocol';
 import { listActiveMaps, type MapCatalogEntry } from '@richman/board-data';
 import MapPicker from '../components/MapPicker.vue';
 import PwaInstallRow from '../components/PwaInstallRow.vue';
@@ -30,6 +30,10 @@ const props = withDefaults(defineProps<{
   localSaveCards?: readonly LocalSaveCard[];
   initialMapId?: string;
   activeMaps?: readonly MapCatalogEntry[];
+  /** 公开房间列表（#108）：由 App 统一拉取，这里只负责渲染。 */
+  publicRooms?: readonly PublicRoomSummary[];
+  roomListLoading?: boolean;
+  roomListError?: string | null;
 }>(), {
   submitting: false,
   resume: null,
@@ -41,6 +45,9 @@ const props = withDefaults(defineProps<{
   localSaveCards: () => [],
   initialMapId: '',
   activeMaps: () => listActiveMaps(),
+  publicRooms: () => [],
+  roomListLoading: false,
+  roomListError: null,
 });
 
 const emit = defineEmits<{
@@ -48,6 +55,10 @@ const emit = defineEmits<{
   // 因为联机建房那一刻房间里还没有电脑玩家，先问难度是问不出所以然的（#4 / #6）。
   create: [nickname: string, mapId: string];
   join: [payload: { roomCode: string; nickname: string; role: RoomRole }];
+  /** 手动刷新公开房间列表（#108）；首屏那一次由 App 自己触发。 */
+  refreshRooms: [];
+  /** 打开「玩法说明」（#109）：首次进站会自动弹一次，这里是不想等/想重看时的入口。 */
+  openGuide: [];
   local: [mapId: string];
   resume: [];
   abandonPending: [];
@@ -130,6 +141,51 @@ function submitCreate() {
 function submitJoin() {
   const payload = planJoinSubmission(roomCode.value, nickname.value, props.submitting, joinRole.value);
   if (payload !== null) emit('join', payload);
+}
+
+// ---- 公开房间列表（#108） ----
+
+const roomListHint = ref<string | null>(null);
+
+/**
+ * 从公开房间列表里加入 / 旁观。
+ *
+ * 复用与手动加入完全相同的 `planJoinSubmission`：昵称没填、或有人正在提交时一律不放行，
+ * 因此列表入口不会绕开「必须填昵称」这条既有规则。被拦下时给出明确提示——
+ * 静默什么都不做是最糟的表现（用户会以为按钮坏了）。
+ */
+function joinFromList(roomCode: string, role: RoomRole): void {
+  const payload = planJoinSubmission(roomCode, nickname.value, props.submitting, role);
+  if (payload === null) {
+    roomListHint.value = nickname.value.trim().length === 0
+      ? '请先在左上角填好昵称，才能从列表加入。'
+      : '昵称需为 1 至 20 个字符。';
+    return;
+  }
+  roomListHint.value = null;
+  emit('join', payload);
+}
+
+// 列表内容每次刷新都可能变，上一次的提示（「请先填昵称」）到那时已经过期了。
+watch(() => props.publicRooms, () => {
+  roomListHint.value = null;
+});
+
+/** 列表行的状态徽标：让「点进去会发生什么」在点之前就看得出来。 */
+function roomStatusLabel(summary: PublicRoomSummary): string {
+  if (summary.status === 'lobby') return '大厅等待中';
+  if (summary.status === 'playing') return '对局进行中';
+  return '已结束';
+}
+
+function roomSeatLabel(summary: PublicRoomSummary): string {
+  const seat = `${summary.playerCount}/${summary.playerLimit} 人`;
+  return summary.spectatorCount > 0 ? `${seat} · 观战 ${summary.spectatorCount}` : seat;
+}
+
+// 房间设置里也有一份限时（#107），列表上顺手标出来：限时 0 等于不限时，不必显示。
+function roomLimitLabel(summary: PublicRoomSummary): string | null {
+  return summary.turnTimeLimitSec > 0 ? `每步 ${summary.turnTimeLimitSec} 秒` : null;
 }
 
 function submitLocal() {
@@ -222,6 +278,10 @@ function importStats(): void {
       <p class="home-eyebrow">联机对战 · 单机游玩</p>
       <h1 id="home-title">进入大富翁</h1>
       <p class="home-copy">用 6 位房间码和好友同桌，或单机游玩开一局。手机、电脑浏览器皆可。</p>
+
+      <!-- 玩法说明入口（#109）：首次进站会自动弹一次；这里是「想重看」或「没看到那次弹窗」的兜底。
+           放在标题正下方，是想看说明的人一眼就能找到，不必先滚到页脚。 -->
+      <button type="button" class="home-guide" @click="emit('openGuide')">第一次玩？看玩法说明</button>
 
       <p v-if="error" class="home-error" role="alert">{{ error }}</p>
       <p v-if="localSaveError" class="home-error" role="alert">{{ localSaveError }}</p>
@@ -434,6 +494,60 @@ function importStats(): void {
         </p>
       </form>
 
+      <!-- 公开房间列表（#108）：只有房主主动公开的房间才会出现在这里，是「知道房间码」之外
+           的第二条发现途径。做成可选路径而不是首页主轴——手输房间码永远可用，列表拉不到
+           也不该妨碍任何人进屋。 -->
+      <section class="home-rooms" aria-labelledby="home-rooms-title">
+        <div class="home-rooms__head">
+          <h2 id="home-rooms-title" class="home-rooms__title">公开房间</h2>
+          <button
+            type="button"
+            class="home-rooms__refresh"
+            :disabled="roomListLoading"
+            @click="emit('refreshRooms')"
+          >{{ roomListLoading ? '刷新中…' : '刷新' }}</button>
+        </div>
+
+        <p v-if="roomListError" class="home-rooms__notice home-rooms__notice--error" role="status">
+          {{ roomListError }}
+        </p>
+        <p v-else-if="publicRooms.length === 0" class="home-rooms__notice" role="status">
+          {{ roomListLoading ? '正在加载…' : '现在没有公开的房间。输入房间码可以直接加入好友的房。' }}
+        </p>
+        <ul v-else class="home-rooms__list">
+          <li v-for="entry in publicRooms" :key="entry.roomCode" class="home-rooms__item">
+            <div class="home-rooms__meta">
+              <span class="home-rooms__code">{{ entry.roomCode }}</span>
+              <span class="home-rooms__status">{{ roomStatusLabel(entry) }}</span>
+              <p class="home-rooms__detail">
+                {{ entry.hostNickname }} · {{ entry.mapTitle }} · {{ roomSeatLabel(entry) }}
+                <template v-if="roomLimitLabel(entry)"> · {{ roomLimitLabel(entry) }}</template>
+              </p>
+            </div>
+            <div class="home-rooms__actions">
+              <button
+                type="button"
+                class="home-rooms__button"
+                :disabled="submitting || !entry.joinable"
+                :title="entry.joinable ? '' : '这局已经开局或人数已满，只能旁观'"
+                @click="joinFromList(entry.roomCode, 'player')"
+              >加入</button>
+              <button
+                type="button"
+                class="home-rooms__button home-rooms__button--ghost"
+                :disabled="submitting || !entry.spectatable"
+                :title="entry.spectatable ? '' : '观战位已满'"
+                @click="joinFromList(entry.roomCode, 'spectator')"
+              >旁观</button>
+            </div>
+          </li>
+        </ul>
+
+        <p v-if="roomListHint" class="home-rooms__notice home-rooms__notice--error" role="status">
+          {{ roomListHint }}
+        </p>
+      </section>
+
       <div class="home-divider" role="separator" aria-hidden="true"><span>或</span></div>
 
       <button type="button" class="home-local" :disabled="submitting" @click="submitLocal">
@@ -609,6 +723,24 @@ function importStats(): void {
 .home-copy {
   margin: 0;
   line-height: 1.6;
+}
+
+/* 玩法说明入口（#109）：次要动作，所以是描边胶囊而不是实心主按钮。 */
+.home-guide {
+  justify-self: start;
+  min-height: 36px;
+  padding-inline: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.home-guide:hover {
+  color: var(--color-text);
 }
 
 .home-error {
@@ -859,6 +991,132 @@ function importStats(): void {
 .home-local:disabled {
   background: var(--button-disabled-bg);
   color: var(--button-disabled-text);
+  cursor: not-allowed;
+}
+
+/* ---- 公开房间列表（#108）---- */
+.home-rooms {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface-muted, transparent);
+}
+
+.home-rooms__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.home-rooms__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.home-rooms__refresh {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.home-rooms__refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.home-rooms__notice {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.home-rooms__notice--error {
+  color: var(--color-warning, #b45309);
+}
+
+.home-rooms__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-rooms__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.home-rooms__meta {
+  min-width: 0;
+}
+
+.home-rooms__code {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.home-rooms__status {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-border);
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.home-rooms__detail {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-rooms__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.home-rooms__button {
+  padding: 5px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-primary, #2563eb);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.home-rooms__button--ghost {
+  background: transparent;
+  color: inherit;
+}
+
+.home-rooms__button:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
 }
 

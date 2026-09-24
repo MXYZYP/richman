@@ -161,6 +161,10 @@ describe('release file command', () => {
       .rejects.toThrow(/递增版本/);
     await expect(checkPreviousRelease(rootDir, bumpedCatalog, previousSha))
       .resolves.toBeUndefined();
-  });
+    // 这个用例会真的建一个 git 仓库、敲十几次 git 命令再扫一遍提交差异，
+    // 单独跑就已经接近 5s（默认超时）——在全量套件里并行跑时必然被压过线，
+    // 于是门禁会随机变红。它是发版拦截器唯一的端到端验证，宁可给它一个宽裕的上限，
+    // 也不要让它成为一个「重跑一次就好了」的假失败。
+  }, 30_000);
 
 });

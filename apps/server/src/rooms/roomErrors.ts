@@ -13,6 +13,9 @@ export const ROOM_ERROR_CODES = [
   // 创建房间频率限流（按客户端 IP 滑动窗口）。刻意独立于 INVALID_ROOM_ACTION：
   // 这条不是「当前状态不允许」，而是「稍等即可」——客户端据此走可重试分支并给出等待提示。
   'CREATE_RATE_LIMITED',
+  // 公开房间列表频率限流（#108）。同 CREATE_RATE_LIMITED 的理由：它是「刷太快了」，
+  // 不是「你不该做这件事」——房间列表本身对任何人都开放。
+  'ROOM_LIST_RATE_LIMITED',
   // 联机最小悔棋（#101）。三条都不是「房间坏了」，而是「这次悔棋不成立」，
   // 客户端按瞬时提示（transient notice）呈现，不占住持久错误位。
   /** 房主没有开启悔棋。 */

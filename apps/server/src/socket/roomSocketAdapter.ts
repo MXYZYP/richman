@@ -10,6 +10,7 @@ import type {
   JoinRoomPayload,
   PublicRoomState,
   ResumeAck,
+  RoomListAck,
   RoomSettings,
   RoomSettingsPatch,
   ServerToClientEvents,
@@ -74,12 +75,23 @@ const CREATE_RATE_LIMITED_ACK: RoomFailure = roomFailure(
   '创建房间过于频繁，请稍后再试。',
 );
 
+const ROOM_LIST_RATE_LIMITED_ACK: RoomFailure = roomFailure(
+  'ROOM_LIST_RATE_LIMITED',
+  '刷新房间列表过于频繁，请稍后再试。',
+);
+
 const REQUEST_ID_RE = /^[0-9a-fA-F]{32}$/;
 
 // 创建房间频率限流默认值：按客户端 IP 滑动窗口，防公网刷房间码/刷房。
 // 必须定义在模块级（而非函数体内），否则默认参数作用域读不到该常量会抛 ReferenceError。
 const CREATE_WINDOW_MS = 60_000;
 const CREATE_MAX_PER_WINDOW = 5;
+
+// 公开房间列表的限流（#108）：比建房宽松得多（它是一次只读查询，正常使用就是手动刷新几下），
+// 但绝不能完全不限——它是一条**枚举全网房间码**的入口，不设阈值就等于给爬虫开了后门。
+// 与建房共用同一个 `rateLimit !== false` 开关：测试环境一并关掉，避免用例被误拦。
+const LIST_WINDOW_MS = 10_000;
+const LIST_MAX_PER_WINDOW = 30;
 
 export function createRoomSocketAdapter<TTimerHandle = unknown>({
   io,
@@ -98,6 +110,8 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
   const chatHistory = new Map<string, ChatMessage[]>();
   // 创建房间频率限流：按客户端 IP 滑动窗口，防公网刷房间码/刷房。
   const createRate = new Map<string, number[]>();
+  // 公开房间列表频率限流（#108）：同上按 IP 滑动窗口，防止有人拿它枚举全网房间码。
+  const listRate = new Map<string, number[]>();
 
   function bindSocket(socket: RoomSocket, binding: SocketBinding): void {
     unbindSocket(socket);
@@ -208,6 +222,17 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
         continue;
       }
 
+      // 回合限时两条（#107）：同样各自独立一条事件。
+      if (event.type === 'turn_deadline') {
+        io.to(event.roomCode).emit('room:turn_deadline', event.info);
+        continue;
+      }
+
+      if (event.type === 'turn_timeout') {
+        io.to(event.roomCode).emit('room:turn_timeout', { playerId: event.playerId, nickname: event.nickname });
+        continue;
+      }
+
       io.to(event.roomCode).emit('room:closed', { reason: event.reason });
       chatHistory.delete(event.roomCode);
       for (const [socketId, binding] of socketBindings) {
@@ -311,6 +336,21 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
   }
 
   /**
+   * 「此刻谁的回合钟在走」单播（#107）：与房间设置、可悔权同样的时机（进入房间时一次）。
+   *
+   * 不这么做的话，**刷新 / 掉线重连后倒计时会消失**：`room:turn_deadline` 只在行动者变化时
+   * 广播，而那一次广播早于本次连接。刷新页面的人于是看到「轮到我了却没有倒计时」，
+   * 以为房间没开限时，直到自己超时被代走一步才发现。
+   */
+  function emitTurnDeadline(socket: RoomSocket, roomCode: string): void {
+    const info = roomManager.getTurnDeadline(roomCode);
+    if (info === null) {
+      return;
+    }
+    socket.emit('room:turn_deadline', info);
+  }
+
+  /**
    * 补齐「进入房间」时必须单播、但**不在 ack 里**的两份快照：聊天历史与房间设置（#4 / #6）。
    *
    * 两者都刻意排在 ack **之后**：客户端的 ack 处理里可能 resetSession()（会把 chatLog 与
@@ -332,7 +372,36 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
       emitChatHistory(socket, roomCode);
       emitRoomSettings(socket, roomCode);
       emitUndoAvailability(socket, roomCode);
+      emitTurnDeadline(socket, roomCode);
     };
+  }
+
+  /**
+   * 公开房间列表（#108）。这是本适配器里唯一**不需要绑定的房间**的读操作——
+   * 未加入任何房间的人正是它的目标用户，因此不检查 `socketBindings`。
+   *
+   * 按客户端 IP 做滑动窗口限流：它是一条枚举全网房间码的入口，不设阈值等于给爬虫开后门。
+   * 阈值远比建房宽松（10s 内 30 次），正常「手动刷新几下」永远碰不到。
+   */
+  function handleListRooms(socket: RoomSocket, ack: (response: Ack<RoomListAck>) => void): void {
+    if (rateLimit !== false) {
+      const clientIp = socket.handshake.address ?? socket.id;
+      const attemptedAt = now();
+      const recent = (listRate.get(clientIp) ?? []).filter((ts) => attemptedAt - ts < LIST_WINDOW_MS);
+      if (recent.length >= LIST_MAX_PER_WINDOW) {
+        ack(ROOM_LIST_RATE_LIMITED_ACK);
+        return;
+      }
+      recent.push(attemptedAt);
+      listRate.set(clientIp, recent);
+    }
+
+    try {
+      ack({ ok: true, rooms: roomManager.listPublicRooms() });
+    } catch (error) {
+      logger?.error?.('room:list failed unexpectedly', error);
+      ack(INVALID_ROOM_ACTION_ACK);
+    }
   }
 
   function handleCreate(socket: RoomSocket, payload: unknown, ack: (response: Ack<CreateRoomAck>) => void): void {
@@ -864,6 +933,13 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
         }
 
         handleJoin(socket, payload, ack);
+      });
+      socket.on('room:list', (ack) => {
+        if (typeof ack !== 'function') {
+          return;
+        }
+
+        handleListRooms(socket, ack);
       });
       socket.on('session:resume', (payload, ack) => {
         if (typeof ack !== 'function') {

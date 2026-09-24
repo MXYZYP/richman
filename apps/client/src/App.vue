@@ -8,6 +8,10 @@ import RestoreView from './views/RestoreView.vue';
 const GameSetup = defineAsyncComponent(() => import('./components/GameSetup.vue'));
 const LobbyView = defineAsyncComponent(() => import('./views/LobbyView.vue'));
 const GameView = defineAsyncComponent(() => import('./views/GameView.vue'));
+// 新手引导（#109）同样走异步：它整个靠 MobileSheet 撑着，而 MobileSheet 正是上面那批
+// 懒加载视图的独占依赖之一——静态引进来会把弹层基建重新塞回首屏包，白费掉这次分包。
+// 代价只是首次进站时引导晚一个微任务出现，肉眼看不出来。
+const FirstRunGuide = defineAsyncComponent(() => import('./components/FirstRunGuide.vue'));
 import {
   createInitialLocalGameState,
   createLocalSession,
@@ -26,6 +30,7 @@ import {
   type StorageLike,
 } from './session/sessionStorage';
 import { createDefaultGameSetup, gameSetupToCreateOptions, updateGameSetupMapId, type GameSetupForm } from './game/gameSetup';
+import { markFirstRunGuideSeen, shouldAutoOpenGuideHere } from './session/firstRunGuide';
 import { getMapPack, listActiveMaps } from '@richman/board-data';
 import type { RoomRole, RoomSettingsPatch } from '@richman/protocol';
 import {
@@ -49,6 +54,7 @@ import {
   type LocalSaveSummary,
 } from './session/localGameSave';
 import type { GameState } from '@richman/engine';
+import type { PublicRoomSummary } from '@richman/protocol';
 import { applyAppearancePreferences } from './ui/themeManager';
 
 // Exactly one OnlineSession for the app's lifetime — constructed before any operation.
@@ -158,6 +164,36 @@ const resumeOffer = computed(() => (page.value.kind === 'home' ? page.value.resu
 const canResumeActive = computed(() => (page.value.kind === 'home' ? page.value.canResumeActive : false));
 const pendingRetryable = computed(() => onlineSession.entryFailure.value !== 'definitive');
 
+// ---- 新手引导（#109） ----
+// 自动弹的条件是「没看过 + 此刻确实在首页」。
+// 为什么非要等首页：引导是给第一次进来的人看的，而本版之前的老玩家同样没有「已看过」
+// 标记，却可能正落在恢复页或对局里 —— 一进来就盖住棋盘的弹窗，比「没看到引导」糟得多。
+// `autoOpened` 只放行一次：即便标记写不进存储（配额已满 / 无痕），也不会每次回首页都弹。
+//
+// 「已看过」只在**关闭弹层时**落盘：Esc、点背景板、点「知道了」都算明确表态，
+// 而首页主动打开**不算**（主动 ≠ 第一次）。与 `session/firstRunGuide.ts` 里
+// 「值被写坏宁可再弹一次」是同一条原则 —— 宁可多弹一次，也不要用一个含糊的状态
+// 把说明永久关掉，让新玩家再也找不到它。
+const guideOpen = ref(false);
+let guideAutoOpened = false;
+watch(pageKind, (kind) => {
+  if (guideAutoOpened) return;
+  // 先看一眼再落闩：`guideAutoOpened` 只在真的弹过之后才置真，
+  // 否则「首屏落在恢复页」的老玩家会白白消耗掉这次机会。
+  if (!shouldAutoOpenGuideHere(browserStorage(), kind, false)) return;
+  guideAutoOpened = true;
+  guideOpen.value = true;
+}, { immediate: true });
+
+function openGuide(): void {
+  guideOpen.value = true;
+}
+
+function closeGuide(): void {
+  guideOpen.value = false;
+  markFirstRunGuideSeen(browserStorage());
+}
+
 const onlineRoom = computed(() => onlineSession.room.value);
 const onlineError = computed(() => onlineSession.lastError.value);
 const connectionLabel = computed(() => {
@@ -213,6 +249,44 @@ async function handleJoin(payload: { roomCode: string; nickname: string; role: R
     syncStorage();
   }
 }
+
+// ---- 公开房间列表（#108） ----
+
+const publicRooms = ref<PublicRoomSummary[]>([]);
+const roomListLoading = ref(false);
+const roomListError = ref<string | null>(null);
+
+/**
+ * 拉取公开房间列表。
+ *
+ * 失败**不写 `onlineError`**（那是持久错误位，会挡住首页的正常操作）：列表刷不出来只影响
+ * 「从列表里挑一局」这条可选路径，用户照样能手输房间码。所以错误单独存在 `roomListError` 里，
+ * 由区块内部呈现成一句「刷新失败」。
+ *
+ * 并发保护用 `roomListLoading`：刷新按钮点两下不该发两个请求（服务端那边也有按 IP 的限流）。
+ */
+async function refreshPublicRooms(): Promise<void> {
+  if (roomListLoading.value) return;
+  roomListLoading.value = true;
+  try {
+    const response = await onlineSession.listRooms();
+    if (response.ok) {
+      publicRooms.value = response.rooms;
+      roomListError.value = null;
+    } else {
+      roomListError.value = response.message || '房间列表加载失败，请重试';
+    }
+  } finally {
+    roomListLoading.value = false;
+  }
+}
+
+// 回到首页就刷新一次：刚打完的那局若已结束会从列表里消失，别人新开的房也该出现。
+// 只在真正切到 home 时触发，避免在对局中反复请求（服务端有按 IP 的限流）。
+// `immediate` 是必需的：没有存档时首屏直接就是 home，那次「切换」根本不会发生。
+watch(pageKind, (kind) => {
+  if (kind === 'home') void refreshPublicRooms();
+}, { immediate: true });
 
 async function handleResumePending() {
   if (submitting.value) return;
@@ -574,8 +648,13 @@ onBeforeUnmount(() => {
     :local-save-cards="localSaveCards"
     :active-maps="activeMaps"
     :initial-map-id="homeMapId"
+    :public-rooms="publicRooms"
+    :room-list-loading="roomListLoading"
+    :room-list-error="roomListError"
     @create="handleCreate"
     @join="handleJoin"
+    @refresh-rooms="refreshPublicRooms"
+    @open-guide="openGuide"
     @local="chooseLocal"
     @resume="handleResumePending"
     @abandon-pending="handleAbandonPending"
@@ -626,4 +705,7 @@ onBeforeUnmount(() => {
     @start="handleStartRoom"
     @leave="handleLeaveRoom"
   />
+
+  <!-- 新手引导（#109）：与页面同级的常驻弹层，只在 open 时由 MobileSheet 真正 showModal()。 -->
+  <FirstRunGuide :open="guideOpen" @close="closeGuide" />
 </template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { ChatMessage, PublicRoomState, RoomRuleConfig, RoomSettings, RoomSettingsPatch } from '@richman/protocol';
+import { TURN_TIME_LIMIT_OPTIONS } from '@richman/protocol';
 import { getActiveMapPack } from '@richman/board-data';
 import type { BotDifficulty } from '@richman/engine';
 import { BOT_DIFFICULTY_OPTIONS } from '../game/gameSetup';
@@ -250,6 +251,39 @@ function chooseMinimalUndo(enabled: boolean): void {
   emit('updateSettings', { minimalUndoEnabled: enabled });
 }
 
+/** 回合限时（#107）：0 = 不限时（默认）。档位来自协议常量，避免前后端各写一套数字。 */
+const turnTimeLimitSec = computed(() => props.roomSettings?.turnTimeLimitSec ?? 0);
+const TURN_LIMIT_CHOICES = TURN_TIME_LIMIT_OPTIONS.map((sec) => ({
+  value: sec,
+  label: sec === 0 ? '不限时' : `${sec} 秒`,
+}));
+
+/**
+ * 设置回合限时（#107）。超时后**不是**简单跳过这一回合，而是由服务端按电脑策略替这位玩家
+ * 走一步（与「离线托管」同一套决策）。因此它对挂机者是一种「温和的强制推进」，
+ * 而不是「白丢一回合」——后者会让被限时的人直接输在运气上。
+ */
+function chooseTurnTimeLimit(sec: number): void {
+  if (rulesReadOnly.value) return;
+  if (turnTimeLimitSec.value === sec) return;
+  emit('updateSettings', { turnTimeLimitSec: sec });
+}
+
+/**
+ * 「允许被公开房间列表发现」（#108）：默认关闭。
+ *
+ * 默认关闭是刻意的——房间码本来就是准入凭据，把房间摆进全网列表属于**房主替所有人**做的
+ * 曝光决定，不能由升级默认打开。打开后别人能在首页的「公开房间」区块看到这间房并一键进来
+ * （对局中则是一键旁观）。
+ */
+const discoverable = computed(() => props.roomSettings?.isPublic === true);
+
+function chooseDiscoverable(enabled: boolean): void {
+  if (rulesReadOnly.value) return;
+  if (discoverable.value === enabled) return;
+  emit('updateSettings', { isPublic: enabled });
+}
+
 const botDifficultyHint = computed(
   () => BOT_DIFFICULTY_OPTIONS.find((option) => option.value === props.roomSettings?.botDifficulty)?.hint ?? '',
 );
@@ -262,7 +296,13 @@ const ruleSummary = computed(() => {
   // 悔棋也写进摘要（#101）：它不是「规则三项」之一，但同样决定了这局的手感，
   // 非房主只能从摘要里知道这件事（开关本身只渲染在房主区）。
   const undo = undoEnabled.value ? ' · 可悔棋（需对手同意）' : '';
-  return `初始资金 ¥${rule.initialCash} · 最高房级 ${rule.maxHouseLevel} 级 · 抵押利率 ${percent}%${undo}`;
+  // 回合限时也进摘要（#107）：非房主只能从摘要里知道这局有没有倒计时，
+  // 不然他会以为是自己的网络或界面出了问题。
+  const limit = turnTimeLimitSec.value > 0 ? ` · 每步限时 ${turnTimeLimitSec.value} 秒` : '';
+  // 可被发现也进摘要（#108）：它决定「外面的人能不能搜到我们这间房」，是房间的公开性事实，
+  // 不只在房主的开关里可见。
+  const listed = discoverable.value ? ' · 已公开到房间列表' : '';
+  return `初始资金 ¥${rule.initialCash} · 最高房级 ${rule.maxHouseLevel} 级 · 抵押利率 ${percent}%${undo}${limit}${listed}`;
 });
 
 // Copy feedback is transient and self-describing so a clipboard rejection is never silent.
@@ -525,6 +565,58 @@ onBeforeUnmount(() => {
 
           <p v-if="ruleError" class="lobby-rules__error" role="alert">{{ ruleError }}</p>
         </template>
+
+        <!-- 回合限时（#107）：所有人可见（只读给非房主），因为它直接决定每个人有没有倒计时。
+             默认不限时；开了之后，到点由服务端按电脑策略替该玩家走一步。 -->
+        <div class="lobby-rules__difficulty">
+          <span class="lobby-rules__difficulty-label">每步限时</span>
+          <div class="lobby-rules__difficulty-options" role="radiogroup" aria-label="每步限时">
+            <button
+              v-for="choice in TURN_LIMIT_CHOICES"
+              :key="choice.value"
+              type="button"
+              class="lobby-rules__difficulty-option"
+              :class="{ active: turnTimeLimitSec === choice.value }"
+              :aria-pressed="turnTimeLimitSec === choice.value"
+              :disabled="rulesReadOnly"
+              @click="chooseTurnTimeLimit(choice.value)"
+            >{{ choice.label }}</button>
+          </div>
+          <p class="lobby-rules__hint">
+            {{ turnTimeLimitSec > 0
+              ? '轮到你的每一步都有倒计时，到点由服务端替你走一步（与离线托管同一套决策），不会直接跳过整回合。'
+              : '不限时：不催任何人的操作节奏。适合熟人局与边聊边玩。' }}
+          </p>
+        </div>
+
+        <!-- 公开房间列表（#108）：同样所有人可见（只读给非房主）。默认关闭——
+             房间码本就是准入凭据，把房间摆到全网列表上是房主替所有人做的曝光决定。 -->
+        <div class="lobby-rules__difficulty">
+          <span class="lobby-rules__difficulty-label">公开房间</span>
+          <div class="lobby-rules__difficulty-options" role="radiogroup" aria-label="是否允许被公开房间列表发现">
+            <button
+              type="button"
+              class="lobby-rules__difficulty-option"
+              :class="{ active: !discoverable }"
+              :aria-pressed="!discoverable"
+              :disabled="rulesReadOnly"
+              @click="chooseDiscoverable(false)"
+            >仅凭房间码</button>
+            <button
+              type="button"
+              class="lobby-rules__difficulty-option"
+              :class="{ active: discoverable }"
+              :aria-pressed="discoverable"
+              :disabled="rulesReadOnly"
+              @click="chooseDiscoverable(true)"
+            >公开到列表</button>
+          </div>
+          <p class="lobby-rules__hint">
+            {{ discoverable
+              ? '别人能在首页的「公开房间」里看到这间房并一键进来；对局中则是一键旁观。'
+              : '只有拿到房间码或邀请链接的人才能进来。' }}
+          </p>
+        </div>
       </section>
 
       <section v-if="isHost" class="lobby-controls" aria-label="房主操作">

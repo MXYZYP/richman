@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue';
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { ChatMessage } from '@richman/protocol';
+import { QUICK_PHRASES, createQuickPhraseGate, isSendableQuickPhrase } from '../session/quickPhrases';
 
 const props = defineProps<{
   messages: ChatMessage[];
@@ -35,6 +36,29 @@ function submit(): void {
   emit('send', text);
   draft.value = '';
 }
+
+// ───────────── 快捷短语（路线图 #109） ─────────────
+// 点一下**直接发出去**，不经过输入框：省掉「填进去 → 再点发送」那一步，
+// 而联机时最常说的那几句（「轮到我啦」）本来也不值得敲键盘。
+//
+// 代价是「连点两下」在服务端会被静默丢弃（`roomSocketAdapter.ts` 的 CHAT_MIN_INTERVAL_MS = 700），
+// 客户端看不到任何异常。所以本地先按住同样长的时间把按钮变灰 ——
+// 看得见的等待远好过看不见的丢消息。闸门本身在 `session/quickPhrases.ts`，
+// 那边是纯逻辑、可单测；这里只负责把它的状态翻成按钮的 disabled。
+const phraseCooldown = ref(false);
+const phraseGate = createQuickPhraseGate(() => {
+  phraseCooldown.value = false;
+});
+
+function sendQuickPhrase(phrase: string): void {
+  if (props.disabled) return;
+  if (!isSendableQuickPhrase(phrase)) return;
+  if (!phraseGate.trySend()) return;
+  emit('send', phrase);
+  phraseCooldown.value = true;
+}
+
+onBeforeUnmount(() => phraseGate.dispose());
 </script>
 
 <template>
@@ -54,6 +78,19 @@ function submit(): void {
           <span class="chat-line__time">{{ formatTime(message.ts) }}</span>
         </span>
         <span class="chat-line__text">{{ message.text }}</span>
+      </div>
+    </div>
+    <div class="chat-panel__phrases" role="group" aria-label="快捷短语，点击即发送">
+      <span class="chat-panel__phrases-hint">快捷短语 · 点击即发送</span>
+      <div class="chat-panel__phrases-row">
+        <button
+          v-for="phrase in QUICK_PHRASES"
+          :key="phrase"
+          type="button"
+          class="chat-panel__phrase"
+          :disabled="disabled || phraseCooldown"
+          @click="sendQuickPhrase(phrase)"
+        >{{ phrase }}</button>
       </div>
     </div>
     <form class="chat-panel__form" @submit.prevent="submit">
@@ -149,6 +186,46 @@ function submit(): void {
 .chat-line__text {
   word-break: break-word;
   white-space: pre-wrap;
+}
+
+/* 快捷短语（#109）：窄面板里一排小胶囊，放不下就换行。 */
+.chat-panel__phrases {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.chat-panel__phrases-hint {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
+.chat-panel__phrases-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chat-panel__phrase {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  color: var(--color-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chat-panel__phrase:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* 冷却期（700ms）与「聊天不可用」共用同一种「暂时点不了」的表现。 */
+.chat-panel__phrase:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .chat-panel__form {

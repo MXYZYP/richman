@@ -47,6 +47,8 @@ type RoomDomainEvent =
   | { type: 'undo_request'; roomCode: string; request: unknown }
   | { type: 'undo_result'; roomCode: string; result: unknown }
   | { type: 'undo_available'; roomCode: string; playerId: string | null }
+  | { type: 'turn_deadline'; roomCode: string; info: { playerId: string | null; deadlineAt: number | null; limitSec: number } }
+  | { type: 'turn_timeout'; roomCode: string; playerId: string; nickname: string }
   | { type: 'player_connection'; roomCode: string; playerId: string; online: boolean }
   | { type: 'room_closed'; roomCode: string; reason: 'empty_lobby' | 'lobby_idle_timeout' }
   | { type: 'game_events'; roomCode: string; events: unknown[] }
@@ -101,11 +103,34 @@ interface RoomManagerContract {
   removeBot(roomCode: string, requesterId: string, playerId: string): RoomResult<PublicRoomState>;
   renameBot(roomCode: string, requesterId: string, playerId: string, nickname: string): RoomResult<PublicRoomState>;
   startRoom(roomCode: string, requesterId: string): RoomResult<PublicRoomState>;
+  kickPlayer(roomCode: string, requesterId: string, targetPlayerId: string): RoomResult<PublicRoomState | null>;
+  updateRoomSettings(
+    roomCode: string,
+    requesterId: string,
+    patch: { isPublic?: boolean; turnTimeLimitSec?: number },
+  ): RoomResult<{ isPublic: boolean; turnTimeLimitSec: number }>;
+  listPublicRooms(): PublicRoomSummary[];
   getPublicRoom(roomCode: string): PublicRoomState | null;
   leaveRoom(roomCode: string, playerId: string): RoomResult<PublicRoomState | null>;
   markDisconnected(roomCode: string, playerId: string): RoomResult<PublicRoomState | null>;
   resumeRoom(roomCode: string, playerId: string, token: string): RoomResult<PublicRoomState>;
   dispose(): void;
+}
+
+/** 公开房间列表条目（#108）。刻意不含成员名单 / 观战者名单 / 托管状态 —— 见 `listPublicRooms`。 */
+interface PublicRoomSummary {
+  roomCode: string;
+  hostNickname: string;
+  mapTitle: string;
+  status: RoomStatus;
+  playerCount: number;
+  spectatorCount: number;
+  playerLimit: number;
+  spectatorLimit: number;
+  joinable: boolean;
+  spectatable: boolean;
+  turnTimeLimitSec: number;
+  botDifficulty: string;
 }
 
 function createChinaRoom(
@@ -1539,6 +1564,105 @@ describe('RoomManager lobby disconnect grace period', () => {
     expect(manager.getPublicRoom('000041')).toEqual(expectedRoom);
 
     manager.dispose();
+  });
+});
+
+describe('RoomManager public room list (#108)', () => {
+  test('lists only published, still-joinable-or-watchable rooms and orders joinable → spectatable → rest', () => {
+    // 房间号按建房顺序发放：000007=A、000008=B、000009=C、000010=D、000011=E。
+    const manager = createManager({ roomNumbers: [7, 8, 9, 10, 11] });
+
+    // A：大厅 1 人、已公开 → 既能加入也能旁观。
+    const roomA = createChinaRoom(manager, '房主甲');
+    expectRoomSuccess(roomA);
+    expectRoomSuccess(manager.updateRoomSettings(roomA.value.roomCode, roomA.value.playerId, { isPublic: true }));
+
+    // B：已开局 2 人、已公开 → 不能再以玩家加入，但可以旁观。
+    const roomB = createChinaRoom(manager, '房主乙');
+    expectRoomSuccess(roomB);
+    const guestB = manager.joinRoom(roomB.value.roomCode, '乙的对手');
+    expectRoomSuccess(guestB);
+    expectRoomSuccess(manager.updateRoomSettings(roomB.value.roomCode, roomB.value.playerId, { isPublic: true }));
+    expectRoomSuccess(manager.startRoom(roomB.value.roomCode, roomB.value.playerId));
+
+    // C：大厅坐满 6 人、已公开 → 同样只能旁观，与 B 同组，排序时靠房间号决先后。
+    const roomC = createChinaRoom(manager, '房主丙');
+    expectRoomSuccess(roomC);
+    for (let seat = 0; seat < 5; seat += 1) {
+      expectRoomSuccess(manager.joinRoom(roomC.value.roomCode, `丙的客人${seat}`));
+    }
+    expectRoomSuccess(manager.updateRoomSettings(roomC.value.roomCode, roomC.value.playerId, { isPublic: true }));
+
+    // D：公开后又收回（大厅里随时可撤）。
+    const roomD = createChinaRoom(manager, '房主丁');
+    expectRoomSuccess(roomD);
+    expectRoomSuccess(manager.updateRoomSettings(roomD.value.roomCode, roomD.value.playerId, { isPublic: true }));
+    expectRoomSuccess(manager.updateRoomSettings(roomD.value.roomCode, roomD.value.playerId, { isPublic: false }));
+
+    // E：从头到尾没公开过。
+    const roomE = createChinaRoom(manager, '房主戊');
+    expectRoomSuccess(roomE);
+
+    // 只列 3 个：D 收回了、E 没公开过。排序是「可加入 → 可旁观 → 其余」，同组内按房间号升序 ——
+    // 确定性排序不是洁癖：列表每次刷新都在跳会让用户以为自己点错了。
+    expect(manager.listPublicRooms()).toEqual([
+      {
+        roomCode: '000007',
+        hostNickname: '房主甲',
+        mapTitle: CHINA_MAP_SUMMARY.title,
+        status: 'lobby',
+        playerCount: 1,
+        spectatorCount: 0,
+        playerLimit: 6,
+        spectatorLimit: 3,
+        joinable: true,
+        spectatable: true,
+        turnTimeLimitSec: 0,
+        botDifficulty: 'normal',
+      },
+      expect.objectContaining({ roomCode: '000008', status: 'playing', playerCount: 2, joinable: false, spectatable: true }),
+      expect.objectContaining({ roomCode: '000009', status: 'lobby', playerCount: 6, joinable: false, spectatable: true }),
+    ]);
+  });
+
+  test('drops a room out of the list the moment it ends, even though it is still published', () => {
+    const manager = createManager({ roomNumbers: [7] });
+    const created = createChinaRoom(manager, '房主');
+    expectRoomSuccess(created);
+    const guest = manager.joinRoom(created.value.roomCode, '客人');
+    expectRoomSuccess(guest);
+    expectRoomSuccess(manager.updateRoomSettings(created.value.roomCode, created.value.playerId, { isPublic: true }));
+    expectRoomSuccess(manager.startRoom(created.value.roomCode, created.value.playerId));
+    expect(manager.listPublicRooms()).toHaveLength(1);
+
+    // 两人局里踢掉对手 = 仅剩一名存活玩家 → 直接终局。已结束的房间连 `room:join` 都拒绝，
+    // 留在列表里只会让人点进去才发现进不去。
+    expectRoomSuccess(manager.kickPlayer(created.value.roomCode, created.value.playerId, guest.value.playerId));
+
+    expect(manager.getPublicRoom(created.value.roomCode)?.status).toBe('ended');
+    expect(manager.listPublicRooms()).toEqual([]);
+  });
+
+  test('a published room whose spectator seats are taken is neither joinable nor spectatable', () => {
+    const manager = createManager({ roomNumbers: [7] });
+    const created = createChinaRoom(manager, '房主');
+    expectRoomSuccess(created);
+    const guest = manager.joinRoom(created.value.roomCode, '客人');
+    expectRoomSuccess(guest);
+    expectRoomSuccess(manager.updateRoomSettings(created.value.roomCode, created.value.playerId, { isPublic: true }));
+    expectRoomSuccess(manager.startRoom(created.value.roomCode, created.value.playerId));
+
+    for (let seat = 0; seat < 3; seat += 1) {
+      expectRoomSuccess(manager.joinRoom(created.value.roomCode, `观众${seat}`, undefined, 'spectator'));
+    }
+
+    // 第 4 个观众挤不进来 —— 摘要里的 `spectatable: false` 必须与真实准入判断一致，
+    // 否则列表会给出一个点下去就报错的「旁观」按钮。
+    expectRoomFailure(manager.joinRoom(created.value.roomCode, '观众4', undefined, 'spectator'), 'ROOM_FULL');
+
+    expect(manager.listPublicRooms()).toEqual([
+      expect.objectContaining({ roomCode: '000007', spectatorCount: 3, joinable: false, spectatable: false }),
+    ]);
   });
 });
 

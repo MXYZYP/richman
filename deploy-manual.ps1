@@ -58,6 +58,11 @@ $files = @(
   # GameView; if left out of this list the server vite build fails with
   # `Could not resolve "../components/PwaInstallRow.vue"`.
   "apps/client/src/components/PwaInstallRow.vue",
+  # Per-turn clock badge (#107), imported by GameView. NEW component: without it the server build
+  # dies with `Could not resolve "../components/TurnCountdown.vue"`.
+  "apps/client/src/components/TurnCountdown.vue",
+  # First-run guide / "how to play" modal (#109), lazily imported by App.vue. NEW component.
+  "apps/client/src/components/FirstRunGuide.vue",
   "apps/client/src/views/HomeView.vue",
   "apps/client/src/views/LobbyView.vue",
   "apps/client/src/App.vue",
@@ -72,6 +77,12 @@ $files = @(
   # Animation speed (local display preference). Imported by GameView and by
   # playbackPace.test.ts, so a stale server copy breaks vue-tsc.
   "apps/client/src/session/playbackPace.ts",
+  # Turn clock helper (#107): pure deadline/formatting module used by GameView and onlineSession.
+  "apps/client/src/session/turnTimer.ts",
+  # First-run guide flag (#109) and chat quick phrases (#109). Pure modules imported by App.vue
+  # and ChatPanel.vue; a missing upload leaves the server building against a stale copy.
+  "apps/client/src/session/firstRunGuide.ts",
+  "apps/client/src/session/quickPhrases.ts",
   "apps/client/src/session/sessionStorage.ts",
   "apps/client/src/session/onlineSession.ts",
   "apps/client/src/session/localSession.ts",
@@ -251,6 +262,8 @@ $files = @(
   "apps/server/src/__tests__/fullGameSmoke.test.ts",
   "apps/server/src/__tests__/roomSnapshot.test.ts",
   "apps/server/src/__tests__/roomUndo.test.ts",
+  # Per-turn clock (#107): the server-side deadline / timeout-autoplay behaviour.
+  "apps/server/src/__tests__/turnTimer.test.ts",
   # ---------- Client tests (all, so vue-tsc never uses stale copies) ----------
   "apps/client/src/components/boardRendering.test.ts",
   "apps/client/src/session/gamePresenter.test.ts",
@@ -291,7 +304,15 @@ $files = @(
   "apps/client/src/components/SettingsDialog.test.ts",
   "apps/client/src/ui/mapRules.test.ts",
   "apps/client/src/audio/sfx.test.ts",
-  "apps/client/src/audio/bgm.test.ts"
+  "apps/client/src/audio/bgm.test.ts",
+  # Tests added by the third batch: turn clock (#107), public room list (#108),
+  # first-run guide + chat quick phrases (#109). vue-tsc runs over the whole client package,
+  # so a test file left out here is type-checked against a stale server copy.
+  "apps/client/src/session/turnTimer.test.ts",
+  "apps/client/src/session/quickPhrases.test.ts",
+  "apps/client/src/session/firstRunGuide.test.ts",
+  "apps/client/src/components/ChatPanel.test.ts",
+  "apps/client/src/components/FirstRunGuide.test.ts"
 )
 
 # ---------- Pre-flight guard (added 2026-09-23 after a failed deploy) ----------

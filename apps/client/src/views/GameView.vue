@@ -11,11 +11,13 @@ import SettlementDialog from '../components/SettlementDialog.vue';
 import PropertyAwards from '../components/PropertyAwards.vue';
 import MobileSheet from '../components/MobileSheet.vue';
 import ChatPanel from '../components/ChatPanel.vue';
+import TurnCountdown from '../components/TurnCountdown.vue';
 import SettingsDialog from '../components/SettingsDialog.vue';
 import { formatRecentLogEvent, canProposeTrade, getAssetRows, getAuctionDisplay, getCellDetail, getOwnTradableCells, getPendingCardChoice, getPendingPurchaseOffer, getPlayerAssetDialogModel, getTradeDisplay, getTradeProposalOptions, type ClientAction } from '../game/clientGame';
 import { formatCashAnnouncement, formatMoney } from '../ui/format';
 import type { CashNotice, GameSession } from '../session/gameSession';
 import { paceMultiplier } from '../session/playbackPace';
+import { shouldShowTurnCountdown } from '../session/turnTimer';
 import { getGameInteractionState } from '../session/gameInteraction';
 import { browserStorage, recordGameResult } from '../session/playerStats';
 import type { Intent } from '@richman/engine';
@@ -404,6 +406,16 @@ const showBargainPanel = computed(() => (
   tradeDisplay.value !== null
   || auctionDisplay.value !== null
   || (tradeProposalOptions.value !== null && tradeProposalOptions.value.length > 0)
+));
+
+/* ---- 回合限时（#107） ----
+   服务端只给出「此刻谁的钟在走」（`room:turn_deadline`），本地一秒钟也不自行判超时。
+   只为**本机玩家自己**画倒计时：给旁观者或别人画一根「你的回合快到了」比不画更让人困惑。 */
+const turnDeadlineInfo = computed(() => props.session.turnDeadline?.value ?? null);
+const showTurnCountdown = computed(() => (
+  !isSpectator.value
+  && state.value?.phase === 'playing'
+  && shouldShowTurnCountdown(turnDeadlineInfo.value, props.session.localPlayerId.value)
 ));
 const selectedCellDetail = computed(() => (
   state.value === null || selectedCellId.value === null ? null : getCellDetail(state.value, selectedCellId.value)
@@ -918,6 +930,14 @@ function inspectFinalBoard() {
           :purchase-offer="pendingPurchaseOffer"
           :pending-card="pendingCardChoice"
           @action="handleAction"
+        />
+        <!-- 回合限时（#107）：房主在大厅开启后才出现，且只在本机玩家自己该走时显示。
+             排在操作面板正下方——玩家抬手就能看见「还剩几秒」，而不必满屏找。 -->
+        <TurnCountdown
+          v-if="showTurnCountdown"
+          :deadline-at="turnDeadlineInfo!.deadlineAt!"
+          :limit-sec="turnDeadlineInfo!.limitSec"
+          :busy="isBusy || isSubmittingIntent"
         />
         <!-- 议价面板（#105 交易 / #106 拍卖）：三态互斥，与悔棋面板并列排在操作面板下方。
              没有进行中的议价、也不轮到我发起时整块不出现，不会给控制台留下常驻空白。 -->

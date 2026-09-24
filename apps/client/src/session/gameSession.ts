@@ -1,7 +1,7 @@
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import type { GameState, Intent } from '@richman/engine';
 import type { MapPresentation } from '@richman/board-data';
-import type { ChatMessage, PublicRoomState, RoomSettings, UndoRequestInfo } from '@richman/protocol';
+import type { ChatMessage, PublicRoomState, RoomSettings, TurnDeadlineInfo, UndoRequestInfo } from '@richman/protocol';
 import type { ClientAction, DisplayCard } from '../game/clientGame';
 
 /** Display-safe game state: no engine seed or private deck queues. */
@@ -98,4 +98,9 @@ export interface GameSession {
   voteUndo?(requestId: string, approve: boolean): Promise<void>;
   /** 撤回自己尚未有结果的联机悔棋请求。 */
   cancelUndo?(): Promise<void>;
+  /**
+   * 回合限时（#107）：服务端给出的「此刻谁的回合钟在走、走到几点」，仅联机提供。
+   * `playerId === null` = 此刻没有倒计时（房间未开启 / 轮到电脑 / 行动者离线），UI 据此不画进度条。
+   */
+  readonly turnDeadline?: Ref<TurnDeadlineInfo | null>;
 }
