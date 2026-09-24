@@ -73,7 +73,7 @@ describe('production room server bootstrap', () => {
       throw new Error('room:create ack must include a public room object');
     }
 
-    expect(createAck.roomCode).toMatch(/^\d{4}$/);
+    expect(createAck.roomCode).toMatch(/^\d{6}$/);
     expect(createAck.playerId).toEqual(expect.stringMatching(uuidLike));
     expect(createAck.token).toEqual(expect.stringMatching(tokenLike));
     expect(createAck.playerId).not.toBe(createAck.token);

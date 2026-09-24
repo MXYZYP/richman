@@ -10,6 +10,9 @@ export const ROOM_ERROR_CODES = [
   'INVALID_NICKNAME',
   'NOT_ENOUGH_PLAYERS',
   'INVALID_ROOM_ACTION',
+  // 创建房间频率限流（按客户端 IP 滑动窗口）。刻意独立于 INVALID_ROOM_ACTION：
+  // 这条不是「当前状态不允许」，而是「稍等即可」——客户端据此走可重试分支并给出等待提示。
+  'CREATE_RATE_LIMITED',
 ] as const;
 
 export type RoomErrorCode = (typeof ROOM_ERROR_CODES)[number];

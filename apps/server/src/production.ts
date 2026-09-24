@@ -2,6 +2,7 @@ import { randomBytes, randomInt, randomUUID, timingSafeEqual } from 'node:crypto
 import { fileURLToPath } from 'node:url';
 import { createRoomServer, type RunningRoomServer } from './server';
 import { RoomManager } from './rooms/roomManager';
+import { createRoomSnapshotStore } from './rooms/roomSnapshotStore';
 import type { RoomDomainEvent } from './rooms/roomTypes';
 
 export interface StartedProductionServer {
@@ -14,10 +15,12 @@ type RandomInt = (min: number, max: number) => number;
 
 const DEFAULT_PORT = 3000;
 const TOKEN_BYTE_LENGTH = 32;
-const ROOM_CODE_COUNT = 10_000;
+const ROOM_CODE_COUNT = 1_000_000;
 const MIN_AUTOMATION_DELAY_MS = 800;
 const MAX_AUTOMATION_DELAY_MS = 1600;
 const CLIENT_DIST_PATH = fileURLToPath(new URL('../../client/dist', import.meta.url));
+/** 房间快照目录（C-③）：默认放在 server 包内的 `.runtime/`，可用环境变量覆盖。 */
+const DEFAULT_SNAPSHOT_DIR = fileURLToPath(new URL('../.runtime/room-snapshots', import.meta.url));
 
 export async function startProductionServer(
   requestedPort = Number(process.env.PORT ?? DEFAULT_PORT),
@@ -50,6 +53,7 @@ export function nextProductionAutomationDelayMs(randomInteger: RandomInt = rando
 function createProductionRoomManager(
   onAsyncEvents: (events: RoomDomainEvent[]) => void,
 ): RoomManager<NodeJS.Timeout> {
+  const snapshotDirectory = process.env.RICHMAN_SNAPSHOT_DIR ?? DEFAULT_SNAPSHOT_DIR;
   return new RoomManager<NodeJS.Timeout>({
     generatePlayerId: randomUUID,
     generateToken: generateProductionGameSeed,
@@ -60,6 +64,8 @@ function createProductionRoomManager(
     onAsyncEvents,
     generateGameSeed: generateProductionGameSeed,
     nextAutomationDelayMs: nextProductionAutomationDelayMs,
+    // C-③：房间状态变更即落盘，进程重启后（pm2 restart / 部署）进行中的对局可恢复。
+    snapshotStore: createRoomSnapshotStore({ directory: snapshotDirectory }),
     onServerError: (message, error) => console.error(message, error),
   });
 }

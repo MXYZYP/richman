@@ -43,6 +43,7 @@ interface PublicRoomState {
 
 type RoomDomainEvent =
   | { type: 'room_state'; roomCode: string; room: PublicRoomState }
+  | { type: 'room_settings'; roomCode: string; settings: unknown }
   | { type: 'player_connection'; roomCode: string; playerId: string; online: boolean }
   | { type: 'room_closed'; roomCode: string; reason: 'empty_lobby' | 'lobby_idle_timeout' }
   | { type: 'game_events'; roomCode: string; events: unknown[] }
@@ -228,7 +229,7 @@ describe('RoomManager deterministic room creation', () => {
     const result = createChinaRoom(manager, '  玩家一  ');
 
     expectRoomSuccess(result);
-    const expectedRoom: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '玩家一',
@@ -237,21 +238,21 @@ describe('RoomManager deterministic room creation', () => {
       },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(result.value).toEqual({
-      roomCode: '0007',
+      roomCode: '000007',
       playerId: 'player-host',
       token: 'secret-token',
       room: expectedRoom,
     });
-    expect(result.events).toEqual([{ type: 'room_state', roomCode: '0007', room: expectedRoom }]);
-    expect(manager.getPublicRoom('0007')).toEqual(expectedRoom);
+    expect(result.events).toEqual([{ type: 'room_state', roomCode: '000007', room: expectedRoom }]);
+    expect(manager.getPublicRoom('000007')).toEqual(expectedRoom);
     expect(JSON.stringify(result.value.room)).not.toContain('secret-token');
     expect(JSON.stringify(result.events)).not.toContain('secret-token');
-    expect(JSON.stringify(manager.getPublicRoom('0007'))).not.toContain('secret-token');
+    expect(JSON.stringify(manager.getPublicRoom('000007'))).not.toContain('secret-token');
 
     manager.dispose();
   });
 
-  test('createRoom retries an occupied random candidate and uses the next available four-digit code', () => {
+  test('createRoom retries an occupied random candidate and uses the next available six-digit code', () => {
     const manager = createManager({ roomNumbers: [7, 7, 8] });
 
     const first = createChinaRoom(manager, '玩家一');
@@ -259,9 +260,9 @@ describe('RoomManager deterministic room creation', () => {
 
     expectRoomSuccess(first);
     expectRoomSuccess(second);
-    expect(first.value.roomCode).toBe('0007');
-    expect(second.value.roomCode).toBe('0008');
-    expect(manager.getPublicRoom('0008')).toEqual(second.value.room);
+    expect(first.value.roomCode).toBe('000007');
+    expect(second.value.roomCode).toBe('000008');
+    expect(manager.getPublicRoom('000008')).toEqual(second.value.room);
 
     manager.dispose();
   });
@@ -274,27 +275,27 @@ describe('RoomManager deterministic room creation', () => {
 
     expectRoomSuccess(occupied);
     expectRoomSuccess(fallback);
-    expect(occupied.value.roomCode).toBe('0000');
-    expect(fallback.value.roomCode).toBe('0001');
-    expect(manager.getPublicRoom('0001')).toEqual(fallback.value.room);
+    expect(occupied.value.roomCode).toBe('000000');
+    expect(fallback.value.roomCode).toBe('000001');
+    expect(manager.getPublicRoom('000001')).toEqual(fallback.value.room);
 
     manager.dispose();
   });
 
-  test('createRoom returns INVALID_ROOM_ACTION when every four-digit code is already allocated', () => {
-    const allRoomNumbers = Array.from({ length: 10_000 }, (_, roomNumber) => roomNumber);
-    const manager = createManager({ roomNumbers: allRoomNumbers, repeatRoomNumber: 0 });
+  test('createRoom assigns zero-padded six-digit codes and keeps allocating past the first ten thousand', () => {
+    const firstTenThousand = Array.from({ length: 10_000 }, (_, roomNumber) => roomNumber);
+    const manager = createManager({ roomNumbers: firstTenThousand, repeatRoomNumber: 0 });
 
-    for (const roomNumber of allRoomNumbers) {
+    for (const roomNumber of firstTenThousand) {
       const result = createChinaRoom(manager, `玩家${roomNumber}`);
       expectRoomSuccess(result);
-      expect(result.value.roomCode).toBe(roomNumber.toString().padStart(4, '0'));
+      expect(result.value.roomCode).toBe(roomNumber.toString().padStart(6, '0'));
     }
 
-    const exhausted = createChinaRoom(manager, '最后玩家');
-
-    expectRoomFailure(exhausted, 'INVALID_ROOM_ACTION');
-    expect(JSON.stringify(exhausted)).not.toContain('token-');
+    const extra = createChinaRoom(manager, '第十批玩家');
+    expectRoomSuccess(extra);
+    // After consuming 0..9999 the next free number is 10000 -> '010000'.
+    expect(extra.value.roomCode).toBe('010000');
 
     manager.dispose();
   });
@@ -316,7 +317,7 @@ describe('RoomManager deterministic room creation', () => {
     const result = createChinaRoom(manager, nickname);
 
     expectRoomSuccess(result);
-    expect(result.value.roomCode).toBe('0042');
+    expect(result.value.roomCode).toBe('000042');
     expect(result.value.room.players).toHaveLength(1);
     expect(result.value.room.players[0]?.nickname).toBe(nickname);
 
@@ -354,10 +355,10 @@ describe('RoomManager deterministic membership and lobby start', () => {
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
 
-    const joined = manager.joinRoom('0011', '  玩家二  ');
+    const joined = manager.joinRoom('000011', '  玩家二  ');
 
     expectRoomSuccess(joined);
-    const expectedRoom: PublicRoomState = { roomCode: '0011', status: 'lobby', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000011', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -376,11 +377,11 @@ describe('RoomManager deterministic membership and lobby start', () => {
       token: 'guest-token',
       room: expectedRoom,
     });
-    expect(joined.events).toEqual([{ type: 'room_state', roomCode: '0011', room: expectedRoom }]);
-    expect(manager.getPublicRoom('0011')).toEqual(expectedRoom);
+    expect(joined.events).toEqual([{ type: 'room_state', roomCode: '000011', room: expectedRoom }]);
+    expect(manager.getPublicRoom('000011')).toEqual(expectedRoom);
     expect(JSON.stringify(joined.value.room)).not.toContain('guest-token');
     expect(JSON.stringify(joined.events)).not.toContain('guest-token');
-    expect(JSON.stringify(manager.getPublicRoom('0011'))).not.toContain('guest-token');
+    expect(JSON.stringify(manager.getPublicRoom('000011'))).not.toContain('guest-token');
 
     manager.dispose();
   });
@@ -393,12 +394,12 @@ describe('RoomManager deterministic membership and lobby start', () => {
     });
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const botAdded = manager.addBot('0012', 'player-host');
+    const botAdded = manager.addBot('000012', 'player-host');
     expectRoomSuccess(botAdded);
-    const started = manager.startRoom('0012', 'player-host');
+    const started = manager.startRoom('000012', 'player-host');
     expectRoomSuccess(started);
 
-    const result = manager.joinRoom('0012', ' \n\t ');
+    const result = manager.joinRoom('000012', ' \n\t ');
 
     expectRoomFailure(result, 'GAME_ALREADY_STARTED');
 
@@ -414,11 +415,11 @@ describe('RoomManager deterministic membership and lobby start', () => {
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
     for (const nickname of ['玩家二', '玩家三', '玩家四', '玩家五', '玩家六']) {
-      const joined = manager.joinRoom('0013', nickname);
+      const joined = manager.joinRoom('000013', nickname);
       expectRoomSuccess(joined);
     }
 
-    const result = manager.joinRoom('0013', ' 房主 ');
+    const result = manager.joinRoom('000013', ' 房主 ');
 
     expectRoomFailure(result, 'ROOM_FULL');
 
@@ -434,10 +435,10 @@ describe('RoomManager deterministic membership and lobby start', () => {
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
 
-    expectRoomFailure(manager.joinRoom('0014', ' \n\t '), 'INVALID_NICKNAME');
-    expectRoomFailure(manager.joinRoom('0014', '  房主  '), 'NICKNAME_TAKEN');
+    expectRoomFailure(manager.joinRoom('000014', ' \n\t '), 'INVALID_NICKNAME');
+    expectRoomFailure(manager.joinRoom('000014', '  房主  '), 'NICKNAME_TAKEN');
 
-    const joined = manager.joinRoom('0014', '玩家二');
+    const joined = manager.joinRoom('000014', '玩家二');
     expectRoomSuccess(joined);
     expect(joined.value.playerId).toBe('player-guest');
 
@@ -453,10 +454,10 @@ describe('RoomManager deterministic membership and lobby start', () => {
     const created = createChinaRoom(manager, '电脑 A');
     expectRoomSuccess(created);
 
-    const result = manager.addBot('0015', 'player-host');
+    const result = manager.addBot('000015', 'player-host');
 
     expectRoomSuccess(result);
-    const expectedRoom: PublicRoomState = { roomCode: '0015', status: 'lobby', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000015', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '电脑 A',
@@ -471,7 +472,7 @@ describe('RoomManager deterministic membership and lobby start', () => {
       },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(result.value).toEqual(expectedRoom);
-    expect(result.events).toEqual([{ type: 'room_state', roomCode: '0015', room: expectedRoom }]);
+    expect(result.events).toEqual([{ type: 'room_state', roomCode: '000015', room: expectedRoom }]);
     expect(JSON.stringify(result.value)).not.toContain('host-token');
 
     manager.dispose();
@@ -486,10 +487,10 @@ describe('RoomManager deterministic membership and lobby start', () => {
     const fullCreated = createChinaRoom(fullManager, '房主');
     expectRoomSuccess(fullCreated);
     for (const nickname of ['玩家二', '玩家三', '玩家四', '玩家五', '玩家六']) {
-      expectRoomSuccess(fullManager.joinRoom('0016', nickname));
+      expectRoomSuccess(fullManager.joinRoom('000016', nickname));
     }
 
-    expectRoomFailure(fullManager.addBot('0016', 'player-host'), 'ROOM_FULL');
+    expectRoomFailure(fullManager.addBot('000016', 'player-host'), 'ROOM_FULL');
     fullManager.dispose();
   });
 
@@ -501,21 +502,21 @@ describe('RoomManager deterministic membership and lobby start', () => {
     });
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0018', '玩家二');
+    const joined = manager.joinRoom('000018', '玩家二');
     expectRoomSuccess(joined);
 
-    expectRoomFailure(manager.addBot('0018', 'player-guest'), 'NOT_HOST');
-    expectRoomFailure(manager.removeBot('0018', 'player-guest', 'missing-player'), 'NOT_HOST');
-    expectRoomFailure(manager.removeBot('0018', 'player-host', 'missing-player'), 'INVALID_ROOM_ACTION');
-    expectRoomFailure(manager.removeBot('0018', 'player-host', 'player-guest'), 'INVALID_ROOM_ACTION');
+    expectRoomFailure(manager.addBot('000018', 'player-guest'), 'NOT_HOST');
+    expectRoomFailure(manager.removeBot('000018', 'player-guest', 'missing-player'), 'NOT_HOST');
+    expectRoomFailure(manager.removeBot('000018', 'player-host', 'missing-player'), 'INVALID_ROOM_ACTION');
+    expectRoomFailure(manager.removeBot('000018', 'player-host', 'player-guest'), 'INVALID_ROOM_ACTION');
 
-    const botAdded = manager.addBot('0018', 'player-host');
+    const botAdded = manager.addBot('000018', 'player-host');
     expectRoomSuccess(botAdded);
-    const started = manager.startRoom('0018', 'player-host');
+    const started = manager.startRoom('000018', 'player-host');
     expectRoomSuccess(started);
 
-    expectRoomFailure(manager.addBot('0018', 'player-host'), 'GAME_ALREADY_STARTED');
-    expectRoomFailure(manager.removeBot('0018', 'player-host', 'bot-a'), 'GAME_ALREADY_STARTED');
+    expectRoomFailure(manager.addBot('000018', 'player-host'), 'GAME_ALREADY_STARTED');
+    expectRoomFailure(manager.removeBot('000018', 'player-host', 'bot-a'), 'GAME_ALREADY_STARTED');
 
     manager.dispose();
   });
@@ -528,13 +529,13 @@ describe('RoomManager deterministic membership and lobby start', () => {
     });
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    expectRoomSuccess(manager.addBot('0019', 'player-host'));
-    expectRoomSuccess(manager.addBot('0019', 'player-host'));
+    expectRoomSuccess(manager.addBot('000019', 'player-host'));
+    expectRoomSuccess(manager.addBot('000019', 'player-host'));
 
-    const result = manager.removeBot('0019', 'player-host', 'bot-a');
+    const result = manager.removeBot('000019', 'player-host', 'bot-a');
 
     expectRoomSuccess(result);
-    const expectedRoom: PublicRoomState = { roomCode: '0019', status: 'lobby', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000019', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -549,8 +550,8 @@ describe('RoomManager deterministic membership and lobby start', () => {
       },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(result.value).toEqual(expectedRoom);
-    expect(result.events).toEqual([{ type: 'room_state', roomCode: '0019', room: expectedRoom }]);
-    expect(manager.getPublicRoom('0019')).toEqual(expectedRoom);
+    expect(result.events).toEqual([{ type: 'room_state', roomCode: '000019', room: expectedRoom }]);
+    expect(manager.getPublicRoom('000019')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -564,33 +565,33 @@ describe('RoomManager deterministic membership and lobby start', () => {
     });
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0021', '玩家二');
+    const joined = manager.joinRoom('000021', '玩家二');
     expectRoomSuccess(joined);
-    expectRoomSuccess(manager.addBot('0021', 'player-host'));
+    expectRoomSuccess(manager.addBot('000021', 'player-host'));
 
-    expectRoomFailure(manager.renameBot('0021', 'player-guest', 'bot-a', '新电脑'), 'NOT_HOST');
-    expectRoomFailure(manager.renameBot('0021', 'player-host', 'player-guest', '新名字'), 'INVALID_ROOM_ACTION');
-    expectRoomFailure(manager.renameBot('0021', 'player-host', 'bot-a', '   '), 'INVALID_NICKNAME');
-    expectRoomFailure(manager.renameBot('0021', 'player-host', 'bot-a', '玩家二'), 'NICKNAME_TAKEN');
+    expectRoomFailure(manager.renameBot('000021', 'player-guest', 'bot-a', '新电脑'), 'NOT_HOST');
+    expectRoomFailure(manager.renameBot('000021', 'player-host', 'player-guest', '新名字'), 'INVALID_ROOM_ACTION');
+    expectRoomFailure(manager.renameBot('000021', 'player-host', 'bot-a', '   '), 'INVALID_NICKNAME');
+    expectRoomFailure(manager.renameBot('000021', 'player-host', 'bot-a', '玩家二'), 'NICKNAME_TAKEN');
 
-    const unchanged = manager.renameBot('0021', 'player-host', 'bot-a', '  电脑 A  ');
+    const unchanged = manager.renameBot('000021', 'player-host', 'bot-a', '  电脑 A  ');
     expectRoomSuccess(unchanged);
     expect(unchanged.value.players.find((player) => player.id === 'bot-a')?.nickname).toBe('电脑 A');
 
-    const renamed = manager.renameBot('0021', 'player-host', 'bot-a', '  电脑甲  ');
+    const renamed = manager.renameBot('000021', 'player-host', 'bot-a', '  电脑甲  ');
     expectRoomSuccess(renamed);
-    const expectedRoom: PublicRoomState = { roomCode: '0021', status: 'lobby', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000021', status: 'lobby', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: true },
       { id: 'player-guest', nickname: '玩家二', isBot: false, online: true },
       { id: 'bot-a', nickname: '电脑甲', isBot: true, online: true },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(renamed.value).toEqual(expectedRoom);
-    expect(renamed.events).toEqual([{ type: 'room_state', roomCode: '0021', room: expectedRoom }]);
-    expect(manager.getPublicRoom('0021')).toEqual(expectedRoom);
+    expect(renamed.events).toEqual([{ type: 'room_state', roomCode: '000021', room: expectedRoom }]);
+    expect(manager.getPublicRoom('000021')).toEqual(expectedRoom);
 
-    const started = manager.startRoom('0021', 'player-host');
+    const started = manager.startRoom('000021', 'player-host');
     expectRoomSuccess(started);
-    expectRoomFailure(manager.renameBot('0021', 'player-host', 'bot-a', '晚改名'), 'GAME_ALREADY_STARTED');
+    expectRoomFailure(manager.renameBot('000021', 'player-host', 'bot-a', '晚改名'), 'GAME_ALREADY_STARTED');
 
     manager.dispose();
   });
@@ -604,8 +605,8 @@ describe('RoomManager deterministic membership and lobby start', () => {
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
 
-    expectRoomFailure(manager.startRoom('0020', 'player-guest'), 'NOT_HOST');
-    expectRoomFailure(manager.startRoom('0020', 'player-host'), 'NOT_ENOUGH_PLAYERS');
+    expectRoomFailure(manager.startRoom('000020', 'player-guest'), 'NOT_HOST');
+    expectRoomFailure(manager.startRoom('000020', 'player-host'), 'NOT_ENOUGH_PLAYERS');
 
     manager.dispose();
   });
@@ -618,12 +619,12 @@ describe('RoomManager deterministic membership and lobby start', () => {
     });
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    expectRoomSuccess(manager.addBot('0021', 'player-host'));
+    expectRoomSuccess(manager.addBot('000021', 'player-host'));
 
-    const result = manager.startRoom('0021', 'player-host');
+    const result = manager.startRoom('000021', 'player-host');
 
     expectRoomSuccess(result);
-    const expectedRoom: PublicRoomState = { roomCode: '0021', status: 'playing', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000021', status: 'playing', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -652,12 +653,12 @@ describe('RoomManager deterministic membership and lobby start', () => {
     });
     expect(result.value).toEqual(expectedRoom);
     expect(result.events).toEqual([
-      { type: 'room_state', roomCode: '0021', room: expectedRoom },
-      { type: 'game_snapshot', roomCode: '0021', state: expectedGameState },
+      { type: 'room_state', roomCode: '000021', room: expectedRoom },
+      { type: 'game_snapshot', roomCode: '000021', state: expectedGameState },
     ]);
-    expect(manager.getPublicRoom('0021')).toEqual(expectedRoom);
+    expect(manager.getPublicRoom('000021')).toEqual(expectedRoom);
 
-    expectRoomFailure(manager.startRoom('0021', 'player-host'), 'GAME_ALREADY_STARTED');
+    expectRoomFailure(manager.startRoom('000021', 'player-host'), 'GAME_ALREADY_STARTED');
 
     manager.dispose();
   });
@@ -677,12 +678,12 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
 
     const created = createChinaRoom(manager, '0022 host');
     expectRoomSuccess(created);
-    const unchangedRoom = manager.getPublicRoom('0022');
+    const unchangedRoom = manager.getPublicRoom('000022');
 
-    const missingPlayer = manager.leaveRoom('0022', 'player-missing');
+    const missingPlayer = manager.leaveRoom('000022', 'player-missing');
     expectRoomSuccess(missingPlayer);
     expect(missingPlayer.events).toEqual([]);
-    expect(manager.getPublicRoom('0022')).toEqual(unchangedRoom);
+    expect(manager.getPublicRoom('000022')).toEqual(unchangedRoom);
 
     manager.dispose();
   });
@@ -695,13 +696,13 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     });
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0023', '玩家二');
+    const joined = manager.joinRoom('000023', '玩家二');
     expectRoomSuccess(joined);
 
-    const result = manager.leaveRoom('0023', 'player-guest');
+    const result = manager.leaveRoom('000023', 'player-guest');
 
     expectRoomSuccess(result);
-    const expectedRoom: PublicRoomState = { roomCode: '0023', status: 'lobby', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000023', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -710,8 +711,8 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
       },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(result.value).toEqual(expectedRoom);
-    expect(result.events).toEqual([{ type: 'room_state', roomCode: '0023', room: expectedRoom }]);
-    expect(manager.getPublicRoom('0023')).toEqual(expectedRoom);
+    expect(result.events).toEqual([{ type: 'room_state', roomCode: '000023', room: expectedRoom }]);
+    expect(manager.getPublicRoom('000023')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -724,15 +725,15 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     });
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const botAdded = manager.addBot('0024', 'player-host');
+    const botAdded = manager.addBot('000024', 'player-host');
     expectRoomSuccess(botAdded);
-    const joined = manager.joinRoom('0024', '玩家二');
+    const joined = manager.joinRoom('000024', '玩家二');
     expectRoomSuccess(joined);
 
-    const result = manager.leaveRoom('0024', 'player-host');
+    const result = manager.leaveRoom('000024', 'player-host');
 
     expectRoomSuccess(result);
-    const expectedRoom: PublicRoomState = { roomCode: '0024', status: 'lobby', hostId: 'player-guest', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000024', status: 'lobby', hostId: 'player-guest', players: [
       {
         id: 'bot-a',
         nickname: '电脑 A',
@@ -747,8 +748,8 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
       },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(result.value).toEqual(expectedRoom);
-    expect(result.events).toEqual([{ type: 'room_state', roomCode: '0024', room: expectedRoom }]);
-    expect(manager.getPublicRoom('0024')).toEqual(expectedRoom);
+    expect(result.events).toEqual([{ type: 'room_state', roomCode: '000024', room: expectedRoom }]);
+    expect(manager.getPublicRoom('000024')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -761,15 +762,15 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     });
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joinedA = manager.joinRoom('0033', '玩家 A');
+    const joinedA = manager.joinRoom('000033', '玩家 A');
     expectRoomSuccess(joinedA);
-    const joinedB = manager.joinRoom('0033', '玩家 B');
+    const joinedB = manager.joinRoom('000033', '玩家 B');
     expectRoomSuccess(joinedB);
 
-    const result = manager.leaveRoom('0033', 'player-host');
+    const result = manager.leaveRoom('000033', 'player-host');
 
     expectRoomSuccess(result);
-    const expectedRoom: PublicRoomState = { roomCode: '0033', status: 'lobby', hostId: 'player-a', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000033', status: 'lobby', hostId: 'player-a', players: [
       {
         id: 'player-a',
         nickname: '玩家 A',
@@ -784,8 +785,8 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
       },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(result.value).toEqual(expectedRoom);
-    expect(result.events).toEqual([{ type: 'room_state', roomCode: '0033', room: expectedRoom }]);
-    expect(manager.getPublicRoom('0033')).toEqual(expectedRoom);
+    expect(result.events).toEqual([{ type: 'room_state', roomCode: '000033', room: expectedRoom }]);
+    expect(manager.getPublicRoom('000033')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -798,14 +799,14 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     });
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const botAdded = manager.addBot('0025', 'player-host');
+    const botAdded = manager.addBot('000025', 'player-host');
     expectRoomSuccess(botAdded);
 
-    const result = manager.leaveRoom('0025', 'player-host');
+    const result = manager.leaveRoom('000025', 'player-host');
 
     expectRoomSuccess(result);
-    expect(result.events).toEqual([{ type: 'room_closed', roomCode: '0025', reason: 'empty_lobby' }]);
-    expect(manager.getPublicRoom('0025')).toBeNull();
+    expect(result.events).toEqual([{ type: 'room_closed', roomCode: '000025', reason: 'empty_lobby' }]);
+    expect(manager.getPublicRoom('000025')).toBeNull();
 
     manager.dispose();
   });
@@ -818,15 +819,15 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     });
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0026', '玩家二');
+    const joined = manager.joinRoom('000026', '玩家二');
     expectRoomSuccess(joined);
-    const started = manager.startRoom('0026', 'player-host');
+    const started = manager.startRoom('000026', 'player-host');
     expectRoomSuccess(started);
 
-    const result = manager.leaveRoom('0026', 'player-guest');
+    const result = manager.leaveRoom('000026', 'player-guest');
 
     expectRoomSuccess(result);
-    const expectedRoom: PublicRoomState = { roomCode: '0026', status: 'playing', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000026', status: 'playing', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -842,9 +843,9 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(result.value).toEqual(expectedRoom);
     expect(result.events).toEqual([
-      { type: 'player_connection', roomCode: '0026', playerId: 'player-guest', online: false },
+      { type: 'player_connection', roomCode: '000026', playerId: 'player-guest', online: false },
     ]);
-    expect(manager.getPublicRoom('0026')).toEqual(expectedRoom);
+    expect(manager.getPublicRoom('000026')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -857,17 +858,17 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     });
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0027', '玩家二');
+    const joined = manager.joinRoom('000027', '玩家二');
     expectRoomSuccess(joined);
-    const botAdded = manager.addBot('0027', 'player-host');
+    const botAdded = manager.addBot('000027', 'player-host');
     expectRoomSuccess(botAdded);
-    const started = manager.startRoom('0027', 'player-host');
+    const started = manager.startRoom('000027', 'player-host');
     expectRoomSuccess(started);
 
-    const result = manager.leaveRoom('0027', 'player-host');
+    const result = manager.leaveRoom('000027', 'player-host');
 
     expectRoomSuccess(result);
-    const expectedRoom: PublicRoomState = { roomCode: '0027', status: 'playing', hostId: 'player-guest', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000027', status: 'playing', hostId: 'player-guest', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -889,10 +890,13 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(result.value).toEqual(expectedRoom);
     expect(result.events).toEqual([
-      { type: 'player_connection', roomCode: '0027', playerId: 'player-host', online: false },
-      { type: 'room_state', roomCode: '0027', room: expectedRoom },
+      { type: 'player_connection', roomCode: '000027', playerId: 'player-host', online: false },
+      { type: 'room_state', roomCode: '000027', room: expectedRoom },
+      // 掉线自动托管：当前行动者正是刚离线的房主时，服务端会再广播一次 room_state，
+      // 告知客户端已进入 15s 托管宽限期（见 roomManager #maybeAutoTakeover）。
+      { type: 'room_state', roomCode: '000027', room: expectedRoom },
     ]);
-    expect(manager.getPublicRoom('0027')).toEqual(expectedRoom);
+    expect(manager.getPublicRoom('000027')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -906,15 +910,15 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     const manager = new RoomManager(harness.dependencies) as RoomManagerContract;
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0028', '玩家二');
+    const joined = manager.joinRoom('000028', '玩家二');
     expectRoomSuccess(joined);
-    const started = manager.startRoom('0028', 'player-host');
+    const started = manager.startRoom('000028', 'player-host');
     expectRoomSuccess(started);
 
-    const result = manager.markDisconnected('0028', 'player-host');
+    const result = manager.markDisconnected('000028', 'player-host');
 
     expectRoomSuccess(result);
-    const expectedRoom: PublicRoomState = { roomCode: '0028', status: 'playing', hostId: 'player-guest', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000028', status: 'playing', hostId: 'player-guest', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -930,11 +934,14 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(result.value).toEqual(expectedRoom);
     expect(result.events).toEqual([
-      { type: 'player_connection', roomCode: '0028', playerId: 'player-host', online: false },
-      { type: 'room_state', roomCode: '0028', room: expectedRoom },
+      { type: 'player_connection', roomCode: '000028', playerId: 'player-host', online: false },
+      { type: 'room_state', roomCode: '000028', room: expectedRoom },
+      // 同 leaveRoom：当前行动者离线时额外广播一次托管宽限提示。
+      { type: 'room_state', roomCode: '000028', room: expectedRoom },
     ]);
-    expect(harness.timers).toEqual([]);
-    expect(manager.getPublicRoom('0028')).toEqual(expectedRoom);
+    // 只应有掉线自动托管的 15s 宽限计时器；对局中的断线绝不排大厅清理计时器（300000ms）。
+    expect(harness.timers.map((timer) => timer.delayMs)).toEqual([15_000]);
+    expect(manager.getPublicRoom('000028')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -948,13 +955,13 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     const manager = new RoomManager(harness.dependencies) as RoomManagerContract;
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0032', '玩家二');
+    const joined = manager.joinRoom('000032', '玩家二');
     expectRoomSuccess(joined);
 
-    const result = manager.markDisconnected('0032', 'player-guest');
+    const result = manager.markDisconnected('000032', 'player-guest');
 
     expectRoomSuccess(result);
-    const expectedRoom: PublicRoomState = { roomCode: '0032', status: 'lobby', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000032', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -970,11 +977,11 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(result.value).toEqual(expectedRoom);
     expect(result.events).toEqual([
-      { type: 'player_connection', roomCode: '0032', playerId: 'player-guest', online: false },
+      { type: 'player_connection', roomCode: '000032', playerId: 'player-guest', online: false },
     ]);
     expect(harness.timers).toHaveLength(1);
     expect(harness.timers[0]).toMatchObject({ delayMs: 300_000, active: true });
-    expect(manager.getPublicRoom('0032')).toEqual(expectedRoom);
+    expect(manager.getPublicRoom('000032')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -990,14 +997,14 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
 
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0029', '玩家二');
+    const joined = manager.joinRoom('000029', '玩家二');
     expectRoomSuccess(joined);
-    const botAdded = manager.addBot('0029', 'player-host');
+    const botAdded = manager.addBot('000029', 'player-host');
     expectRoomSuccess(botAdded);
 
-    expectRoomFailure(manager.resumeRoom('0029', 'player-missing', 'host-token'), 'INVALID_TOKEN');
-    expectRoomFailure(manager.resumeRoom('0029', 'bot-a', 'any-token'), 'INVALID_TOKEN');
-    expectRoomFailure(manager.resumeRoom('0029', 'player-guest', 'wrong-token'), 'INVALID_TOKEN');
+    expectRoomFailure(manager.resumeRoom('000029', 'player-missing', 'host-token'), 'INVALID_TOKEN');
+    expectRoomFailure(manager.resumeRoom('000029', 'bot-a', 'any-token'), 'INVALID_TOKEN');
+    expectRoomFailure(manager.resumeRoom('000029', 'player-guest', 'wrong-token'), 'INVALID_TOKEN');
 
     manager.dispose();
   });
@@ -1010,17 +1017,17 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     });
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0030', '玩家二');
+    const joined = manager.joinRoom('000030', '玩家二');
     expectRoomSuccess(joined);
-    const started = manager.startRoom('0030', 'player-host');
+    const started = manager.startRoom('000030', 'player-host');
     expectRoomSuccess(started);
-    const disconnected = manager.markDisconnected('0030', 'player-host');
+    const disconnected = manager.markDisconnected('000030', 'player-host');
     expectRoomSuccess(disconnected);
 
-    const result = manager.resumeRoom('0030', 'player-host', 'host-token');
+    const result = manager.resumeRoom('000030', 'player-host', 'host-token');
 
     expectRoomSuccess(result);
-    const expectedRoom: PublicRoomState = { roomCode: '0030', status: 'playing', hostId: 'player-guest', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000030', status: 'playing', hostId: 'player-guest', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -1036,9 +1043,9 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(result.value).toEqual(expectedRoom);
     expect(result.events).toEqual([
-      { type: 'player_connection', roomCode: '0030', playerId: 'player-host', online: true },
+      { type: 'player_connection', roomCode: '000030', playerId: 'player-host', online: true },
     ]);
-    expect(manager.getPublicRoom('0030')).toEqual(expectedRoom);
+    expect(manager.getPublicRoom('000030')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -1051,19 +1058,19 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     });
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0031', '玩家二');
+    const joined = manager.joinRoom('000031', '玩家二');
     expectRoomSuccess(joined);
-    const started = manager.startRoom('0031', 'player-host');
+    const started = manager.startRoom('000031', 'player-host');
     expectRoomSuccess(started);
-    const guestDisconnected = manager.markDisconnected('0031', 'player-guest');
+    const guestDisconnected = manager.markDisconnected('000031', 'player-guest');
     expectRoomSuccess(guestDisconnected);
-    const hostDisconnected = manager.markDisconnected('0031', 'player-host');
+    const hostDisconnected = manager.markDisconnected('000031', 'player-host');
     expectRoomSuccess(hostDisconnected);
 
-    const result = manager.resumeRoom('0031', 'player-guest', 'guest-token');
+    const result = manager.resumeRoom('000031', 'player-guest', 'guest-token');
 
     expectRoomSuccess(result);
-    const expectedRoom: PublicRoomState = { roomCode: '0031', status: 'playing', hostId: 'player-guest', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000031', status: 'playing', hostId: 'player-guest', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -1079,10 +1086,10 @@ describe('RoomManager leave, disconnect, and resume lifecycle', () => {
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(result.value).toEqual(expectedRoom);
     expect(result.events).toEqual([
-      { type: 'player_connection', roomCode: '0031', playerId: 'player-guest', online: true },
-      { type: 'room_state', roomCode: '0031', room: expectedRoom },
+      { type: 'player_connection', roomCode: '000031', playerId: 'player-guest', online: true },
+      { type: 'room_state', roomCode: '000031', room: expectedRoom },
     ]);
-    expect(manager.getPublicRoom('0031')).toEqual(expectedRoom);
+    expect(manager.getPublicRoom('000031')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -1108,13 +1115,13 @@ describe('RoomManager lobby disconnect grace period', () => {
     const manager = new RoomManager(harness.dependencies) as RoomManagerContract;
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0034', '玩家二');
+    const joined = manager.joinRoom('000034', '玩家二');
     expectRoomSuccess(joined);
 
-    const disconnected = manager.markDisconnected('0034', 'player-guest');
+    const disconnected = manager.markDisconnected('000034', 'player-guest');
 
     expectRoomSuccess(disconnected);
-    const offlineRoom: PublicRoomState = { roomCode: '0034', status: 'lobby', hostId: 'player-host', players: [
+    const offlineRoom: PublicRoomState = { roomCode: '000034', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -1130,7 +1137,7 @@ describe('RoomManager lobby disconnect grace period', () => {
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(disconnected.value).toEqual(offlineRoom);
     expect(disconnected.events).toEqual([
-      { type: 'player_connection', roomCode: '0034', playerId: 'player-guest', online: false },
+      { type: 'player_connection', roomCode: '000034', playerId: 'player-guest', online: false },
     ]);
     expect(harness.timers).toHaveLength(1);
     expect(harness.timers[0]).toMatchObject({ delayMs: 300_000, active: true });
@@ -1138,11 +1145,11 @@ describe('RoomManager lobby disconnect grace period', () => {
     vi.advanceTimersByTime(299_999);
 
     expect(harness.asyncEvents).toEqual([]);
-    expect(manager.getPublicRoom('0034')).toEqual(offlineRoom);
+    expect(manager.getPublicRoom('000034')).toEqual(offlineRoom);
 
     vi.advanceTimersByTime(1);
 
-    const expectedRoom: PublicRoomState = { roomCode: '0034', status: 'lobby', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000034', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -1150,8 +1157,8 @@ describe('RoomManager lobby disconnect grace period', () => {
         online: true,
       },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
-    expect(harness.asyncEvents).toEqual([{ type: 'room_state', roomCode: '0034', room: expectedRoom }]);
-    expect(manager.getPublicRoom('0034')).toEqual(expectedRoom);
+    expect(harness.asyncEvents).toEqual([{ type: 'room_state', roomCode: '000034', room: expectedRoom }]);
+    expect(manager.getPublicRoom('000034')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -1166,17 +1173,17 @@ describe('RoomManager lobby disconnect grace period', () => {
     const manager = new RoomManager(harness.dependencies) as RoomManagerContract;
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0035', '玩家二');
+    const joined = manager.joinRoom('000035', '玩家二');
     expectRoomSuccess(joined);
-    const disconnected = manager.markDisconnected('0035', 'player-guest');
+    const disconnected = manager.markDisconnected('000035', 'player-guest');
     expectRoomSuccess(disconnected);
     expect(harness.timers).toHaveLength(1);
 
     vi.advanceTimersByTime(299_999);
-    const resumed = manager.resumeRoom('0035', 'player-guest', 'guest-token');
+    const resumed = manager.resumeRoom('000035', 'player-guest', 'guest-token');
 
     expectRoomSuccess(resumed);
-    const expectedRoom: PublicRoomState = { roomCode: '0035', status: 'lobby', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000035', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -1192,14 +1199,14 @@ describe('RoomManager lobby disconnect grace period', () => {
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(resumed.value).toEqual(expectedRoom);
     expect(resumed.events).toEqual([
-      { type: 'player_connection', roomCode: '0035', playerId: 'player-guest', online: true },
+      { type: 'player_connection', roomCode: '000035', playerId: 'player-guest', online: true },
     ]);
     expect(harness.timers[0].active).toBe(false);
 
     vi.advanceTimersByTime(1);
 
     expect(harness.asyncEvents).toEqual([]);
-    expect(manager.getPublicRoom('0035')).toEqual(expectedRoom);
+    expect(manager.getPublicRoom('000035')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -1214,17 +1221,17 @@ describe('RoomManager lobby disconnect grace period', () => {
     const manager = new RoomManager(harness.dependencies) as RoomManagerContract;
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0042', '玩家二');
+    const joined = manager.joinRoom('000042', '玩家二');
     expectRoomSuccess(joined);
-    const guestDisconnected = manager.markDisconnected('0042', 'player-guest');
+    const guestDisconnected = manager.markDisconnected('000042', 'player-guest');
     expectRoomSuccess(guestDisconnected);
     expect(harness.timers).toHaveLength(1);
     expect(harness.timers[0]).toMatchObject({ delayMs: 300_000, active: true });
 
-    const result = manager.leaveRoom('0042', 'player-host');
+    const result = manager.leaveRoom('000042', 'player-host');
 
     expectRoomSuccess(result);
-    const expectedRoom: PublicRoomState = { roomCode: '0042', status: 'lobby', hostId: 'player-guest', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000042', status: 'lobby', hostId: 'player-guest', players: [
       {
         id: 'player-guest',
         nickname: '玩家二',
@@ -1233,8 +1240,8 @@ describe('RoomManager lobby disconnect grace period', () => {
       },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(result.value).toEqual(expectedRoom);
-    expect(result.events).toEqual([{ type: 'room_state', roomCode: '0042', room: expectedRoom }]);
-    expect(manager.getPublicRoom('0042')).toEqual(expectedRoom);
+    expect(result.events).toEqual([{ type: 'room_state', roomCode: '000042', room: expectedRoom }]);
+    expect(manager.getPublicRoom('000042')).toEqual(expectedRoom);
     expect(harness.timers[0].active).toBe(true);
 
     manager.dispose();
@@ -1250,11 +1257,11 @@ describe('RoomManager lobby disconnect grace period', () => {
     const manager = new RoomManager(harness.dependencies) as RoomManagerContract;
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0043', '玩家二');
+    const joined = manager.joinRoom('000043', '玩家二');
     expectRoomSuccess(joined);
-    const guestDisconnected = manager.markDisconnected('0043', 'player-guest');
+    const guestDisconnected = manager.markDisconnected('000043', 'player-guest');
     expectRoomSuccess(guestDisconnected);
-    const hostDisconnected = manager.markDisconnected('0043', 'player-host');
+    const hostDisconnected = manager.markDisconnected('000043', 'player-host');
     expectRoomSuccess(hostDisconnected);
     expect(harness.timers).toHaveLength(2);
     expect(harness.timers[0]).toMatchObject({ delayMs: 300_000, active: true });
@@ -1262,7 +1269,7 @@ describe('RoomManager lobby disconnect grace period', () => {
 
     harness.timers[1].callback();
 
-    const expectedRoom: PublicRoomState = { roomCode: '0043', status: 'lobby', hostId: 'player-guest', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000043', status: 'lobby', hostId: 'player-guest', players: [
       {
         id: 'player-guest',
         nickname: '玩家二',
@@ -1270,8 +1277,8 @@ describe('RoomManager lobby disconnect grace period', () => {
         online: false,
       },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
-    expect(harness.asyncEvents).toEqual([{ type: 'room_state', roomCode: '0043', room: expectedRoom }]);
-    expect(manager.getPublicRoom('0043')).toEqual(expectedRoom);
+    expect(harness.asyncEvents).toEqual([{ type: 'room_state', roomCode: '000043', room: expectedRoom }]);
+    expect(manager.getPublicRoom('000043')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -1286,16 +1293,16 @@ describe('RoomManager lobby disconnect grace period', () => {
     const manager = new RoomManager(harness.dependencies) as RoomManagerContract;
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0036', '玩家二');
+    const joined = manager.joinRoom('000036', '玩家二');
     expectRoomSuccess(joined);
-    const disconnected = manager.markDisconnected('0036', 'player-guest');
+    const disconnected = manager.markDisconnected('000036', 'player-guest');
     expectRoomSuccess(disconnected);
     expect(harness.timers).toHaveLength(1);
 
-    const left = manager.leaveRoom('0036', 'player-guest');
+    const left = manager.leaveRoom('000036', 'player-guest');
 
     expectRoomSuccess(left);
-    const expectedRoom: PublicRoomState = { roomCode: '0036', status: 'lobby', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000036', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -1304,13 +1311,13 @@ describe('RoomManager lobby disconnect grace period', () => {
       },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(left.value).toEqual(expectedRoom);
-    expect(left.events).toEqual([{ type: 'room_state', roomCode: '0036', room: expectedRoom }]);
+    expect(left.events).toEqual([{ type: 'room_state', roomCode: '000036', room: expectedRoom }]);
     expect(harness.timers[0].active).toBe(false);
 
     vi.advanceTimersByTime(300_000);
 
     expect(harness.asyncEvents).toEqual([]);
-    expect(manager.getPublicRoom('0036')).toEqual(expectedRoom);
+    expect(manager.getPublicRoom('000036')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -1325,14 +1332,14 @@ describe('RoomManager lobby disconnect grace period', () => {
     const manager = new RoomManager(harness.dependencies) as RoomManagerContract;
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const botAdded = manager.addBot('0037', 'player-host');
+    const botAdded = manager.addBot('000037', 'player-host');
     expectRoomSuccess(botAdded);
-    const joinedA = manager.joinRoom('0037', '玩家 A');
+    const joinedA = manager.joinRoom('000037', '玩家 A');
     expectRoomSuccess(joinedA);
-    const joinedB = manager.joinRoom('0037', '玩家 B');
+    const joinedB = manager.joinRoom('000037', '玩家 B');
     expectRoomSuccess(joinedB);
 
-    const disconnected = manager.markDisconnected('0037', 'player-host');
+    const disconnected = manager.markDisconnected('000037', 'player-host');
 
     expectRoomSuccess(disconnected);
     expect(disconnected.value?.players.find((player) => player.id === 'player-host')).toMatchObject({
@@ -1340,7 +1347,7 @@ describe('RoomManager lobby disconnect grace period', () => {
     });
     expect(disconnected.events).toContainEqual({
       type: 'player_connection',
-      roomCode: '0037',
+      roomCode: '000037',
       playerId: 'player-host',
       online: false,
     });
@@ -1348,7 +1355,7 @@ describe('RoomManager lobby disconnect grace period', () => {
 
     vi.advanceTimersByTime(300_000);
 
-    const expectedRoom: PublicRoomState = { roomCode: '0037', status: 'lobby', hostId: 'player-a', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000037', status: 'lobby', hostId: 'player-a', players: [
       {
         id: 'bot-a',
         nickname: '电脑 A',
@@ -1368,8 +1375,8 @@ describe('RoomManager lobby disconnect grace period', () => {
         online: true,
       },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
-    expect(harness.asyncEvents).toEqual([{ type: 'room_state', roomCode: '0037', room: expectedRoom }]);
-    expect(manager.getPublicRoom('0037')).toEqual(expectedRoom);
+    expect(harness.asyncEvents).toEqual([{ type: 'room_state', roomCode: '000037', room: expectedRoom }]);
+    expect(manager.getPublicRoom('000037')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -1384,13 +1391,13 @@ describe('RoomManager lobby disconnect grace period', () => {
     const manager = new RoomManager(harness.dependencies) as RoomManagerContract;
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const botAdded = manager.addBot('0038', 'player-host');
+    const botAdded = manager.addBot('000038', 'player-host');
     expectRoomSuccess(botAdded);
 
-    const disconnected = manager.markDisconnected('0038', 'player-host');
+    const disconnected = manager.markDisconnected('000038', 'player-host');
 
     expectRoomSuccess(disconnected);
-    const offlineRoom: PublicRoomState = { roomCode: '0038', status: 'lobby', hostId: 'player-host', players: [
+    const offlineRoom: PublicRoomState = { roomCode: '000038', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -1406,14 +1413,14 @@ describe('RoomManager lobby disconnect grace period', () => {
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(disconnected.value).toEqual(offlineRoom);
     expect(disconnected.events).toEqual([
-      { type: 'player_connection', roomCode: '0038', playerId: 'player-host', online: false },
+      { type: 'player_connection', roomCode: '000038', playerId: 'player-host', online: false },
     ]);
     expect(harness.timers).toHaveLength(1);
 
     vi.advanceTimersByTime(300_000);
 
-    expect(harness.asyncEvents).toEqual([{ type: 'room_closed', roomCode: '0038', reason: 'lobby_idle_timeout' }]);
-    expect(manager.getPublicRoom('0038')).toBeNull();
+    expect(harness.asyncEvents).toEqual([{ type: 'room_closed', roomCode: '000038', reason: 'lobby_idle_timeout' }]);
+    expect(manager.getPublicRoom('000038')).toBeNull();
 
     manager.dispose();
   });
@@ -1428,15 +1435,15 @@ describe('RoomManager lobby disconnect grace period', () => {
     const manager = new RoomManager(harness.dependencies) as RoomManagerContract;
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0039', '玩家二');
+    const joined = manager.joinRoom('000039', '玩家二');
     expectRoomSuccess(joined);
-    const started = manager.startRoom('0039', 'player-host');
+    const started = manager.startRoom('000039', 'player-host');
     expectRoomSuccess(started);
 
-    const disconnected = manager.markDisconnected('0039', 'player-guest');
+    const disconnected = manager.markDisconnected('000039', 'player-guest');
 
     expectRoomSuccess(disconnected);
-    const expectedRoom: PublicRoomState = { roomCode: '0039', status: 'playing', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000039', status: 'playing', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -1452,14 +1459,14 @@ describe('RoomManager lobby disconnect grace period', () => {
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(disconnected.value).toEqual(expectedRoom);
     expect(disconnected.events).toEqual([
-      { type: 'player_connection', roomCode: '0039', playerId: 'player-guest', online: false },
+      { type: 'player_connection', roomCode: '000039', playerId: 'player-guest', online: false },
     ]);
     expect(harness.timers).toEqual([]);
 
     vi.advanceTimersByTime(300_000);
 
     expect(harness.asyncEvents).toEqual([]);
-    expect(manager.getPublicRoom('0039')).toEqual(expectedRoom);
+    expect(manager.getPublicRoom('000039')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -1474,9 +1481,9 @@ describe('RoomManager lobby disconnect grace period', () => {
     const manager = new RoomManager(harness.dependencies) as RoomManagerContract;
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0040', '玩家二');
+    const joined = manager.joinRoom('000040', '玩家二');
     expectRoomSuccess(joined);
-    const disconnected = manager.markDisconnected('0040', 'player-guest');
+    const disconnected = manager.markDisconnected('000040', 'player-guest');
     expectRoomSuccess(disconnected);
     expect(harness.timers).toHaveLength(1);
     expect(harness.timers[0].active).toBe(true);
@@ -1500,18 +1507,18 @@ describe('RoomManager lobby disconnect grace period', () => {
     const manager = new RoomManager(harness.dependencies) as RoomManagerContract;
     const created = createChinaRoom(manager, '房主');
     expectRoomSuccess(created);
-    const joined = manager.joinRoom('0041', '玩家二');
+    const joined = manager.joinRoom('000041', '玩家二');
     expectRoomSuccess(joined);
-    const disconnected = manager.markDisconnected('0041', 'player-guest');
+    const disconnected = manager.markDisconnected('000041', 'player-guest');
     expectRoomSuccess(disconnected);
     expect(harness.timers).toHaveLength(1);
     const staleTimer = harness.timers[0];
 
-    const resumed = manager.resumeRoom('0041', 'player-guest', 'guest-token');
+    const resumed = manager.resumeRoom('000041', 'player-guest', 'guest-token');
     expectRoomSuccess(resumed);
     staleTimer.callback();
 
-    const expectedRoom: PublicRoomState = { roomCode: '0041', status: 'lobby', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000041', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '房主',
@@ -1526,7 +1533,7 @@ describe('RoomManager lobby disconnect grace period', () => {
       },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(harness.asyncEvents).toEqual([]);
-    expect(manager.getPublicRoom('0041')).toEqual(expectedRoom);
+    expect(manager.getPublicRoom('000041')).toEqual(expectedRoom);
 
     manager.dispose();
   });
@@ -1548,7 +1555,7 @@ describe('RoomManager room entry idempotency', () => {
 
     expectRoomSuccess(first);
     expect(replay).toEqual(first);
-    expect(manager.getPublicRoom('0007')?.players).toHaveLength(1);
+    expect(manager.getPublicRoom('000007')?.players).toHaveLength(1);
     expect(JSON.stringify(first.value.room)).not.toMatch(/token|requestId/i);
   });
 
@@ -1685,7 +1692,7 @@ describe('RoomManager room entry idempotency', () => {
 
     expectRoomSuccess(retriedAfterDeletion);
     expect(retriedAfterDeletion.value).toMatchObject({
-      roomCode: '0008',
+      roomCode: '000008',
       playerId: 'player-retry',
       token: 'retry-token',
     });
@@ -1721,7 +1728,7 @@ describe('RoomManager room entry idempotency', () => {
     const replacement = createChinaRoom(manager, '创建者', hostRequestId);
     expectRoomSuccess(replacement);
     expect(replacement.value).toMatchObject({
-      roomCode: '0008',
+      roomCode: '000008',
       playerId: 'player-replacement',
       token: 'replacement-token',
     });

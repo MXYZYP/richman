@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 const startupLine = /^本机访问：http:\/\/localhost:(\d+)$/;
 // Real process startup has no deterministic virtual clock; these are safety bounds, not sleeps.
-const startupTimeoutMs = 3_000;
+// 3s 曾把 tsx 冷启动卡在边线上（同一份代码 1.8s 过、3.07s 挂，全量跑时尤其明显），
+// 边界只用于兜住「真的起不来」，放宽不会拖慢正常路径，只是不再随机地把绿灯判成红灯。
+const startupTimeoutMs = 15_000;
 const shutdownTimeoutMs = 1_000;
 
 type PartyLauncherChild = ChildProcessByStdio<null, Readable, Readable>;
@@ -42,7 +44,14 @@ describe('party launcher runtime', () => {
 
       child.kill('SIGTERM');
       const exit = await waitForExit(child, shutdownTimeoutMs);
-      expect(exit).toEqual({ code: 0, signal: null });
+      if (process.platform === 'win32') {
+        // Windows 没有 POSIX 信号：Node 的 kill('SIGTERM') 会无条件终止目标进程，
+        // 进程内 process.on('SIGTERM') 永远不会被触发。这里只能断言进程确实已退出。
+        expect(exit.signal !== null || exit.code !== null).toBe(true);
+      } else {
+        // POSIX 平台：party.ts 注册了 SIGTERM 优雅退出，应以 code 0 正常结束。
+        expect(exit).toEqual({ code: 0, signal: null });
+      }
     } finally {
       if (child.exitCode === null && child.signalCode === null) {
         child.kill('SIGTERM');
@@ -54,7 +63,7 @@ describe('party launcher runtime', () => {
       }
       activeChild = undefined;
     }
-  }, 4_500);
+  }, 20_000);
 });
 
 type ChildOutput = {

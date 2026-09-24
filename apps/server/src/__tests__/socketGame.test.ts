@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, test } from 'vitest';
 import { io as connectSocket, type Socket as ClientSocket } from 'socket.io-client';
 import { applyIntent, chooseBotIntent, createGame } from '@richman/engine';
-import type { ApplyResult, GameEvent, GameState, Intent } from '@richman/engine';
+import type { ApplyResult, BotDifficulty, GameEvent, GameState, Intent } from '@richman/engine';
 import { createRoomServer, type RunningRoomServer } from '../server';
 import type { Ack, ClientToServerEvents, CreateRoomAck, JoinRoomAck, PublicGameSnapshot, ServerToClientEvents } from '@richman/protocol';
 import { RoomManager } from '../rooms/roomManager';
@@ -55,7 +55,7 @@ describe('Socket.IO game dispatch integration', () => {
     expect(guestRecorder.messages).toEqual(['room_state', 'snapshot']);
     expect(hostGame).toEqual(guestGame);
     expect(hostGame.state.phase).toBe('playing');
-    const authoritative = running.manager.getGameSnapshot('0007');
+    const authoritative = running.manager.getGameSnapshot('000007');
     if (authoritative === null) throw new Error('missing authoritative game snapshot after start');
     expectPublicGameSnapshot(hostGame.state, authoritative);
     expectNoPrivateData(hostGame);
@@ -88,7 +88,7 @@ describe('Socket.IO game dispatch integration', () => {
     expect(events.events).not.toHaveLength(0);
     expect(actorRecorder.messages).toEqual(['events', 'snapshot', 'ack']);
     expect(peerRecorder.messages).toEqual(['events', 'snapshot']);
-    const authoritative = game.manager.getGameSnapshot('0007');
+    const authoritative = game.manager.getGameSnapshot('000007');
     if (authoritative === null) throw new Error('missing authoritative transition snapshot');
     expectPublicGameSnapshot(snapshot.state, authoritative);
     expectNoPrivateData(events);
@@ -151,7 +151,7 @@ describe('Socket.IO game dispatch integration', () => {
   test('malformed payload and missing acknowledgement do not mutate deep state or broadcast', async () => {
     const game = await startTwoClientGame();
     const actor = socketForCurrentPlayer(game);
-    const before = game.manager.getGameSnapshot('0007');
+    const before = game.manager.getGameSnapshot('000007');
     expect(before).not.toBeNull();
     if (before === null) throw new Error('missing authoritative game state');
     const beforeValue = structuredClone(before);
@@ -165,7 +165,7 @@ describe('Socket.IO game dispatch integration', () => {
     await zeroDelayMacrotask();
 
     expect(malformed.ok).toBe(false);
-    const after = game.manager.getGameSnapshot('0007');
+    const after = game.manager.getGameSnapshot('000007');
     expect(after).toEqual(beforeValue);
     expect(after?.players[0]).toBe(stablePlayers[0]);
     expect(after?.properties).toBe(stableProperties);
@@ -188,7 +188,7 @@ describe('Socket.IO game dispatch integration', () => {
     expect(final.state.phase).toBe('game_over');
     expect(final.state.winnerId).toBe(game.state.currentPlayerId);
     expectFailure(later, 'INVALID_ROOM_ACTION');
-    const authoritative = game.manager.getGameSnapshot('0007');
+    const authoritative = game.manager.getGameSnapshot('000007');
     if (authoritative === null) throw new Error('missing authoritative final game snapshot');
     expectPublicGameSnapshot(final.state, authoritative);
     expect(scripted.applyCalls()).toBe(1);
@@ -205,7 +205,7 @@ async function startTwoClientGame(options: Options = {}): Promise<StartedGame> {
   await emitStart(host);
   const [hostGame, guestGame] = await Promise.all([hostSnapshot, guestSnapshot]);
   expect(hostGame).toEqual(guestGame);
-  const state = running.manager.getGameSnapshot('0007');
+  const state = running.manager.getGameSnapshot('000007');
   if (state === null) throw new Error('missing authoritative game snapshot after start');
   return { host, guest, manager: running.manager, state, sockets: new Map([['player-host', host], ['player-guest', guest]]) };
 }
@@ -213,6 +213,7 @@ async function startTwoClientGame(options: Options = {}): Promise<StartedGame> {
 async function startServer(options: Options = {}): Promise<Running> {
   let manager: RoomManager<TimerHandle> | undefined;
   const server = createRoomServer<TimerHandle>({
+    rateLimit: false,
     roomManagerFactory: deterministicFactory(options, (captured) => { manager = captured; }),
   });
   servers.push(server);
@@ -272,9 +273,9 @@ async function createAndJoin(host: RoomClient, guest: RoomClient): Promise<void>
     mapId: 'china-tour', nickname: '房主',
     requestId: '00112233445566778899aabbccddeeff',
   });
-  expect(create).toMatchObject({ ok: true, roomCode: '0007', playerId: 'player-host' });
+  expect(create).toMatchObject({ ok: true, roomCode: '000007', playerId: 'player-host' });
   const join = await emitRoomAck(guest, 'room:join', {
-    roomCode: '0007',
+    roomCode: '000007',
     nickname: '玩家二',
     requestId: 'ffeeddccbbaa99887766554433221100',
   });
@@ -425,7 +426,10 @@ function gameOverGateway(): { gateway: GameRuntimeGateway; applyCalls: () => num
     applyCalls: () => calls,
     gateway: {
       createGame,
-      chooseBotIntent,
+      // 网关签名是 (state, playerId, difficulty?)；引擎 chooseBotIntent 的第 3 参是 registry。
+      // 这里适配为「使用默认注册表」，与生产 gameRuntime 的 defaultGameGateway 一致。
+      chooseBotIntent: (state: GameState, playerId: string, difficulty?: BotDifficulty) =>
+        chooseBotIntent(state, playerId, undefined, difficulty),
       applyIntent(state: GameState, playerId: string): ApplyResult {
         calls += 1;
         if (state.phase !== 'playing') return { ok: false, code: 'WRONG_PHASE' };

@@ -108,7 +108,7 @@ function createTwoHumanLobby(seed = 'game-seed') {
 
   const created = createChinaRoom(harness.manager, '房主');
   expect(created.ok).toBe(true);
-  const joined = harness.manager.joinRoom('0007', '客人');
+  const joined = harness.manager.joinRoom('000007', '客人');
   expect(joined.ok).toBe(true);
 
   return harness;
@@ -132,16 +132,16 @@ function startedRoomWith(options: StartedRoomOptions = {}) {
   if (!created.ok) throw new Error(`createRoom failed: ${created.code}`);
 
   if (secondPlayer === 'bot') {
-    const added = harness.manager.addBot('0007', 'host');
+    const added = harness.manager.addBot('000007', 'host');
     expect(added.ok).toBe(true);
     if (!added.ok) throw new Error(`addBot failed: ${added.code}`);
   } else {
-    const joined = harness.manager.joinRoom('0007', '客人');
+    const joined = harness.manager.joinRoom('000007', '客人');
     expect(joined.ok).toBe(true);
     if (!joined.ok) throw new Error(`joinRoom failed: ${joined.code}`);
   }
 
-  const started = harness.manager.startRoom('0007', 'host');
+  const started = harness.manager.startRoom('000007', 'host');
   expect(started.ok).toBe(true);
   if (!started.ok) throw new Error(`startRoom failed: ${started.code}`);
 
@@ -192,11 +192,11 @@ function startedBotFirstRoom(options: HarnessOptions = {}) {
   expect(created.ok).toBe(true);
   if (!created.ok) throw new Error(`createRoom failed: ${created.code}`);
 
-  const added = harness.manager.addBot('0007', 'host');
+  const added = harness.manager.addBot('000007', 'host');
   expect(added.ok).toBe(true);
   if (!added.ok) throw new Error(`addBot failed: ${added.code}`);
 
-  const started = harness.manager.startRoom('0007', 'host');
+  const started = harness.manager.startRoom('000007', 'host');
   expect(started.ok).toBe(true);
   if (!started.ok) throw new Error(`startRoom failed: ${started.code}`);
   expect(started.events.map((event) => event.type)).toEqual(['room_state', 'game_snapshot']);
@@ -235,12 +235,12 @@ function startedRoomBotFirstWithGateway(
   if (!created.ok) throw new Error(`createRoom failed: ${created.code}`);
 
   for (const _ of ['botA', 'botB']) {
-    const added = harness.manager.addBot('0007', 'host');
+    const added = harness.manager.addBot('000007', 'host');
     expect(added.ok).toBe(true);
     if (!added.ok) throw new Error(`addBot failed: ${added.code}`);
   }
 
-  const started = harness.manager.startRoom('0007', 'host');
+  const started = harness.manager.startRoom('000007', 'host');
   expect(started.ok).toBe(true);
   if (!started.ok) throw new Error(`startRoom failed: ${started.code}`);
 
@@ -331,6 +331,22 @@ function activeTimers(timers: TimerHandle[]): TimerHandle[] {
   return timers.filter((timer) => timer.active);
 }
 
+/**
+ * 当前行动者离线时，markDisconnected 会先起一个 15s「自动托管宽限」计时器（给短暂断网的人留重连机会）；
+ * 显式托管请求（requestSkipOfflineTurn）另起真正的自动化计时器。下面的断言据此区分两者。
+ */
+const AUTO_TAKEOVER_GRACE_MS = 15_000;
+/** 与 roomManager 的 MAX_AUTOMATION_SELF_HEAL_RETRIES 保持一致：连续失败超过该值才放弃自动化。 */
+const SELF_HEAL_RETRY_LIMIT = 3;
+
+function graceTimers(timers: TimerHandle[]): TimerHandle[] {
+  return activeTimers(timers).filter((timer) => timer.delayMs === AUTO_TAKEOVER_GRACE_MS);
+}
+
+function takeoverTimers(timers: TimerHandle[]): TimerHandle[] {
+  return activeTimers(timers).filter((timer) => timer.delayMs !== AUTO_TAKEOVER_GRACE_MS);
+}
+
 function completeEngineTurn(
   initialState: GameState,
   maxSteps: number,
@@ -417,15 +433,15 @@ function startedHumanThenBotRoom(options: HarnessOptions = {}) {
   expect(created.ok).toBe(true);
   if (!created.ok) throw new Error(`createRoom failed: ${created.code}`);
 
-  const joined = harness.manager.joinRoom('0007', '客人');
+  const joined = harness.manager.joinRoom('000007', '客人');
   expect(joined.ok).toBe(true);
   if (!joined.ok) throw new Error(`joinRoom failed: ${joined.code}`);
 
-  const added = harness.manager.addBot('0007', 'host');
+  const added = harness.manager.addBot('000007', 'host');
   expect(added.ok).toBe(true);
   if (!added.ok) throw new Error(`addBot failed: ${added.code}`);
 
-  const started = harness.manager.startRoom('0007', 'host');
+  const started = harness.manager.startRoom('000007', 'host');
   expect(started.ok).toBe(true);
   if (!started.ok) throw new Error(`startRoom failed: ${started.code}`);
 
@@ -570,7 +586,7 @@ function gameOverGateway(): { gateway: GameRuntimeGateway; applyCalls: () => num
   };
 }
 
-function getCommittedGameState(manager: RoomManager<TimerHandle>, roomCode = '0007'): GameState {
+function getCommittedGameState(manager: RoomManager<TimerHandle>, roomCode = '000007'): GameState {
   const snapshot = manager.getGameSnapshot(roomCode);
   expect(snapshot).not.toBeNull();
   if (snapshot === null) {
@@ -612,12 +628,12 @@ describe('RoomManager authoritative GameState start', () => {
   test('startRoom emits room_state(playing) then a deterministic game_snapshot with cashGoal disabled', () => {
     const { manager } = createTwoHumanLobby('deterministic-seed');
 
-    const result = manager.startRoom('0007', 'host');
+    const result = manager.startRoom('000007', 'host');
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const expectedRoom = {
-      roomCode: '0007',
+      roomCode: '000007',
       status: 'playing',
       hostId: 'host',
       players: [
@@ -644,8 +660,8 @@ describe('RoomManager authoritative GameState start', () => {
 
     expect(result.value).toEqual(expectedRoom);
     expect(result.events).toEqual([
-      { type: 'room_state', roomCode: '0007', room: expectedRoom },
-      { type: 'game_snapshot', roomCode: '0007', state: expectedGame },
+      { type: 'room_state', roomCode: '000007', room: expectedRoom },
+      { type: 'game_snapshot', roomCode: '000007', state: expectedGame },
     ]);
     expect(expectedGame.cashGoal).toBeNull();
   });
@@ -653,7 +669,7 @@ describe('RoomManager authoritative GameState start', () => {
   test('getGameSnapshot preserves dice-resolved player order from the initial GameState snapshot', () => {
     const seed = 'identity-seed';
     const { manager } = createTwoHumanLobby(seed);
-    const result = manager.startRoom('0007', 'host');
+    const result = manager.startRoom('000007', 'host');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -676,7 +692,7 @@ describe('RoomManager authoritative GameState start', () => {
 
     expect(realEngineOrder).toEqual(['guest', 'host']);
     const emittedOrder = emittedSnapshotEvent.state.players.map((player: PlayerState) => player.id);
-    const accessorOrder = manager.getGameSnapshot('0007')?.players.map((player: PlayerState) => player.id);
+    const accessorOrder = manager.getGameSnapshot('000007')?.players.map((player: PlayerState) => player.id);
 
     expect(emittedOrder).toEqual(realEngineOrder);
     expect(accessorOrder).toEqual(emittedOrder);
@@ -685,10 +701,10 @@ describe('RoomManager authoritative GameState start', () => {
 
   test('getGameSnapshot exposes the started room players exactly once and never leaks room tokens', () => {
     const { manager } = createTwoHumanLobby('identity-seed');
-    const result = manager.startRoom('0007', 'host');
+    const result = manager.startRoom('000007', 'host');
     expect(result.ok).toBe(true);
 
-    const snapshot = manager.getGameSnapshot('0007');
+    const snapshot = manager.getGameSnapshot('000007');
 
     expect(snapshot).not.toBeNull();
     expect(snapshot?.players.map((player: PlayerState) => ({
@@ -710,22 +726,22 @@ describe('RoomManager authoritative GameState start', () => {
   test('getGameSnapshot returns null for lobby and unknown rooms', () => {
     const { manager } = createTwoHumanLobby();
 
-    expect(manager.getGameSnapshot('0007')).toBeNull();
+    expect(manager.getGameSnapshot('000007')).toBeNull();
     expect(manager.getGameSnapshot('9999')).toBeNull();
   });
 
   test('startRoom mirrors an offline lobby guest into the initial GameState and cancels its lobby timer', () => {
     const { manager, timers } = createTwoHumanLobby('offline-seed');
-    const disconnected = manager.markDisconnected('0007', 'guest');
+    const disconnected = manager.markDisconnected('000007', 'guest');
     expect(disconnected.ok).toBe(true);
     expect(timers).toHaveLength(1);
     expect(timers[0]?.active).toBe(true);
 
-    const result = manager.startRoom('0007', 'host');
+    const result = manager.startRoom('000007', 'host');
 
     expect(result.ok).toBe(true);
     expect(timers[0]?.active).toBe(false);
-    const snapshot = manager.getGameSnapshot('0007');
+    const snapshot = manager.getGameSnapshot('000007');
     expect(snapshot?.players.find((player: PlayerState) => player.id === 'host')?.online).toBe(true);
     expect(snapshot?.players.find((player: PlayerState) => player.id === 'guest')?.online).toBe(false);
   });
@@ -751,19 +767,19 @@ describe('RoomManager authoritative GameState start', () => {
     });
     const created = createChinaRoom(manager, '房主');
     expect(created.ok).toBe(true);
-    const joined = manager.joinRoom('0007', '客人');
+    const joined = manager.joinRoom('000007', '客人');
     expect(joined.ok).toBe(true);
-    const publicLobbyBefore = manager.getPublicRoom('0007');
+    const publicLobbyBefore = manager.getPublicRoom('000007');
 
-    const result = manager.startRoom('0007', 'host');
+    const result = manager.startRoom('000007', 'host');
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.code).toBe('INVALID_ROOM_ACTION');
     expect(serverErrors).toEqual([boom]);
     expect(asyncEvents).toEqual([]);
-    expect(manager.getPublicRoom('0007')).toEqual(publicLobbyBefore);
-    expect(manager.getGameSnapshot('0007')).toBeNull();
+    expect(manager.getPublicRoom('000007')).toEqual(publicLobbyBefore);
+    expect(manager.getGameSnapshot('000007')).toBeNull();
   });
 });
 
@@ -775,15 +791,17 @@ describe('RoomManager online-state mirroring', () => {
     const beforeGuest = gamePlayer(beforeState, 'guest');
     expect(beforeGuest.online).toBe(true);
 
-    const disconnected = manager.markDisconnected('0007', 'guest');
+    const disconnected = manager.markDisconnected('000007', 'guest');
 
     expect(disconnected.ok).toBe(true);
     if (!disconnected.ok) throw new Error(`markDisconnected failed: ${disconnected.code}`);
     expect(disconnected.value).not.toBeNull();
     if (disconnected.value === null) throw new Error('markDisconnected unexpectedly removed the playing room');
-    expect(disconnected.events).toEqual([
-      { type: 'player_connection', roomCode: '0007', playerId: 'guest', online: false },
-    ]);
+    expect(disconnected.events[0]).toEqual(
+      { type: 'player_connection', roomCode: '000007', playerId: 'guest', online: false },
+    );
+    // 当前行动者恰好是该离线真人：除在线状态外还会附带一次 room_state（启动自动托管宽限计时器）。
+    expect(disconnected.events.slice(1).every((event) => event.type === 'room_state')).toBe(true);
     expectNoGameEmissions(disconnected.events);
     expect(publicPlayer(disconnected.value, 'guest').online).toBe(false);
     expect(publicPlayer(disconnected.value, 'host').online).toBe(true);
@@ -805,14 +823,14 @@ describe('RoomManager online-state mirroring', () => {
     const beforeHost = gamePlayer(beforeState, 'host');
     const beforeGuest = gamePlayer(beforeState, 'guest');
 
-    const left = manager.leaveRoom('0007', 'guest');
+    const left = manager.leaveRoom('000007', 'guest');
 
     expect(left.ok).toBe(true);
     if (!left.ok) throw new Error(`leaveRoom failed: ${left.code}`);
     expect(left.value).not.toBeNull();
     if (left.value === null) throw new Error('leaveRoom unexpectedly removed the playing room');
     expect(left.events).toEqual([
-      { type: 'player_connection', roomCode: '0007', playerId: 'guest', online: false },
+      { type: 'player_connection', roomCode: '000007', playerId: 'guest', online: false },
     ]);
     expectNoGameEmissions(left.events);
     expect(left.value.players.map((player) => player.id).sort()).toEqual(['guest', 'host']);
@@ -832,12 +850,12 @@ describe('RoomManager online-state mirroring', () => {
 
   test('playing token resume restores PublicRoomState and GameState online while returning only the public room shape', () => {
     const { manager } = startedRoomWith({ seed: 'online-mirror-resume-seed' });
-    const disconnected = manager.markDisconnected('0007', 'guest');
+    const disconnected = manager.markDisconnected('000007', 'guest');
     expect(disconnected.ok).toBe(true);
     if (!disconnected.ok) throw new Error(`markDisconnected failed: ${disconnected.code}`);
     expect(gamePlayer(getCommittedGameState(manager), 'guest').online).toBe(false);
 
-    const resumed = manager.resumeRoom('0007', 'guest', 'tok-guest');
+    const resumed = manager.resumeRoom('000007', 'guest', 'tok-guest');
 
     expect(resumed.ok).toBe(true);
     if (!resumed.ok) throw new Error(`resumeRoom failed: ${resumed.code}`);
@@ -845,7 +863,7 @@ describe('RoomManager online-state mirroring', () => {
     expect('snapshot' in resumed).toBe(false);
     expectPublicRoomStateOnly(resumed.value);
     expect(resumed.events).toEqual([
-      { type: 'player_connection', roomCode: '0007', playerId: 'guest', online: true },
+      { type: 'player_connection', roomCode: '000007', playerId: 'guest', online: true },
     ]);
     expectNoGameEmissions(resumed.events);
     expect(publicPlayer(resumed.value, 'guest').online).toBe(true);
@@ -860,15 +878,18 @@ describe('RoomManager online-state mirroring', () => {
       secondPlayer: 'bot',
     });
 
-    const disconnected = manager.markDisconnected('0007', 'host');
+    const disconnected = manager.markDisconnected('000007', 'host');
 
     expect(disconnected.ok).toBe(true);
     if (!disconnected.ok) throw new Error(`markDisconnected failed: ${disconnected.code}`);
     expect(disconnected.value).not.toBeNull();
     if (disconnected.value === null) throw new Error('markDisconnected unexpectedly removed the bot room');
-    expect(disconnected.events).toEqual([
-      { type: 'player_connection', roomCode: '0007', playerId: 'host', online: false },
-    ]);
+    expect(disconnected.events[0]).toEqual(
+      { type: 'player_connection', roomCode: '000007', playerId: 'host', online: false },
+    );
+    // 当前行动者恰好是该离线真人：除在线状态外还会附带一次 room_state（启动自动托管宽限计时器）；
+    // 电脑席位的在线状态不受影响。
+    expect(disconnected.events.slice(1).every((event) => event.type === 'room_state')).toBe(true);
     expectNoGameEmissions(disconnected.events);
     expect(publicPlayer(disconnected.value, 'host').online).toBe(false);
     expect(publicPlayer(disconnected.value, 'bot').online).toBe(true);
@@ -883,20 +904,20 @@ describe('RoomManager online-state mirroring', () => {
       seed: 'online-mirror-ended-seed',
       gameGateway: scripted.gateway,
     });
-    const ended = applyRoomGameIntent(manager, '0007', state.currentPlayerId, { type: 'end_turn' });
+    const ended = applyRoomGameIntent(manager, '000007', state.currentPlayerId, { type: 'end_turn' });
     expect(ended.ok).toBe(true);
     if (!ended.ok) throw new Error(`forced game_over failed: ${ended.code}`);
     expect(getCommittedGameState(manager).phase).toBe('game_over');
-    expect(manager.getPublicRoom('0007')?.status).toBe('ended');
+    expect(manager.getPublicRoom('000007')?.status).toBe('ended');
 
-    const endedDisconnect = manager.markDisconnected('0007', 'guest');
+    const endedDisconnect = manager.markDisconnected('000007', 'guest');
 
     expect(endedDisconnect.ok).toBe(true);
     if (!endedDisconnect.ok) throw new Error(`ended markDisconnected failed: ${endedDisconnect.code}`);
     expect(endedDisconnect.value).not.toBeNull();
     if (endedDisconnect.value === null) throw new Error('ended markDisconnected unexpectedly removed the room');
     expect(endedDisconnect.events).toEqual([
-      { type: 'player_connection', roomCode: '0007', playerId: 'guest', online: false },
+      { type: 'player_connection', roomCode: '000007', playerId: 'guest', online: false },
     ]);
     expectNoGameEmissions(endedDisconnect.events);
     expect(endedDisconnect.value.status).toBe('ended');
@@ -905,26 +926,26 @@ describe('RoomManager online-state mirroring', () => {
     expect(gamePlayer(getCommittedGameState(manager), 'guest').online).toBe(false);
     expect(getCommittedGameState(manager).phase).toBe('game_over');
 
-    const resumedAfterDisconnect = manager.resumeRoom('0007', 'guest', 'tok-guest');
+    const resumedAfterDisconnect = manager.resumeRoom('000007', 'guest', 'tok-guest');
     expect(resumedAfterDisconnect.ok).toBe(true);
     if (!resumedAfterDisconnect.ok) throw new Error(`ended resume failed: ${resumedAfterDisconnect.code}`);
     expectPublicRoomStateOnly(resumedAfterDisconnect.value);
     expect(resumedAfterDisconnect.value.status).toBe('ended');
     expect(resumedAfterDisconnect.events).toEqual([
-      { type: 'player_connection', roomCode: '0007', playerId: 'guest', online: true },
+      { type: 'player_connection', roomCode: '000007', playerId: 'guest', online: true },
     ]);
     expectNoGameEmissions(resumedAfterDisconnect.events);
     expect(publicPlayer(resumedAfterDisconnect.value, 'guest').online).toBe(true);
     expect(gamePlayer(getCommittedGameState(manager), 'guest').online).toBe(true);
     expect(getCommittedGameState(manager).phase).toBe('game_over');
 
-    const endedLeave = manager.leaveRoom('0007', 'guest');
+    const endedLeave = manager.leaveRoom('000007', 'guest');
     expect(endedLeave.ok).toBe(true);
     if (!endedLeave.ok) throw new Error(`ended leaveRoom failed: ${endedLeave.code}`);
     expect(endedLeave.value).not.toBeNull();
     if (endedLeave.value === null) throw new Error('ended leaveRoom unexpectedly removed the room');
     expect(endedLeave.events).toEqual([
-      { type: 'player_connection', roomCode: '0007', playerId: 'guest', online: false },
+      { type: 'player_connection', roomCode: '000007', playerId: 'guest', online: false },
     ]);
     expectNoGameEmissions(endedLeave.events);
     expect(endedLeave.value.status).toBe('ended');
@@ -933,16 +954,16 @@ describe('RoomManager online-state mirroring', () => {
     expect(gamePlayer(getCommittedGameState(manager), 'guest').online).toBe(false);
     expect(getCommittedGameState(manager).phase).toBe('game_over');
 
-    const resumedAfterLeave = manager.resumeRoom('0007', 'guest', 'tok-guest');
+    const resumedAfterLeave = manager.resumeRoom('000007', 'guest', 'tok-guest');
     expect(resumedAfterLeave.ok).toBe(true);
     if (!resumedAfterLeave.ok) throw new Error(`ended resume after leave failed: ${resumedAfterLeave.code}`);
     expect(Object.keys(resumedAfterLeave).sort()).toEqual(['events', 'ok', 'value']);
     expect('snapshot' in resumedAfterLeave).toBe(false);
     expectPublicRoomStateOnly(resumedAfterLeave.value);
     expect(resumedAfterLeave.value.status).toBe('ended');
-    expect(resumedAfterLeave.value).toEqual(manager.getPublicRoom('0007'));
+    expect(resumedAfterLeave.value).toEqual(manager.getPublicRoom('000007'));
     expect(resumedAfterLeave.events).toEqual([
-      { type: 'player_connection', roomCode: '0007', playerId: 'guest', online: true },
+      { type: 'player_connection', roomCode: '000007', playerId: 'guest', online: true },
     ]);
     expectNoGameEmissions(resumedAfterLeave.events);
     expect(publicPlayer(resumedAfterLeave.value, 'guest').online).toBe(true);
@@ -957,7 +978,7 @@ describe('RoomManager applyGameIntent shared committed transition', () => {
     const { manager, state } = startedRoomWith({ seed: 'accepted-roll-seed' });
     const actorId = state.currentPlayerId;
     const intent = { type: 'roll_dice' } satisfies Intent;
-    const beforeSnapshot = manager.getGameSnapshot('0007');
+    const beforeSnapshot = manager.getGameSnapshot('000007');
     expect(beforeSnapshot).toEqual(state);
     const expected = applyIntent(state, actorId, intent);
     expect(expected.ok).toBe(true);
@@ -967,12 +988,12 @@ describe('RoomManager applyGameIntent shared committed transition', () => {
     expect(expected.state.players).not.toEqual(beforeSnapshot?.players);
     expect(expected.state.recentLog.length).toBeGreaterThan(beforeSnapshot?.recentLog.length ?? 0);
 
-    const result = applyRoomGameIntent(manager, '0007', actorId, intent);
+    const result = applyRoomGameIntent(manager, '000007', actorId, intent);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toEqual({});
-    const committed = manager.getGameSnapshot('0007');
+    const committed = manager.getGameSnapshot('000007');
     expect(committed).toEqual(expected.state);
     expect(committed).not.toEqual(beforeSnapshot);
     expect(committed?.players).toEqual(expected.state.players);
@@ -996,13 +1017,13 @@ describe('RoomManager applyGameIntent shared committed transition', () => {
     const { manager, state } = startedRoomWith({ seed: 'wrong-actor-seed' });
     const wrongActorId = state.players.find((player) => player.id !== state.currentPlayerId)?.id;
     if (wrongActorId === undefined) throw new Error('expected a second player for wrong actor coverage');
-    const beforeSnapshot = manager.getGameSnapshot('0007');
+    const beforeSnapshot = manager.getGameSnapshot('000007');
     expect(beforeSnapshot).not.toBeNull();
 
-    const result = applyRoomGameIntent(manager, '0007', wrongActorId, { type: 'roll_dice' });
+    const result = applyRoomGameIntent(manager, '000007', wrongActorId, { type: 'roll_dice' });
 
     expect(result).toEqual({ ok: false, code: 'NOT_YOUR_TURN', message: '还没轮到你行动。' });
-    const afterSnapshot = manager.getGameSnapshot('0007');
+    const afterSnapshot = manager.getGameSnapshot('000007');
     expect(afterSnapshot).toEqual(beforeSnapshot);
     expect(afterSnapshot?.properties).toBe(beforeSnapshot?.properties);
     expect(afterSnapshot?.recentLog).toBe(beforeSnapshot?.recentLog);
@@ -1023,16 +1044,16 @@ describe('RoomManager applyGameIntent shared committed transition', () => {
       gameGateway: throwingGateway,
       onServerError: (message, error) => serverErrors.push({ message, error }),
     });
-    const beforeSnapshot = manager.getGameSnapshot('0007');
+    const beforeSnapshot = manager.getGameSnapshot('000007');
 
-    const result = applyRoomGameIntent(manager, '0007', state.currentPlayerId, { type: 'roll_dice' });
+    const result = applyRoomGameIntent(manager, '000007', state.currentPlayerId, { type: 'roll_dice' });
 
     expect(result).toEqual({ ok: false, code: 'ILLEGAL_INTENT', message: '该操作不合法。' });
-    expect(manager.getGameSnapshot('0007')).toEqual(beforeSnapshot);
+    expect(manager.getGameSnapshot('000007')).toEqual(beforeSnapshot);
     expect(serverErrors).toHaveLength(1);
     expect(serverErrors[0]?.error).toBe(boom);
     expect(serverErrors[0]?.message).toContain('applyGameIntent');
-    expect(serverErrors[0]?.message).toContain('0007');
+    expect(serverErrors[0]?.message).toContain('000007');
     expect(serverErrors[0]?.message).not.toContain(state.currentPlayerId);
     expect(serverErrors[0]?.message).not.toContain('roll_dice');
     expect(serverErrors[0]?.message).not.toContain('tok-host');
@@ -1044,7 +1065,7 @@ describe('RoomManager applyGameIntent shared committed transition', () => {
   test('bounded real full-turn helper reaches turn_ended and commits game_events immediately before game_snapshot', () => {
     const { manager } = startedRoomWith({ seed: 'full-turn-seed' });
 
-    const fullTurn = playFullTurn(manager, '0007', 8);
+    const fullTurn = playFullTurn(manager, '000007', 8);
 
     const turnEnded = fullTurn.events.find((event) => event.type === 'turn_ended');
     expect(turnEnded).toBeDefined();
@@ -1055,7 +1076,7 @@ describe('RoomManager applyGameIntent shared committed transition', () => {
     expect(finalSnapshot?.type).toBe('game_snapshot');
     if (finalBatch?.type !== 'game_events' || finalSnapshot?.type !== 'game_snapshot') return;
     expect(finalBatch.events).toContainEqual(turnEnded);
-    expect(finalSnapshot.state).toEqual(manager.getGameSnapshot('0007'));
+    expect(finalSnapshot.state).toEqual(manager.getGameSnapshot('000007'));
   });
 
   test('forced game_over ends the public room once, publishes one final snapshot, and blocks later mutations', () => {
@@ -1068,7 +1089,7 @@ describe('RoomManager applyGameIntent shared committed transition', () => {
     });
     const actorId = state.currentPlayerId;
 
-    const result = applyRoomGameIntent(manager, '0007', actorId, { type: 'end_turn' });
+    const result = applyRoomGameIntent(manager, '000007', actorId, { type: 'end_turn' });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -1090,27 +1111,27 @@ describe('RoomManager applyGameIntent shared committed transition', () => {
     ]);
     expect(snapshots).toHaveLength(1);
     expect(snapshots[0]?.state.phase).toBe('game_over');
-    expect(manager.getPublicRoom('0007')?.status).toBe('ended');
-    expect(manager.getGameSnapshot('0007')).toEqual(snapshots[0]?.state);
+    expect(manager.getPublicRoom('000007')?.status).toBe('ended');
+    expect(manager.getGameSnapshot('000007')).toEqual(snapshots[0]?.state);
     expect(timers.filter((timer) => timer.active)).toEqual([]);
     expect(asyncEvents).toEqual([]);
     expect(scripted.applyCalls()).toBe(1);
 
-    const endedSnapshot = manager.getGameSnapshot('0007');
-    const laterIntent = applyRoomGameIntent(manager, '0007', actorId, { type: 'roll_dice' });
+    const endedSnapshot = manager.getGameSnapshot('000007');
+    const laterIntent = applyRoomGameIntent(manager, '000007', actorId, { type: 'roll_dice' });
     expect(laterIntent.ok).toBe(false);
     if (laterIntent.ok) return;
     expect(laterIntent.code).toBe('INVALID_ROOM_ACTION');
     expect(scripted.applyCalls()).toBe(1);
-    expect(manager.getGameSnapshot('0007')).toEqual(endedSnapshot);
+    expect(manager.getGameSnapshot('000007')).toEqual(endedSnapshot);
     expect(timers.filter((timer) => timer.active)).toEqual([]);
     expect(asyncEvents).toEqual([]);
 
-    const restart = manager.startRoom('0007', 'host');
+    const restart = manager.startRoom('000007', 'host');
     expect(restart.ok).toBe(false);
     if (restart.ok) return;
     expect(restart.code).toBe('INVALID_ROOM_ACTION');
-    expect(manager.getGameSnapshot('0007')).toEqual(endedSnapshot);
+    expect(manager.getGameSnapshot('000007')).toEqual(endedSnapshot);
   });
 });
 describe('automation infrastructure', () => {
@@ -1176,7 +1197,7 @@ describe('automation infrastructure', () => {
     expect(activeTimers(timers)).toHaveLength(0);
     expect(debtGateway.chooseCalls()).toEqual(['botA']);
 
-    const manualResolution = applyRoomGameIntent(manager, '0007', 'host', { type: 'end_turn' });
+    const manualResolution = applyRoomGameIntent(manager, '000007', 'host', { type: 'end_turn' });
 
     expect(manualResolution.ok).toBe(true);
     if (!manualResolution.ok) throw new Error(`host debt resolution failed: ${manualResolution.code}`);
@@ -1270,7 +1291,7 @@ describe('automation infrastructure', () => {
     expect(gamePlayer(state, firstActorId).isBot).toBe(false);
     expect(activeTimers(timers)).toEqual([]);
 
-    const completed = playFullTurn(manager, '0007', 8);
+    const completed = playFullTurn(manager, '000007', 8);
 
     expect(completed.events.some((event) => event.type === 'turn_ended')).toBe(true);
     const afterHumanTurn = getCommittedGameState(manager);
@@ -1321,7 +1342,7 @@ describe('automation infrastructure', () => {
     expect(counting.applyCalls()).toBe(1);
   });
 
-  test('BOT apply rule failure preserves committed state references, emits nothing, and stops retry', () => {
+  test('BOT apply rule failure preserves committed state references, emits nothing, and self-heals a bounded number of retries', () => {
     const serverErrors: Array<{ message: string; error: unknown }> = [];
     const failureCodes: string[] = [];
     let chooseCalls = 0;
@@ -1366,15 +1387,30 @@ describe('automation infrastructure', () => {
     expect(snapshotAfterFailure.players[0]).toBe(playerRefsBeforeFailure[0]);
     expect(snapshotAfterFailure.players[1]).toBe(playerRefsBeforeFailure[1]);
     expect(asyncEvents).toEqual([]);
-    expect(activeTimers(timers)).toEqual([]);
-    expect(timers).toHaveLength(1);
+    // 有界自愈：一次提交失败不再永久冻结对局，而是重排一拍、用（已修复的）bot 重新决策。
+    expect(takeoverTimers(timers)).toHaveLength(1);
+    expect(graceTimers(timers)).toEqual([]);
     expect(serverErrors).toEqual([]);
+
+    // 连续失败超过上限后放弃：清空自动化且不泄漏细节。
+    for (let attempt = 0; attempt < SELF_HEAL_RETRY_LIMIT; attempt += 1) {
+      takeoverTimers(timers)[0]?.callback();
+    }
+
+    expect(chooseCalls).toBe(1 + SELF_HEAL_RETRY_LIMIT);
+    expect(failureCodes).toEqual(Array(1 + SELF_HEAL_RETRY_LIMIT).fill('WRONG_PHASE'));
+    expect(getCommittedGameState(manager)).toEqual(snapshotBeforeFailure);
+    expect(asyncEvents).toEqual([]);
+    expect(takeoverTimers(timers)).toEqual([]);
+    expect(serverErrors).toHaveLength(1);
+    expect(serverErrors[0]?.message).toContain('automation');
+    expect(serverErrors[0]?.message).toContain('000007');
   });
 
   test('deterministic two-human start leaves no active automation timer', () => {
     const { asyncEvents, manager, timers } = startedRoomWith({ seed: 'human-first-no-automation-seed' });
 
-    expect(manager.getGameSnapshot('0007')?.players.every((player) => !player.isBot)).toBe(true);
+    expect(manager.getGameSnapshot('000007')?.players.every((player) => !player.isBot)).toBe(true);
     expect(timers.filter((timer) => timer.active)).toEqual([]);
     expect(asyncEvents).toEqual([]);
   });
@@ -1382,18 +1418,18 @@ describe('automation infrastructure', () => {
   test('dispose cancels and invalidates a queued BOT callback without mutating or emitting', () => {
     const { asyncEvents, manager, timers } = startedBotFirstRoom({ delays: [2468] });
     const handle = timers[0];
-    const snapshotBeforeDispose = manager.getGameSnapshot('0007');
+    const snapshotBeforeDispose = manager.getGameSnapshot('000007');
 
     manager.dispose();
     expect(handle?.active).toBe(false);
     handle?.callback();
 
-    expect(manager.getGameSnapshot('0007')).toEqual(snapshotBeforeDispose);
+    expect(manager.getGameSnapshot('000007')).toEqual(snapshotBeforeDispose);
     expect(asyncEvents).toEqual([]);
     expect(timers.filter((timer) => timer.active)).toEqual([]);
   });
 
-  test('throwing BOT planner logs the original error safely, preserves state, emits nothing, and stops automation', () => {
+  test('throwing BOT planner logs the original error safely, preserves state, emits nothing, and gives up after bounded self-heal retries', () => {
     const boom = new Error('chooseBotIntent internals should stay server-side');
     const serverErrors: Array<{ message: string; error: unknown }> = [];
     let chooseCalls = 0;
@@ -1415,20 +1451,33 @@ describe('automation infrastructure', () => {
       onServerError: (message, error) => serverErrors.push({ message, error }),
     });
     const handle = timers[0];
-    const snapshotBeforeThrow = manager.getGameSnapshot('0007');
+    const snapshotBeforeThrow = manager.getGameSnapshot('000007');
 
     handle?.callback();
 
+    // 有界自愈：决策抛错不再立刻清空自动化，先重排一拍；对局状态保持不变、也不上报错误。
     expect(chooseCalls).toBe(1);
     expect(applyCalls).toBe(0);
-    expect(manager.getGameSnapshot('0007')).toEqual(snapshotBeforeThrow);
-    expect(manager.getGameSnapshot('0007')).toEqual(state);
+    expect(manager.getGameSnapshot('000007')).toEqual(snapshotBeforeThrow);
+    expect(manager.getGameSnapshot('000007')).toEqual(state);
     expect(asyncEvents).toEqual([]);
-    expect(timers.filter((timer) => timer.active)).toEqual([]);
+    expect(takeoverTimers(timers)).toHaveLength(1);
+    expect(serverErrors).toEqual([]);
+
+    // 连续抛错超过上限后放弃：只上报一次，且不泄漏任何敏感细节。
+    for (let attempt = 0; attempt < SELF_HEAL_RETRY_LIMIT; attempt += 1) {
+      takeoverTimers(timers)[0]?.callback();
+    }
+
+    expect(chooseCalls).toBe(1 + SELF_HEAL_RETRY_LIMIT);
+    expect(applyCalls).toBe(0);
+    expect(manager.getGameSnapshot('000007')).toEqual(snapshotBeforeThrow);
+    expect(asyncEvents).toEqual([]);
+    expect(takeoverTimers(timers)).toEqual([]);
     expect(serverErrors).toHaveLength(1);
     expect(serverErrors[0]?.error).toBe(boom);
     expect(serverErrors[0]?.message).toContain('automation');
-    expect(serverErrors[0]?.message).toContain('0007');
+    expect(serverErrors[0]?.message).toContain('000007');
     expect(serverErrors[0]?.message).not.toContain('tok-host');
     expect(serverErrors[0]?.message).not.toContain('botA');
     expect(serverErrors[0]?.message).not.toContain('房主');
@@ -1457,11 +1506,11 @@ function startedRoomWithOfflineActor(options: HarnessOptions = {}) {
     seed: options.seed ?? 'offline-takeover-seed',
   });
   const actor = harness.state.currentPlayerId;
-  const disconnected = harness.manager.markDisconnected('0007', actor);
+  const disconnected = harness.manager.markDisconnected('000007', actor);
   expect(disconnected.ok).toBe(true);
   if (!disconnected.ok) throw new Error(`markDisconnected failed: ${disconnected.code}`);
 
-  const room = harness.manager.getPublicRoom('0007');
+  const room = harness.manager.getPublicRoom('000007');
   expect(room).not.toBeNull();
   if (room === null) throw new Error('offline takeover setup lost room');
   const host = room.hostId;
@@ -1550,21 +1599,23 @@ describe('offline takeover', () => {
     const { asyncEvents, manager, timers, actor, host } = startedRoomWithOfflineActor({ delays: [701] });
     const before = getCommittedGameState(manager);
 
-    const result = requestOfflineTakeover(manager, '0007', host);
+    const result = requestOfflineTakeover(manager, '000007', host);
 
     expect(result).toEqual({
       ok: true,
       value: {},
       events: [{
         type: 'room_state',
-        roomCode: '0007',
+        roomCode: '000007',
         room: expect.objectContaining({ takeoverPlayerId: actor }),
       }],
     });
-    expect(manager.getPublicRoom('0007')).toEqual(expect.objectContaining({ takeoverPlayerId: actor }));
-    expect(activeTimers(timers)).toHaveLength(1);
-    expect(timers).toHaveLength(1);
-    expect(timers[0]?.delayMs).toBe(701);
+    expect(manager.getPublicRoom('000007')).toEqual(expect.objectContaining({ takeoverPlayerId: actor }));
+    // markDisconnected 已先起了 15s 自动托管宽限计时器；显式托管请求另起真正的自动化计时器。
+    expect(graceTimers(timers)).toHaveLength(1);
+    expect(takeoverTimers(timers)).toHaveLength(1);
+    expect(takeoverTimers(timers)[0]?.delayMs).toBe(701);
+    expect(timers).toHaveLength(2);
     const after = getCommittedGameState(manager);
     expect(after).toEqual(before);
     expect(after.currentPlayerId).toBe(actor);
@@ -1578,7 +1629,7 @@ describe('offline takeover', () => {
       code: 'INVALID_ROOM_ACTION',
       message: 'No active game for that action.',
     });
-    expect(requestOfflineTakeover(lobby.manager, '0007', 'host')).toEqual({
+    expect(requestOfflineTakeover(lobby.manager, '000007', 'host')).toEqual({
       ok: false,
       code: 'INVALID_ROOM_ACTION',
       message: 'No active game for that action.',
@@ -1586,23 +1637,24 @@ describe('offline takeover', () => {
 
     const offline = startedRoomWithOfflineActor();
     const before = getCommittedGameState(offline.manager);
-    expect(requestOfflineTakeover(offline.manager, '0007', offline.actor)).toEqual({
+    expect(requestOfflineTakeover(offline.manager, '000007', offline.actor)).toEqual({
       ok: false,
       code: 'NOT_HOST',
       message: 'Only the host can complete an offline turn.',
     });
-    expect(activeTimers(offline.timers)).toEqual([]);
+    expect(takeoverTimers(offline.timers)).toEqual([]);
+    expect(graceTimers(offline.timers)).toHaveLength(1);
     expect(getCommittedGameState(offline.manager)).toEqual(before);
 
     const online = startedRoomWith({ seed: 'offline-takeover-online-seed' });
-    expect(requestOfflineTakeover(online.manager, '0007', 'host')).toEqual({
+    expect(requestOfflineTakeover(online.manager, '000007', 'host')).toEqual({
       ok: false,
       code: 'INVALID_ROOM_ACTION',
       message: 'The current player is online.',
     });
 
     const bot = startedBotFirstRoom({ seed: seedWithBotFirst([{ id: 'host', nickname: '房主', isBot: false }, { id: 'botA', nickname: '电脑 A', isBot: true }], 'botA') });
-    expect(requestOfflineTakeover(bot.manager, '0007', 'host')).toEqual({
+    expect(requestOfflineTakeover(bot.manager, '000007', 'host')).toEqual({
       ok: false,
       code: 'INVALID_ROOM_ACTION',
       message: 'The current player is not a human.',
@@ -1610,36 +1662,36 @@ describe('offline takeover', () => {
 
     const debt = startedRoomWithOfflineActorGateway(debtDuringTakeoverGateway());
     // The typed gateway seam supplies debt through a canonical committed transition, not a mutable snapshot.
-    const debtResult = applyRoomGameIntent(debt.manager, '0007', debt.actor, { type: 'roll_dice' });
+    const debtResult = applyRoomGameIntent(debt.manager, '000007', debt.actor, { type: 'roll_dice' });
     expect(debtResult.ok).toBe(true);
     expect(getCommittedGameState(debt.manager).debt?.debtorId).toBe(debt.actor);
-    expect(requestOfflineTakeover(debt.manager, '0007', debt.host)).toEqual({
+    expect(requestOfflineTakeover(debt.manager, '000007', debt.host)).toEqual({
       ok: false,
       code: 'INVALID_ROOM_ACTION',
       message: 'Cannot skip while a debt is unresolved.',
     });
 
-    expect(requestOfflineTakeover(offline.manager, '0007', offline.host)).toEqual({
+    expect(requestOfflineTakeover(offline.manager, '000007', offline.host)).toEqual({
       ok: true,
       value: {},
       events: [expect.objectContaining({ room: expect.objectContaining({ takeoverPlayerId: offline.actor }) })],
     });
-    expect(requestOfflineTakeover(offline.manager, '0007', offline.host)).toEqual({
+    expect(requestOfflineTakeover(offline.manager, '000007', offline.host)).toEqual({
       ok: false,
       code: 'INVALID_ROOM_ACTION',
       message: 'Automation is already active for this turn.',
     });
-    expect(activeTimers(offline.timers)).toHaveLength(1);
+    expect(takeoverTimers(offline.timers)).toHaveLength(1);
   });
 
   test('rejects the locked human manual intent while the timer callback commits and emits asynchronously', () => {
     const { asyncEvents, manager, timers, actor, host } = startedRoomWithOfflineActor({ delays: [702, 703] });
-    expect(requestOfflineTakeover(manager, '0007', host).ok).toBe(true);
-    const handle = activeTimers(timers)[0];
+    expect(requestOfflineTakeover(manager, '000007', host).ok).toBe(true);
+    const handle = takeoverTimers(timers)[0];
     if (handle === undefined) throw new Error('expected offline takeover timer');
     const before = getCommittedGameState(manager);
 
-    expect(applyRoomGameIntent(manager, '0007', actor, { type: 'roll_dice' })).toEqual({
+    expect(applyRoomGameIntent(manager, '000007', actor, { type: 'roll_dice' })).toEqual({
       ok: false,
       code: 'INVALID_ROOM_ACTION',
       message: 'The offline takeover is already committing this turn.',
@@ -1659,23 +1711,23 @@ describe('offline takeover', () => {
     const { asyncEvents, manager, timers, actor, host } = startedRoomWithOfflineActorGateway(controlled.gateway, {
       delays: [711, 712, 713, 714],
     });
-    expect(requestOfflineTakeover(manager, '0007', host).ok).toBe(true);
+    expect(requestOfflineTakeover(manager, '000007', host).ok).toBe(true);
 
     for (const expected of ['roll_dice', 'skip_buy', 'skip_build', 'end_turn'] satisfies Intent['type'][]) {
-      const handle = activeTimers(timers)[0];
+      const handle = takeoverTimers(timers)[0];
       if (handle === undefined) throw new Error(`missing takeover timer for ${expected}`);
-      expect(activeTimers(timers)).toHaveLength(1);
+      expect(takeoverTimers(timers)).toHaveLength(1);
       const callsBefore = controlled.intents().length;
       handle.callback();
       expect(controlled.intents()).toHaveLength(callsBefore + 1);
       expect(controlled.intents()[callsBefore]).toBe(expected);
-      expect(activeTimers(timers)).toHaveLength(expected === 'end_turn' ? 0 : 1);
+      expect(takeoverTimers(timers)).toHaveLength(expected === 'end_turn' ? 0 : 1);
       if (expected === 'roll_dice') {
-        const replacement = activeTimers(timers)[0];
+        const replacement = takeoverTimers(timers)[0];
         const callsAfter = controlled.intents().length;
         handle.callback();
         expect(controlled.intents()).toHaveLength(callsAfter);
-        expect(activeTimers(timers)).toEqual(replacement === undefined ? [] : [replacement]);
+        expect(takeoverTimers(timers)).toEqual(replacement === undefined ? [] : [replacement]);
       }
     }
 
@@ -1690,21 +1742,21 @@ describe('offline takeover', () => {
     const { asyncEvents, manager, timers, actor, host } = startedRoomWithOfflineActorGateway(controlled.gateway, {
       delays: [721, 722, 723, 724],
     });
-    expect(requestOfflineTakeover(manager, '0007', host).ok).toBe(true);
-    const handle = activeTimers(timers)[0];
+    expect(requestOfflineTakeover(manager, '000007', host).ok).toBe(true);
+    const handle = takeoverTimers(timers)[0];
     if (handle === undefined) throw new Error('expected retained takeover timer');
-    const resumed = manager.resumeRoom('0007', actor, actor === 'host' ? 'tok-host' : 'tok-guest');
+    const resumed = manager.resumeRoom('000007', actor, actor === 'host' ? 'tok-host' : 'tok-guest');
     expect(resumed).toEqual(expect.objectContaining({
       ok: true,
       value: expect.objectContaining({ takeoverPlayerId: actor }),
     }));
-    expect(activeTimers(timers)).toEqual([handle]);
-    const locked = applyRoomGameIntent(manager, '0007', actor, { type: 'roll_dice' });
+    expect(takeoverTimers(timers)).toEqual([handle]);
+    const locked = applyRoomGameIntent(manager, '000007', actor, { type: 'roll_dice' });
     expect(locked.ok).toBe(false);
     if (locked.ok) throw new Error('takeover lock unexpectedly released on reconnect');
     expect(locked.code).toBe('INVALID_ROOM_ACTION');
     for (const expected of ['roll_dice', 'skip_buy', 'skip_build', 'end_turn'] satisfies Intent['type'][]) {
-      const timer = activeTimers(timers)[0];
+      const timer = takeoverTimers(timers)[0];
       if (timer === undefined) throw new Error(`missing timer for ${expected}`);
       timer.callback();
     }
@@ -1716,10 +1768,10 @@ describe('offline takeover', () => {
 
   test('host transfer room_state keeps the scheduled takeover actor public', () => {
     const { manager, actor, host } = startedRoomWithOfflineActor({ delays: [725] });
-    expect(requestOfflineTakeover(manager, '0007', host).ok).toBe(true);
+    expect(requestOfflineTakeover(manager, '000007', host).ok).toBe(true);
 
-    expect(manager.markDisconnected('0007', host).ok).toBe(true);
-    const resumed = manager.resumeRoom('0007', actor, actor === 'host' ? 'tok-host' : 'tok-guest');
+    expect(manager.markDisconnected('000007', host).ok).toBe(true);
+    const resumed = manager.resumeRoom('000007', actor, actor === 'host' ? 'tok-host' : 'tok-guest');
 
     expect(resumed.ok).toBe(true);
     if (!resumed.ok) throw new Error('resume failed');
@@ -1735,19 +1787,20 @@ describe('offline takeover', () => {
     const { asyncEvents, manager, timers, actor, host } = startedRoomWithOfflineActorGateway(debtDuringTakeoverGateway(), {
       delays: [731, 732],
     });
-    expect(requestOfflineTakeover(manager, '0007', host).ok).toBe(true);
-    const handle = activeTimers(timers)[0];
+    expect(requestOfflineTakeover(manager, '000007', host).ok).toBe(true);
+    const handle = takeoverTimers(timers)[0];
     if (handle === undefined) throw new Error('expected debt takeover timer');
     handle.callback();
     expect(getCommittedGameState(manager).debt?.debtorId).toBe(actor);
-    expect(activeTimers(timers)).toEqual([]);
+    expect(takeoverTimers(timers)).toEqual([]);
+    expect(graceTimers(timers)).toHaveLength(1);
     expect(asyncEvents.filter((event) => event.type === 'room_state')).toEqual([
       expect.objectContaining({ room: expect.objectContaining({ takeoverPlayerId: null }) }),
     ]);
     const timerCount = timers.length;
 
-    expect(manager.resumeRoom('0007', actor, actor === 'host' ? 'tok-host' : 'tok-guest').ok).toBe(true);
-    expect(applyRoomGameIntent(manager, '0007', actor, { type: 'end_turn' }).ok).toBe(true);
+    expect(manager.resumeRoom('000007', actor, actor === 'host' ? 'tok-host' : 'tok-guest').ok).toBe(true);
+    expect(applyRoomGameIntent(manager, '000007', actor, { type: 'end_turn' }).ok).toBe(true);
     expect(getCommittedGameState(manager).debt).toBeNull();
     expect(timers).toHaveLength(timerCount);
     expect(JSON.stringify(asyncEvents)).not.toContain('tok-');

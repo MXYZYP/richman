@@ -78,7 +78,7 @@ describe('RoomManager spectators', () => {
   test('joinRoom default role remains player and spectator seats stay empty', () => {
     const { manager } = createManager({ playerIds: ['host', 'guest'], tokens: ['tok-host', 'tok-guest'] });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    const joined = manager.joinRoom('0007', '客人');
+    const joined = manager.joinRoom('000007', '客人');
     expectSuccess(joined);
     expect(joined.value.room.players.map((player) => player.id)).toEqual(['host', 'guest']);
     expect(joined.value.room.spectators).toEqual([]);
@@ -88,23 +88,23 @@ describe('RoomManager spectators', () => {
   test('joinRoom as spectator publishes a spectator seat without occupying a player seat', () => {
     const { manager } = createManager({ playerIds: ['host', 'spec'], tokens: ['tok-host', 'tok-spec'] });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    const joined = manager.joinRoom('0007', '  观众  ', undefined, 'spectator');
+    const joined = manager.joinRoom('000007', '  观众  ', undefined, 'spectator');
     expectSuccess(joined);
     expect(joined.value).toMatchObject({ playerId: 'spec', token: 'tok-spec' });
     expect(joined.value.room.players).toHaveLength(1);
     expect(joined.value.room.spectators).toEqual([{ id: 'spec', nickname: '观众', online: true }]);
     expect(JSON.stringify(joined.value.room)).not.toContain('tok-spec');
-    expect(manager.getPublicRoom('0007')?.spectators).toEqual(joined.value.room.spectators);
+    expect(manager.getPublicRoom('000007')?.spectators).toEqual(joined.value.room.spectators);
     manager.dispose();
   });
 
   test('joinRoom rejects an invalid role before seating anyone', () => {
     const { manager } = createManager({ playerIds: ['host', 'intruder'], tokens: ['tok-host', 'tok-intruder'] });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    const result = manager.joinRoom('0007', '闯入者', undefined, 'admin' as 'player');
+    const result = manager.joinRoom('000007', '闯入者', undefined, 'admin' as 'player');
     expectFailure(result, 'INVALID_ROOM_ACTION');
-    expect(manager.getPublicRoom('0007')?.players).toHaveLength(1);
-    expect(manager.getPublicRoom('0007')?.spectators).toEqual([]);
+    expect(manager.getPublicRoom('000007')?.players).toHaveLength(1);
+    expect(manager.getPublicRoom('000007')?.spectators).toEqual([]);
     manager.dispose();
   });
 
@@ -114,10 +114,10 @@ describe('RoomManager spectators', () => {
       tokens: ['tok-host', 'tok-spec'],
     });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    expectSuccess(manager.addBot('0007', 'host'));
-    expectSuccess(manager.startRoom('0007', 'host'));
-    expectFailure(manager.joinRoom('0007', '迟到玩家'), 'GAME_ALREADY_STARTED');
-    const spectator = manager.joinRoom('0007', '观众', undefined, 'spectator');
+    expectSuccess(manager.addBot('000007', 'host'));
+    expectSuccess(manager.startRoom('000007', 'host'));
+    expectFailure(manager.joinRoom('000007', '迟到玩家'), 'GAME_ALREADY_STARTED');
+    const spectator = manager.joinRoom('000007', '观众', undefined, 'spectator');
     expectSuccess(spectator);
     expect(spectator.value.room.status).toBe('playing');
     expect(spectator.value.room.spectators).toEqual([{ id: 'spec', nickname: '观众', online: true }]);
@@ -130,11 +130,11 @@ describe('RoomManager spectators', () => {
       tokens: ['tok-host', 't1', 't2', 't3', 't4'],
     });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    expectSuccess(manager.joinRoom('0007', '观众一', undefined, 'spectator'));
-    expectSuccess(manager.joinRoom('0007', '观众二', undefined, 'spectator'));
-    expectSuccess(manager.joinRoom('0007', '观众三', undefined, 'spectator'));
-    expectFailure(manager.joinRoom('0007', ' 房主 ', undefined, 'spectator'), 'ROOM_FULL');
-    expect(manager.getPublicRoom('0007')?.spectators).toHaveLength(3);
+    expectSuccess(manager.joinRoom('000007', '观众一', undefined, 'spectator'));
+    expectSuccess(manager.joinRoom('000007', '观众二', undefined, 'spectator'));
+    expectSuccess(manager.joinRoom('000007', '观众三', undefined, 'spectator'));
+    expectFailure(manager.joinRoom('000007', ' 房主 ', undefined, 'spectator'), 'ROOM_FULL');
+    expect(manager.getPublicRoom('000007')?.spectators).toHaveLength(3);
     manager.dispose();
   });
 
@@ -144,9 +144,9 @@ describe('RoomManager spectators', () => {
       tokens: ['tok-host', 'tok-spec', 'tok-guest'],
     });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    expectSuccess(manager.joinRoom('0007', '观众', undefined, 'spectator'));
-    expectFailure(manager.joinRoom('0007', '观众'), 'NICKNAME_TAKEN');
-    expectFailure(manager.joinRoom('0007', '房主', undefined, 'spectator'), 'NICKNAME_TAKEN');
+    expectSuccess(manager.joinRoom('000007', '观众', undefined, 'spectator'));
+    expectFailure(manager.joinRoom('000007', '观众'), 'NICKNAME_TAKEN');
+    expectFailure(manager.joinRoom('000007', '房主', undefined, 'spectator'), 'NICKNAME_TAKEN');
     manager.dispose();
   });
 
@@ -156,10 +156,10 @@ describe('RoomManager spectators', () => {
       tokens: ['tok-host', 't1', 't2', 't3'],
     });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    expectSuccess(manager.joinRoom('0007', '电脑 A', undefined, 'spectator'));
-    expectSuccess(manager.joinRoom('0007', '电脑 B', undefined, 'spectator'));
-    expectSuccess(manager.joinRoom('0007', '电脑 C', undefined, 'spectator'));
-    const added = manager.addBot('0007', 'host');
+    expectSuccess(manager.joinRoom('000007', '电脑 A', undefined, 'spectator'));
+    expectSuccess(manager.joinRoom('000007', '电脑 B', undefined, 'spectator'));
+    expectSuccess(manager.joinRoom('000007', '电脑 C', undefined, 'spectator'));
+    const added = manager.addBot('000007', 'host');
     expectSuccess(added);
     expect(added.value.players.find((player) => player.isBot)?.nickname).toBe('电脑 D');
     const nicknames = [...added.value.players, ...added.value.spectators].map((member) => member.nickname);
@@ -174,9 +174,9 @@ describe('RoomManager spectators', () => {
       tokens: ['tok-host', 'tok-spec'],
     });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    expectSuccess(manager.addBot('0007', 'host'));
-    expectSuccess(manager.joinRoom('0007', '电脑甲', undefined, 'spectator'));
-    expectFailure(manager.renameBot('0007', 'host', 'bot-a', '电脑甲'), 'NICKNAME_TAKEN');
+    expectSuccess(manager.addBot('000007', 'host'));
+    expectSuccess(manager.joinRoom('000007', '电脑甲', undefined, 'spectator'));
+    expectFailure(manager.renameBot('000007', 'host', 'bot-a', '电脑甲'), 'NICKNAME_TAKEN');
     manager.dispose();
   });
 
@@ -187,12 +187,12 @@ describe('RoomManager spectators', () => {
     });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
     for (const expected of ['电脑 A', '电脑 B', '电脑 C', '电脑 D', '电脑 E']) {
-      const added = manager.addBot('0007', 'host');
+      const added = manager.addBot('000007', 'host');
       expectSuccess(added);
       expect(added.value.players.at(-1)).toMatchObject({ nickname: expected, isBot: true });
     }
-    expectFailure(manager.addBot('0007', 'host'), 'ROOM_FULL');
-    expect(manager.getPublicRoom('0007')?.players).toHaveLength(6);
+    expectFailure(manager.addBot('000007', 'host'), 'ROOM_FULL');
+    expect(manager.getPublicRoom('000007')?.players).toHaveLength(6);
     manager.dispose();
   });
 
@@ -202,13 +202,13 @@ describe('RoomManager spectators', () => {
       tokens: ['tok-host', 'tok-guest', 'tok-spec'],
     });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    expectSuccess(manager.joinRoom('0007', '客人', guestRequestId, 'player'));
-    expectFailure(manager.joinRoom('0007', '客人', guestRequestId, 'spectator'), 'INVALID_ROOM_ACTION');
-    expect(manager.getPublicRoom('0007')?.players).toHaveLength(2);
-    expect(manager.getPublicRoom('0007')?.spectators).toEqual([]);
-    expectSuccess(manager.joinRoom('0007', '观众', spectatorRequestId, 'spectator'));
-    expectFailure(manager.joinRoom('0007', '观众', spectatorRequestId, 'player'), 'INVALID_ROOM_ACTION');
-    expect(manager.getPublicRoom('0007')?.spectators).toHaveLength(1);
+    expectSuccess(manager.joinRoom('000007', '客人', guestRequestId, 'player'));
+    expectFailure(manager.joinRoom('000007', '客人', guestRequestId, 'spectator'), 'INVALID_ROOM_ACTION');
+    expect(manager.getPublicRoom('000007')?.players).toHaveLength(2);
+    expect(manager.getPublicRoom('000007')?.spectators).toEqual([]);
+    expectSuccess(manager.joinRoom('000007', '观众', spectatorRequestId, 'spectator'));
+    expectFailure(manager.joinRoom('000007', '观众', spectatorRequestId, 'player'), 'INVALID_ROOM_ACTION');
+    expect(manager.getPublicRoom('000007')?.spectators).toHaveLength(1);
     manager.dispose();
   });
 
@@ -218,12 +218,12 @@ describe('RoomManager spectators', () => {
       tokens: ['tok-host', 'tok-spec', 'tok-unexpected'],
     });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    const first = manager.joinRoom('0007', '  观众  ', spectatorRequestId, 'spectator');
+    const first = manager.joinRoom('000007', '  观众  ', spectatorRequestId, 'spectator');
     expectSuccess(first);
-    const replay = manager.joinRoom('0007', '观众', spectatorRequestId, 'spectator');
+    const replay = manager.joinRoom('000007', '观众', spectatorRequestId, 'spectator');
     expectSuccess(replay);
     expect(replay.value).toMatchObject({ playerId: 'spec', token: 'tok-spec' });
-    expect(manager.getPublicRoom('0007')?.spectators).toHaveLength(1);
+    expect(manager.getPublicRoom('000007')?.spectators).toHaveLength(1);
     manager.dispose();
   });
 
@@ -233,11 +233,11 @@ describe('RoomManager spectators', () => {
       tokens: ['tok-host', 'tok-spec', 'tok-spec-2'],
     });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    expectSuccess(manager.joinRoom('0007', '观众', undefined, 'spectator'));
-    const left = manager.leaveRoom('0007', 'spec');
+    expectSuccess(manager.joinRoom('000007', '观众', undefined, 'spectator'));
+    const left = manager.leaveRoom('000007', 'spec');
     expectSuccess(left);
     expect(left.value?.spectators).toEqual([]);
-    const rejoined = manager.joinRoom('0007', '观众', undefined, 'spectator');
+    const rejoined = manager.joinRoom('000007', '观众', undefined, 'spectator');
     expectSuccess(rejoined);
     expect(rejoined.value.playerId).toBe('spec-2');
     manager.dispose();
@@ -249,12 +249,12 @@ describe('RoomManager spectators', () => {
       tokens: ['tok-host', 'tok-spec'],
     });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    expectSuccess(manager.joinRoom('0007', '观众', undefined, 'spectator'));
-    const left = manager.leaveRoom('0007', 'host');
+    expectSuccess(manager.joinRoom('000007', '观众', undefined, 'spectator'));
+    const left = manager.leaveRoom('000007', 'host');
     expectSuccess(left);
-    expect(left.events).toEqual([{ type: 'room_closed', roomCode: '0007', reason: 'empty_lobby' }]);
-    expect(manager.getPublicRoom('0007')).toBeNull();
-    expectFailure(manager.resumeRoom('0007', 'spec', 'tok-spec'), 'ROOM_NOT_FOUND');
+    expect(left.events).toEqual([{ type: 'room_closed', roomCode: '000007', reason: 'empty_lobby' }]);
+    expect(manager.getPublicRoom('000007')).toBeNull();
+    expectFailure(manager.resumeRoom('000007', 'spec', 'tok-spec'), 'ROOM_NOT_FOUND');
     manager.dispose();
   });
 
@@ -264,14 +264,14 @@ describe('RoomManager spectators', () => {
       tokens: ['tok-host', 'tok-spec'],
     });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    expectSuccess(manager.joinRoom('0007', '观众', undefined, 'spectator'));
-    expectFailure(manager.addBot('0007', 'spec'), 'NOT_HOST');
-    expectFailure(manager.startRoom('0007', 'spec'), 'NOT_HOST');
-    expectSuccess(manager.addBot('0007', 'host'));
-    expectSuccess(manager.startRoom('0007', 'host'));
-    const intent = manager.applyGameIntent('0007', 'spec', { type: 'roll_dice' });
+    expectSuccess(manager.joinRoom('000007', '观众', undefined, 'spectator'));
+    expectFailure(manager.addBot('000007', 'spec'), 'NOT_HOST');
+    expectFailure(manager.startRoom('000007', 'spec'), 'NOT_HOST');
+    expectSuccess(manager.addBot('000007', 'host'));
+    expectSuccess(manager.startRoom('000007', 'host'));
+    const intent = manager.applyGameIntent('000007', 'spec', { type: 'roll_dice' });
     expect(intent).toMatchObject({ ok: false, code: 'INVALID_ROOM_ACTION' });
-    expect(manager.getPublicRoom('0007')?.hostId).toBe('host');
+    expect(manager.getPublicRoom('000007')?.hostId).toBe('host');
     manager.dispose();
   });
 
@@ -281,17 +281,17 @@ describe('RoomManager spectators', () => {
       tokens: ['tok-host', 'tok-guest', 'tok-spec'],
     });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    expectSuccess(manager.joinRoom('0007', '客人'));
-    expectSuccess(manager.joinRoom('0007', '观众', undefined, 'spectator'));
-    expectSuccess(manager.startRoom('0007', 'host'));
-    expectSuccess(manager.markDisconnected('0007', 'guest'));
-    expectSuccess(manager.markDisconnected('0007', 'host'));
-    expectFailure(manager.resumeRoom('0007', 'spec', 'wrong-token'), 'INVALID_TOKEN');
-    const resumed = manager.resumeRoom('0007', 'spec', 'tok-spec');
+    expectSuccess(manager.joinRoom('000007', '客人'));
+    expectSuccess(manager.joinRoom('000007', '观众', undefined, 'spectator'));
+    expectSuccess(manager.startRoom('000007', 'host'));
+    expectSuccess(manager.markDisconnected('000007', 'guest'));
+    expectSuccess(manager.markDisconnected('000007', 'host'));
+    expectFailure(manager.resumeRoom('000007', 'spec', 'wrong-token'), 'INVALID_TOKEN');
+    const resumed = manager.resumeRoom('000007', 'spec', 'tok-spec');
     expectSuccess(resumed);
     expect(resumed.value.hostId).toBe('host');
     expect(resumed.value.spectators).toEqual([{ id: 'spec', nickname: '观众', online: true }]);
-    const guestBack = manager.resumeRoom('0007', 'guest', 'tok-guest');
+    const guestBack = manager.resumeRoom('000007', 'guest', 'tok-guest');
     expectSuccess(guestBack);
     expect(guestBack.value.hostId).toBe('guest');
     manager.dispose();
@@ -315,20 +315,20 @@ describe('RoomManager spectator disconnect grace', () => {
       useFakeTimers: true,
     });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    expectSuccess(manager.joinRoom('0007', '观众', undefined, 'spectator'));
-    const disconnected = manager.markDisconnected('0007', 'spec');
+    expectSuccess(manager.joinRoom('000007', '观众', undefined, 'spectator'));
+    const disconnected = manager.markDisconnected('000007', 'spec');
     expectSuccess(disconnected);
     expect(disconnected.value?.spectators).toEqual([{ id: 'spec', nickname: '观众', online: false }]);
     expect(timers).toHaveLength(1);
     expect(timers[0]).toMatchObject({ delayMs: 300_000, active: true });
     vi.advanceTimersByTime(299_999);
-    expect(manager.getPublicRoom('0007')?.spectators).toHaveLength(1);
+    expect(manager.getPublicRoom('000007')?.spectators).toHaveLength(1);
     vi.advanceTimersByTime(1);
     expect(asyncEvents).toEqual([
-      expect.objectContaining({ type: 'room_state', roomCode: '0007' }),
+      expect.objectContaining({ type: 'room_state', roomCode: '000007' }),
     ]);
-    expect(manager.getPublicRoom('0007')?.spectators).toEqual([]);
-    expect(manager.getPublicRoom('0007')?.players).toHaveLength(1);
+    expect(manager.getPublicRoom('000007')?.spectators).toEqual([]);
+    expect(manager.getPublicRoom('000007')?.players).toHaveLength(1);
     manager.dispose();
   });
 
@@ -339,16 +339,16 @@ describe('RoomManager spectator disconnect grace', () => {
       useFakeTimers: true,
     });
     expectSuccess(manager.createRoom('房主', 'china-tour'));
-    expectSuccess(manager.addBot('0007', 'host'));
-    expectSuccess(manager.joinRoom('0007', '观众', undefined, 'spectator'));
-    expectSuccess(manager.markDisconnected('0007', 'spec'));
+    expectSuccess(manager.addBot('000007', 'host'));
+    expectSuccess(manager.joinRoom('000007', '观众', undefined, 'spectator'));
+    expectSuccess(manager.markDisconnected('000007', 'spec'));
     expect(timers[0]).toMatchObject({ delayMs: 300_000, active: true });
-    expectSuccess(manager.startRoom('0007', 'host'));
+    expectSuccess(manager.startRoom('000007', 'host'));
     const spectatorTimer = timers.find((timer) => timer.delayMs === 300_000);
     expect(spectatorTimer?.active).toBe(true);
     spectatorTimer?.callback();
-    expect(manager.getPublicRoom('0007')?.status).toBe('playing');
-    expect(manager.getPublicRoom('0007')?.spectators).toEqual([]);
+    expect(manager.getPublicRoom('000007')?.status).toBe('playing');
+    expect(manager.getPublicRoom('000007')?.spectators).toEqual([]);
     manager.dispose();
   });
 });

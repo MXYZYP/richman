@@ -1,4 +1,5 @@
-import { applyIntent, chooseBotIntent, createGame, skipCurrentTurn } from '@richman/engine';
+import { applyIntent, chooseBotIntent, createGame, defaultRuleModuleRegistry, skipCurrentTurn } from '@richman/engine';
+import type { BotDifficulty } from '@richman/engine';
 import type { BoardData, CardsData, DeepReadonly, GameConfig, MapRef, RuleModuleRef } from '@richman/board-data';
 import type {
   ApplyResult,
@@ -12,10 +13,14 @@ import type {
 export interface GameRuntimeGateway {
   createGame(input: CreateGameInput): GameState;
   applyIntent(state: GameState, playerId: string, intent: Intent): ApplyResult;
-  chooseBotIntent(state: GameState, playerId: string): Intent;
+  chooseBotIntent(state: GameState, playerId: string, difficulty?: BotDifficulty): Intent;
 }
 
-export const defaultGameGateway: GameRuntimeGateway = { createGame, applyIntent, chooseBotIntent };
+export const defaultGameGateway: GameRuntimeGateway = {
+  createGame,
+  applyIntent,
+  chooseBotIntent: (state, playerId, difficulty) => chooseBotIntent(state, playerId, defaultRuleModuleRegistry, difficulty),
+};
 
 const NO_ARG_INTENTS = new Set<Intent['type']>([
   'roll_dice',
@@ -26,6 +31,7 @@ const NO_ARG_INTENTS = new Set<Intent['type']>([
   'skip_build',
   'end_turn',
   'declare_bankrupt',
+  'surrender',
 ]);
 
 const CELL_ID_INTENTS = new Set<Intent['type']>([
@@ -242,16 +248,28 @@ const TAKEOVER_POLICY: Record<GameState['turnPhase'], Intent> = {
   managing: { type: 'end_turn' },
 };
 
-export function chooseTakeoverIntent(state: GameState): Intent | null {
+export function chooseTakeoverIntent(state: GameState, difficulty: BotDifficulty = 'normal'): Intent | null {
+  // 待选动作只可能由规则模块产生（core 从不产生 pendingActions），所以这里按「当前玩家 +
+  // 当前阶段」筛选**任何模块**的待选动作，而不是只认某一个模块 id。
+  //
+  // 为什么不能写死模块 id：历史上这里只匹配 world-tour@1，于是其它模块（如 great-wall@1 的
+  // 烽火台 beacon-choice）的待选动作会被整体过滤掉，落入下面的 TAKEOVER_POLICY。而挂起待选动作时
+  // turnPhase 通常是 `managing`，策略返回的是 end_turn —— 既不解决选项（选项滞留、该模块的机制
+  // 对该玩家永久失效），又把回合草草推给下一个人。
   const pendingActions = state.publicRuleState.pendingActions.filter((action) => (
     action.playerId === state.currentPlayerId
     && action.requiredPhase === state.turnPhase
-    && action.module.id === 'world-tour'
-    && action.module.version === 1
   ));
-  if (pendingActions.some((action) => (
-    action.action === 'enter-airport-branch' || action.action === 'roll-branch'
-  ))) return null;
-  if (pendingActions.length > 0) return chooseBotIntent(state, state.currentPlayerId);
+  // 托管（离线接管）玩家与电脑玩家采用同一决策：世界巡游模块的待选动作（机场入口
+  // enter-airport-branch / 支线掷骰 roll-branch、短/长途航班、巴士、免费升级）一律交给 bot
+  // 策略产出对应意图，使其能正常推进。
+  //
+  // 为什么不在这里返回 null（历史上曾如此）：roomManager 对「null + offline_takeover」的处理是
+  // skipCurrentTurn —— 只跳过这一回合、不消费 pendingAirportByPlayerId、玩家仍留在机场格上。
+  // 于是一个长期离线的玩家会被「每回合跳过」，永远停在机场格不再移动（整局冒烟验证：回合数已到
+  // 626 仍未终局），并且这种反复的跳过/重排会与自动化重建路径交错，最终在某个回合出现
+  // 「没有任何活跃计时器、也没有服务端错误」的静默硬冻结——正是线上「一直提示某人行动中、
+  // 无法掷骰子」的形态。交给 bot 策略后，棋子会走进支线并继续正常移动，对局必然收敛。
+  if (pendingActions.length > 0) return chooseBotIntent(state, state.currentPlayerId, defaultRuleModuleRegistry, difficulty);
   return TAKEOVER_POLICY[state.turnPhase];
 }

@@ -66,15 +66,15 @@ describe('Socket.IO game reconnect integration', () => {
     const resumed = await connectClient(gameUrl(game));
     const recorder = record(resumed);
     const noPeerSnapshot = expectNoEvent(peer, 'game:snapshot', 'peer snapshot while another player resumes');
-    const resume = await emitResume(resumed, { roomCode: '0007', playerId: actorId, token: actorToken }, recorder);
-    const authoritative = game.manager.getGameSnapshot('0007');
+    const resume = await emitResume(resumed, { roomCode: '000007', playerId: actorId, token: actorToken }, recorder);
+    const authoritative = game.manager.getGameSnapshot('000007');
 
     expectResumeSuccess(resume);
     expect(authoritative).not.toBeNull();
     if (authoritative === null) throw new Error('missing authoritative game snapshot after resume');
     expect(resume).toMatchObject({
       ok: true,
-      room: expect.objectContaining({ roomCode: '0007', status: 'playing' }),
+      room: expect.objectContaining({ roomCode: '000007', status: 'playing' }),
     });
     if (resume.snapshot === undefined) throw new Error('playing resume did not return a snapshot');
     expect(resume.snapshot).not.toHaveProperty('state');
@@ -108,7 +108,7 @@ describe('Socket.IO game reconnect integration', () => {
     expect(resume).toEqual({
       ok: true,
       room: {
-        roomCode: '0007',
+        roomCode: '000007',
         status: 'lobby',
         hostId: 'player-host',
         players: [
@@ -136,12 +136,12 @@ describe('Socket.IO game reconnect integration', () => {
     await expect(scheduledState).resolves.toEqual(expect.objectContaining({
       takeoverPlayerId: game.actorId,
     }));
-    expect(activeTimers(timers)).toHaveLength(1);
-    const timer = activeTimers(timers)[0];
+    expect(takeoverTimers(timers)).toHaveLength(1);
+    const timer = takeoverTimers(timers)[0];
     const resumed = await connectClient(gameUrl(game));
     const resumeRecorder = record(resumed);
     const resume = await emitResume(resumed, {
-      roomCode: '0007',
+      roomCode: '000007',
       playerId: game.actorId,
       token: game.actorToken,
     }, resumeRecorder);
@@ -152,7 +152,7 @@ describe('Socket.IO game reconnect integration', () => {
     expect(resume.room.players.find((player) => player.id === game.actorId)?.online).toBe(true);
     expect(resumeRecorder.messages).toEqual(['connection', 'ack']);
     expectFailure(lockedManual, 'INVALID_ROOM_ACTION');
-    expect(activeTimers(timers)).toEqual([timer]);
+    expect(takeoverTimers(timers)).toEqual([timer]);
 
     const hostRecorder = record(game.hostSocket);
     const hostEvents = nextEvents(game.hostSocket, 'offline takeover events for host');
@@ -172,20 +172,20 @@ describe('Socket.IO game reconnect integration', () => {
     expect(hostBatch.events).not.toHaveLength(0);
     expect(hostRecorder.messages).toEqual(['events', 'snapshot']);
     expect(resumeRecorder.messages.slice(-2)).toEqual(['events', 'snapshot']);
-    const authoritative = game.manager.getGameSnapshot('0007');
+    const authoritative = game.manager.getGameSnapshot('000007');
     if (authoritative === null) throw new Error('missing authoritative offline takeover state');
     expectPublicGameSnapshot(hostGame.state as unknown as PublicGameSnapshot, authoritative);
-    expect(activeTimers(timers)).toHaveLength(1);
+    expect(takeoverTimers(timers)).toHaveLength(1);
 
     const clearedState = nextRoomState(game.hostSocket, 'offline takeover completion clears public lock');
-    for (let step = 0; step < 8 && game.manager.getPublicRoom('0007')?.takeoverPlayerId !== null; step += 1) {
-      const nextTimer = activeTimers(timers)[0];
+    for (let step = 0; step < 8 && game.manager.getPublicRoom('000007')?.takeoverPlayerId !== null; step += 1) {
+      const nextTimer = takeoverTimers(timers)[0];
       if (nextTimer === undefined) throw new Error('takeover stopped before clearing its public lock');
       fireTimer(nextTimer);
       await zeroDelayMacrotask();
     }
     expect(await clearedState).toEqual(expect.objectContaining({ takeoverPlayerId: null }));
-    expect(game.manager.getPublicRoom('0007')?.takeoverPlayerId).toBeNull();
+    expect(game.manager.getPublicRoom('000007')?.takeoverPlayerId).toBeNull();
     hostRecorder.stop();
     resumeRecorder.stop();
   });
@@ -193,9 +193,9 @@ describe('Socket.IO game reconnect integration', () => {
   test('builds resume acknowledgement from state committed before the deferred acknowledgement runs', async () => {
     const timers: TimerHandle[] = [];
     const game = await startTwoClientGameOfflineActor({ timers });
-    const beforeResume = game.manager.getGameSnapshot('0007');
+    const beforeResume = game.manager.getGameSnapshot('000007');
     const skip = await emitSkipOfflineTurn(game.hostSocket);
-    const [timer] = activeTimers(timers);
+    const [timer] = takeoverTimers(timers);
     if (timer === undefined) throw new Error('offline takeover did not schedule its deterministic timer');
     const resumed = await connectClient(gameUrl(game));
     const connectionObserved = nextConnection(resumed, 'resumed player connection event');
@@ -219,7 +219,7 @@ describe('Socket.IO game reconnect integration', () => {
     let resumePromise: Promise<ResumeResponse> | undefined;
     try {
       resumePromise = emitResume(resumed, {
-        roomCode: '0007',
+        roomCode: '000007',
         playerId: game.actorId,
         token: game.actorToken,
       });
@@ -243,8 +243,8 @@ describe('Socket.IO game reconnect integration', () => {
     const transitionEvents = nextEvents(resumed, 'takeover transition events before deferred resume acknowledgement');
     fireTimer(timer);
     const events = await transitionEvents;
-    const authoritative = game.manager.getGameSnapshot('0007');
-    const publicRoom = game.manager.getPublicRoom('0007');
+    const authoritative = game.manager.getGameSnapshot('000007');
+    const publicRoom = game.manager.getPublicRoom('000007');
     runDeferredAck();
     const resume = await resumePromise;
 
@@ -279,7 +279,7 @@ describe('Socket.IO game reconnect integration', () => {
     expect(batches[0]).toEqual(batch);
     expect(batch.events).not.toHaveLength(0);
     expect(recorder.messages).toEqual(['events', 'snapshot']);
-    const authoritative = game.manager.getGameSnapshot('0007');
+    const authoritative = game.manager.getGameSnapshot('000007');
     if (authoritative === null) throw new Error('missing authoritative BOT state');
     expectPublicGameSnapshot(snapshot.state as unknown as PublicGameSnapshot, authoritative);
     expect(activeTimers(timers)).toHaveLength(1);
@@ -295,14 +295,14 @@ describe('Socket.IO game reconnect integration', () => {
     const replacement = await connectClient(gameUrl(game));
     const noOffline = expectNoConnection(peer, 'offline event from stale replacement socket');
     const resume = await emitResume(replacement, {
-      roomCode: '0007',
+      roomCode: '000007',
       playerId: actorId,
       token: tokenFor(game, actorId),
     });
     original.disconnect();
     await zeroDelayMacrotask();
-    const publicRoom = game.manager.getPublicRoom('0007');
-    const snapshot = game.manager.getGameSnapshot('0007');
+    const publicRoom = game.manager.getPublicRoom('000007');
+    const snapshot = game.manager.getGameSnapshot('000007');
 
     expectResumeSuccess(resume);
     expect(publicRoom?.players.find((player) => player.id === actorId)?.online).toBe(true);
@@ -406,6 +406,7 @@ function seedWithBotFirstSocket(): string {
 async function startServer(options: Options = {}): Promise<Running> {
   let manager: RoomManager<TimerHandle> | undefined;
   const server = createRoomServer<TimerHandle>({
+    rateLimit: false,
     roomManagerFactory: deterministicFactory(options, (captured) => {
       manager = captured;
     }),
@@ -476,7 +477,7 @@ async function createAndJoin(host: RoomClient, guest: RoomClient): Promise<{ cre
     requestId: '00112233445566778899aabbccddeeff',
   });
   const join = await emitRoomAck(guest, 'room:join', {
-    roomCode: '0007',
+    roomCode: '000007',
     nickname: '玩家二',
     requestId: 'ffeeddccbbaa99887766554433221100',
   });
@@ -639,7 +640,7 @@ async function advanceSocketTurn(socket: RoomClient, manager: RoomManager<TimerH
     const intent = intentFor(state.turnPhase);
     const ack = await emitGameIntent(socket, intent);
     expect(ack).toEqual({ ok: true });
-    const next = manager.getGameSnapshot('0007');
+    const next = manager.getGameSnapshot('000007');
     if (next === null) throw new Error('missing authoritative game state while advancing a turn');
     if (next.currentPlayerId !== initial.currentPlayerId) return next;
     state = next;
@@ -690,6 +691,16 @@ function gameUrl(game: TwoClientGame): string {
 
 function activeTimers(timers: TimerHandle[]): TimerHandle[] {
   return timers.filter((timer) => timer.active);
+}
+
+/**
+ * 当前行动者离线时，服务端会先起一个 15s「自动托管宽限」计时器（给短暂断网的人留重连机会）；
+ * 显式托管请求（room:skip_offline_turn）另起真正的自动化计时器。这里只取后者。
+ */
+const AUTO_TAKEOVER_GRACE_MS = 15_000;
+
+function takeoverTimers(timers: TimerHandle[]): TimerHandle[] {
+  return activeTimers(timers).filter((timer) => timer.delayMs !== AUTO_TAKEOVER_GRACE_MS);
 }
 
 function fireTimer(timer: TimerHandle): void {

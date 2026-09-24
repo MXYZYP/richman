@@ -284,7 +284,11 @@ describe('chooseTakeoverIntent', () => {
     }
   });
 
-  test('returns the offline-skip sentinel for a World Tour airport or branch roll option', () => {
+  // 回归：托管遇到环球旅行的机场/支线待选动作时绝不能返回 null。
+  // 返回 null 会被 roomManager 当作「离线跳过」→ skipCurrentTurn：玩家既不掷骰、也不消费
+  // pendingAirportByPlayerId，于是永久停在机场格上被无限跳过（整局冒烟实测回合数到 626 仍未终局）。
+  // 现在的契约是交给 bot 策略产出对应的 module 意图，让棋子走进支线、对局继续收敛。
+  test('never returns null for a World Tour airport/branch roll option (deadlock regression)', () => {
     const base = startState();
     const actorId = base.currentPlayerId;
     const state: GameState = {
@@ -304,7 +308,72 @@ describe('chooseTakeoverIntent', () => {
       },
     };
 
-    expect(chooseTakeoverIntent(state)).toBeNull();
+    const intent = chooseTakeoverIntent(state);
+    expect(intent).not.toBeNull();
+    if (intent === null) throw new Error('world-tour branch action must never stall the offline takeover');
+    expect(intent).toEqual({
+      type: 'module',
+      module: { id: 'world-tour', version: 1 },
+      action: 'enter-airport-branch',
+      payload: { optionId: 'airport-option', airportCellId: 10 },
+    });
+  });
+
+  // 全面护栏：对每一种可达的环球旅行待选动作，托管都必须产出向前的 module 意图。
+  // null 就是「离线玩家被永久跳过」的根因，这里把所有分支都锁死。
+  test('yields a forward module intent for every World Tour pending action kind (deadlock guard)', () => {
+    const base = startState();
+    const actorId = base.currentPlayerId;
+    type Pending = GameState['publicRuleState']['pendingActions'][number];
+    const cases: Pending[] = [
+      {
+        optionId: 'airport-option', module: { id: 'world-tour', version: 1 }, playerId: actorId,
+        requiredPhase: 'awaiting_roll', label: '掷骰子', action: 'enter-airport-branch',
+        payload: { optionId: 'airport-option', airportCellId: 10 },
+      },
+      {
+        optionId: 'branch-option', module: { id: 'world-tour', version: 1 }, playerId: actorId,
+        requiredPhase: 'awaiting_roll', label: '掷骰子', action: 'roll-branch',
+        payload: { optionId: 'branch-option' },
+      },
+      {
+        optionId: 'flight-option', module: { id: 'world-tour', version: 1 }, playerId: actorId,
+        requiredPhase: 'managing', label: '搭乘', action: 'short-flight',
+        payload: { optionId: 'flight-option', targetCellId: 12, cost: 3500 },
+      },
+      {
+        optionId: 'long-flight-option', module: { id: 'world-tour', version: 1 }, playerId: actorId,
+        requiredPhase: 'managing', label: '长途航班', action: 'long-flight',
+        payload: { optionId: 'long-flight-option', targetCellId: 20, cost: 7000 },
+      },
+      {
+        optionId: 'bus-option', module: { id: 'world-tour', version: 1 }, playerId: actorId,
+        requiredPhase: 'managing', label: '巴士', action: 'bus-move',
+        payload: { optionId: 'bus-option', steps: 3 },
+      },
+      {
+        optionId: 'upgrade-option', module: { id: 'world-tour', version: 1 }, playerId: actorId,
+        requiredPhase: 'managing', label: '免费升级', action: 'free-upgrade',
+        payload: { optionId: 'upgrade-option', cellId: 5 },
+      },
+    ];
+
+    for (const action of cases) {
+      const state: GameState = {
+        ...base,
+        turnPhase: action.requiredPhase,
+        ruleModules: [...base.ruleModules, { id: 'world-tour', version: 1 }],
+        publicRuleState: { modules: {}, pendingActions: [action] },
+      };
+      const intent = chooseTakeoverIntent(state);
+      expect(intent, `deadlock guard for ${action.action}`).not.toBeNull();
+      if (intent === null) throw new Error(`world-tour ${action.action} must never stall the offline takeover`);
+      expect(intent.type).toBe('module');
+      if (intent.type === 'module') {
+        expect(intent.module).toEqual({ id: 'world-tour', version: 1 });
+        expect(intent.action).toBe(action.action);
+      }
+    }
   });
 
   test('uses the deterministic module strategy for non-airport World Tour choices', () => {

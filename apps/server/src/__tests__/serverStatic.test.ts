@@ -104,11 +104,11 @@ describe('same-port client static hosting', () => {
 
     expect(ack).toMatchObject({
       ok: true,
-      roomCode: '0007',
+      roomCode: '000007',
       playerId: 'p1',
       token: 'token-1',
       room: {
-        roomCode: '0007',
+        roomCode: '000007',
         status: 'lobby',
         hostId: 'p1',
         players: [{ id: 'p1', nickname: '主机', isBot: false, online: true }],
@@ -138,6 +138,7 @@ async function startServerWithFixtureDist(): Promise<TestServer> {
   ]);
   const serverOptions = {
     clientDistPath: distPath,
+    rateLimit: false as const,
     roomManagerFactory: (onAsyncEvents: AsyncEventsHandler) =>
       createDeterministicRoomManager(RoomManager, onAsyncEvents),
   };

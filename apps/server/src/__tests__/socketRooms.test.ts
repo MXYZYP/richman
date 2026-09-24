@@ -1,10 +1,12 @@
 import type { Server as HttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { io as connectSocket, type Socket as ClientSocket } from 'socket.io-client';
 import { createRoomServer } from '../server';
-import type { Ack, ClientToServerEvents, CreateRoomAck, JoinRoomAck, PublicRoomState, ServerToClientEvents } from '@richman/protocol';
+import type { Ack, ChatMessage, ClientToServerEvents, CreateRoomAck, JoinRoomAck, PublicRoomState, ServerToClientEvents } from '@richman/protocol';
+import { CHAT_HISTORY_LIMIT } from '@richman/protocol';
 import { RoomManager } from '../rooms/roomManager';
+import type { CreateRoomRateLimit } from '../socket/roomSocketAdapter';
 import type { RoomDomainEvent, RoomManagerDependencies } from '../rooms/roomTypes';
 import { getActiveMapPack } from '@richman/board-data';
 
@@ -44,6 +46,10 @@ type DeterministicManagerOptions = {
   tokens?: string[];
   serverErrors?: string[];
   timers?: TimerHandle[];
+  /** 覆盖创建房间限流配置；默认（不传）走 `false`，即既有用例的「不限流」老行为。 */
+  rateLimit?: CreateRoomRateLimit | false;
+  /** 注入限流窗口用的时钟，避免为了跨过 60s 窗口去 mock 全局 Date.now。 */
+  now?: () => number;
 };
 
 const clients: RoomClient[] = [];
@@ -75,7 +81,7 @@ describe('Socket.IO room create and join integration', () => {
     const create = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '  玩家一  ' });
 
     expectCreateRoomSuccess(create);
-    const expectedRoom: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '玩家一',
@@ -85,7 +91,7 @@ describe('Socket.IO room create and join integration', () => {
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(create).toEqual({
       ok: true,
-      roomCode: '0007',
+      roomCode: '000007',
       playerId: 'player-host',
       token: 'token-host',
       room: expectedRoom,
@@ -110,10 +116,10 @@ describe('Socket.IO room create and join integration', () => {
     expectCreateRoomSuccess(create);
     expect(create).toEqual({
       ok: true,
-      roomCode: '0007',
+      roomCode: '000007',
       playerId: 'player-host',
       token: 'token-host',
-      room: { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+      room: { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
         {
           id: 'player-host',
           nickname: '玩家一',
@@ -143,7 +149,7 @@ describe('Socket.IO room create and join integration', () => {
     });
 
     expectJoinRoomSuccess(join);
-    const expectedRoom: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '玩家一',
@@ -188,7 +194,7 @@ describe('Socket.IO room create and join integration', () => {
       nickname: '玩家二',
     });
     expectJoinRoomSuccess(join);
-    const roomAWithHostAndGuest: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const roomAWithHostAndGuest: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: true },
       { id: 'player-guest', nickname: '玩家二', isBot: false, online: true },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
@@ -199,15 +205,15 @@ describe('Socket.IO room create and join integration', () => {
     const createB = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '新房主' });
 
     expectCreateRoomSuccess(createB);
-    const roomB: PublicRoomState = { roomCode: '0008', status: 'lobby', hostId: 'player-new-host', players: [{ id: 'player-new-host', nickname: '新房主', isBot: false, online: true }], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
+    const roomB: PublicRoomState = { roomCode: '000008', status: 'lobby', hostId: 'player-new-host', players: [{ id: 'player-new-host', nickname: '新房主', isBot: false, online: true }], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(createB).toEqual({
       ok: true,
-      roomCode: '0008',
+      roomCode: '000008',
       playerId: 'player-new-host',
       token: 'token-new-host',
       room: roomB,
     });
-    const roomAAfterRebind: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-guest', players: [{ id: 'player-guest', nickname: '玩家二', isBot: false, online: true }], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
+    const roomAAfterRebind: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-guest', players: [{ id: 'player-guest', nickname: '玩家二', isBot: false, online: true }], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(await guestRoomAAfterRebind).toEqual(roomAAfterRebind);
     expectPublicRoomHasNoToken(roomAAfterRebind, [createA.token, join.token, createB.token]);
     expectPublicRoomHasNoToken(createB.room, [createA.token, join.token, createB.token]);
@@ -238,7 +244,7 @@ describe('Socket.IO room create and join integration', () => {
     });
 
     expectJoinRoomSuccess(join);
-    const expectedRoom: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       {
         id: 'player-host',
         nickname: '玩家一',
@@ -306,7 +312,7 @@ describe('Socket.IO room create and join integration', () => {
     const guestBotState = nextRoomStateWithin(guest, 'guest add bot broadcast');
     const add = await emitAddBot(host);
     expectRoomActionSuccess(add);
-    const roomWithBot: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const roomWithBot: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: true },
       { id: 'player-guest', nickname: '玩家二', isBot: false, online: true },
       { id: 'bot-a', nickname: '电脑 A', isBot: true, online: true },
@@ -337,12 +343,14 @@ describe('Socket.IO room create and join integration', () => {
     expectJoinRoomSuccess(join);
     const tokenValues = [create.token, join.token];
 
-    const hostAddedState = nextRoomStateWithin(host, 'host add bot room_state');
-    const guestAddedState = nextRoomStateWithin(guest, 'guest add bot room_state');
+    // 用「匹配条件」而非「第一条」捕获：更早的 create/join 广播可能晚到，抢在 addBot 广播之前被读到。
+    const hasBot = (room: PublicRoomState): boolean => room.players.length === 3;
+    const hostAddedState = nextRoomStateMatchingWithin(host, 'host add bot room_state', hasBot);
+    const guestAddedState = nextRoomStateMatchingWithin(guest, 'guest add bot room_state', hasBot);
     const add = await emitAddBot(host);
 
     expectRoomActionSuccess(add);
-    const roomWithBot: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const roomWithBot: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: true },
       { id: 'player-guest', nickname: '玩家二', isBot: false, online: true },
       { id: 'bot-a', nickname: '电脑 A', isBot: true, online: true },
@@ -356,7 +364,7 @@ describe('Socket.IO room create and join integration', () => {
     const remove = await emitRemoveBot(host, { playerId: 'bot-a' });
 
     expectRoomActionSuccess(remove);
-    const roomWithoutBot: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const roomWithoutBot: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: true },
       { id: 'player-guest', nickname: '玩家二', isBot: false, online: true },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
@@ -383,12 +391,15 @@ describe('Socket.IO room create and join integration', () => {
     expectRoomActionSuccess(await emitAddBot(host));
     const tokenValues = [create.token, join.token];
 
-    const hostRenamedState = nextRoomStateWithin(host, 'host rename bot room_state');
-    const guestRenamedState = nextRoomStateWithin(guest, 'guest rename bot room_state');
+    // 同上：addBot 的广播可能晚到并被误当成「改名结果」，用改名后昵称精确命中。
+    const renamed = (room: PublicRoomState): boolean =>
+      room.players.some((player) => player.id === 'bot-a' && player.nickname === '电脑甲');
+    const hostRenamedState = nextRoomStateMatchingWithin(host, 'host rename bot room_state', renamed);
+    const guestRenamedState = nextRoomStateMatchingWithin(guest, 'guest rename bot room_state', renamed);
     const rename = await emitRenameBot(host, { playerId: 'bot-a', nickname: '  电脑甲  ' });
 
     expectRoomActionSuccess(rename);
-    const roomWithRenamedBot: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const roomWithRenamedBot: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: true },
       { id: 'player-guest', nickname: '玩家二', isBot: false, online: true },
       { id: 'bot-a', nickname: '电脑甲', isBot: true, online: true },
@@ -426,7 +437,7 @@ describe('Socket.IO room create and join integration', () => {
     const start = await emitStart(host);
 
     expectRoomActionSuccess(start);
-    const expectedRoom: PublicRoomState = { roomCode: '0007', status: 'playing', hostId: 'player-host', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000007', status: 'playing', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: true },
       { id: 'player-guest', nickname: '玩家二', isBot: false, online: true },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
@@ -471,14 +482,14 @@ describe('Socket.IO room create and join integration', () => {
     const leave = await emitLeave(guest);
 
     expectRoomActionSuccess(leave);
-    const roomAfterLeave: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [{ id: 'player-host', nickname: '房主', isBot: false, online: true }], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
+    const roomAfterLeave: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [{ id: 'player-host', nickname: '房主', isBot: false, online: true }], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(await hostLeaveState).toEqual(roomAfterLeave);
 
     const hostBotState = nextRoomStateWithin(host, 'host room_state after left socket unbound');
     const guestNoLongerInRoom = expectNoRoomState(guest, 'left socket should not receive future room_state');
     const add = await emitAddBot(host);
     expectRoomActionSuccess(add);
-    const roomAfterBot: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const roomAfterBot: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: true },
       { id: 'bot-a', nickname: '电脑 A', isBot: true, online: true },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
@@ -512,7 +523,7 @@ describe('Socket.IO room create and join integration', () => {
     guest.disconnect();
 
     expect(await hostOfflineConnection).toEqual({ playerId: 'player-guest', online: false });
-    const offlineRoom: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const offlineRoom: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: true },
       { id: 'player-guest', nickname: '玩家二', isBot: false, online: false },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
@@ -530,7 +541,7 @@ describe('Socket.IO room create and join integration', () => {
       token: join.token,
     });
 
-    const onlineRoom: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const onlineRoom: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: true },
       { id: 'player-guest', nickname: '玩家二', isBot: false, online: true },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
@@ -563,7 +574,7 @@ describe('Socket.IO room create and join integration', () => {
       token: join.token,
     });
 
-    const lobbyRoom: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const lobbyRoom: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: true },
       { id: 'player-guest', nickname: '玩家二', isBot: false, online: true },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
@@ -574,7 +585,7 @@ describe('Socket.IO room create and join integration', () => {
     const oldSocketNoState = expectNoRoomState(guest, 'old replaced socket should leave the room');
     const add = await emitAddBot(host);
     expectRoomActionSuccess(add);
-    const roomWithBot: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const roomWithBot: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: true },
       { id: 'player-guest', nickname: '玩家二', isBot: false, online: true },
       { id: 'bot-a', nickname: '电脑 A', isBot: true, online: true },
@@ -590,7 +601,7 @@ describe('Socket.IO room create and join integration', () => {
     const hostLeaveState = nextRoomStateWithin(host, 'replacement leave room_state');
     const leave = await emitLeave(replacement);
     expectRoomActionSuccess(leave);
-    const roomAfterLeave: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const roomAfterLeave: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: true },
       { id: 'bot-a', nickname: '电脑 A', isBot: true, online: true },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
@@ -612,11 +623,18 @@ describe('Socket.IO room create and join integration', () => {
     expectRoomActionSuccess(start);
 
     const guestHostOffline = nextPlayerConnection(guest, 'playing host disconnect player:connection');
-    const guestHostTransfer = nextRoomStateWithin(guest, 'playing host transfer room_state');
+    // 开局本身也会向房间广播一次 room_state（房主仍在线、房主未转让），它与本次掉线广播是
+    // 两个独立的数据包，谁先到达取决于事件循环调度。这里等的必须是「房主已转让」的那一条，
+    // 否则偶发地会拿到开局那条旧状态（历史 flaky 根因）。
+    const guestHostTransfer = nextRoomStateMatchingWithin(
+      guest,
+      'playing host transfer room_state',
+      (room) => room.hostId === 'player-guest',
+    );
     host.disconnect();
 
     expect(await guestHostOffline).toEqual({ playerId: 'player-host', online: false });
-    const expectedRoom: PublicRoomState = { roomCode: '0007', status: 'playing', hostId: 'player-guest', players: [
+    const expectedRoom: PublicRoomState = { roomCode: '000007', status: 'playing', hostId: 'player-guest', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: false },
       { id: 'player-guest', nickname: '玩家二', isBot: false, online: true },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
@@ -671,7 +689,7 @@ describe('Socket.IO room create and join integration', () => {
     const hostRemoveState = nextRoomStateWithin(host, 'acknowledged remove after no-ack remove');
     const remove = await emitRemoveBot(host, { playerId: 'bot-a' });
     expectRoomActionSuccess(remove);
-    const roomAfterSingleRemove: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const roomAfterSingleRemove: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: true },
       { id: 'player-guest', nickname: '玩家二', isBot: false, online: true },
       { id: 'bot-b', nickname: '电脑 B', isBot: true, online: true },
@@ -726,7 +744,7 @@ describe('Socket.IO room create and join integration', () => {
     const guestOfflineState = nextRoomStateWithin(guest, 'host disconnect lobby room_state');
     host.disconnect();
     expect(await guestOfflineConnection).toEqual({ playerId: 'player-host', online: false });
-    const offlineRoom: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-host', players: [
+    const offlineRoom: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-host', players: [
       { id: 'player-host', nickname: '房主', isBot: false, online: false },
       { id: 'player-guest', nickname: '玩家二', isBot: false, online: true },
     ], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
@@ -737,7 +755,7 @@ describe('Socket.IO room create and join integration', () => {
     const guestTimeoutState = nextRoomStateWithin(guest, 'lobby timeout async room_state');
     timers[0].callback();
 
-    const roomAfterTimeout: PublicRoomState = { roomCode: '0007', status: 'lobby', hostId: 'player-guest', players: [{ id: 'player-guest', nickname: '玩家二', isBot: false, online: true }], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
+    const roomAfterTimeout: PublicRoomState = { roomCode: '000007', status: 'lobby', hostId: 'player-guest', players: [{ id: 'player-guest', nickname: '玩家二', isBot: false, online: true }], spectators: [], takeoverPlayerId: null, map: CHINA_MAP_SUMMARY };
     expect(await guestTimeoutState).toEqual(roomAfterTimeout);
     expectPublicRoomHasNoToken(roomAfterTimeout, [create.token, join.token]);
   });
@@ -754,7 +772,7 @@ describe('Socket.IO room create and join integration', () => {
     emitAckAndIgnore(original, 'room:create', payload);
     expect((await committedState).players).toHaveLength(1);
     const observer = await connectClient(url);
-    const observerJoin = await emitAck(observer, 'room:join', { roomCode: '0007', nickname: '观察者' });
+    const observerJoin = await emitAck(observer, 'room:join', { roomCode: '000007', nickname: '观察者' });
     expectJoinRoomSuccess(observerJoin);
 
     const offline = nextPlayerConnection(observer, 'dropped create original disconnect');
@@ -766,7 +784,7 @@ describe('Socket.IO room create and join integration', () => {
     const replay = await emitAck(replacement, 'room:create', payload);
 
     expectCreateRoomSuccess(replay);
-    expect(replay).toMatchObject({ roomCode: '0007', playerId: 'player-host', token: 'host-token' });
+    expect(replay).toMatchObject({ roomCode: '000007', playerId: 'player-host', token: 'host-token' });
     expect(await online).toEqual({ playerId: 'player-host', online: true });
     expect(replay.room.players).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'player-host', online: true })]),
@@ -864,7 +882,7 @@ describe('Socket.IO room create and join integration', () => {
     emitAckAndIgnore(original, 'room:create', payload);
     await nextRoomStateWithin(original, 'committed lobby create room state');
     const observer = await connectClient(url);
-    expectJoinRoomSuccess(await emitAck(observer, 'room:join', { roomCode: '0007', nickname: '观察者' }));
+    expectJoinRoomSuccess(await emitAck(observer, 'room:join', { roomCode: '000007', nickname: '观察者' }));
     const offline = nextPlayerConnection(observer, 'lobby create original disconnect');
     original.disconnect();
     expect(await offline).toEqual({ playerId: 'player-host', online: false });
@@ -1013,8 +1031,320 @@ describe('Socket.IO spectator join and authorization', () => {
   });
 });
 
+describe('Socket.IO room chat broadcast and history', () => {
+  test('room:chat_message broadcasts the trimmed message to every room socket and never leaks the token', async () => {
+    const { url } = await startTestServer();
+    const host = await connectClient(url);
+    const create = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '玩家一' });
+    expectCreateRoomSuccess(create);
+    const guest = await connectClient(url);
+    const guestJoinState = nextRoomStateWithin(guest, 'guest lobby join room_state');
+    const join = await emitAck(guest, 'room:join', { roomCode: create.roomCode, nickname: '玩家二' });
+    expectJoinRoomSuccess(join);
+    await guestJoinState;
+
+    const hostBroadcast = nextChatBroadcast(host, 'host chat broadcast');
+    const guestBroadcast = nextChatBroadcast(guest, 'guest chat broadcast');
+    const ack = await emitChat(host, '  大家好  ');
+
+    expectRoomActionSuccess(ack);
+    const [hostMessage, guestMessage] = await Promise.all([hostBroadcast, guestBroadcast]);
+    // 前后空白被 trim；发送者本人也在房间广播里收到自己的消息。
+    expect(hostMessage).toMatchObject({
+      playerId: 'player-host',
+      nickname: '玩家一',
+      text: '大家好',
+      role: 'player',
+    });
+    expect(typeof hostMessage.ts).toBe('number');
+    expect(guestMessage).toEqual(hostMessage);
+    expectNoTokenField(hostMessage);
+    expect(JSON.stringify(hostMessage)).not.toContain(create.token);
+  });
+
+  test('a member joining later receives the room chat history in the original order', async () => {
+    const { url } = await startTestServer();
+    const host = await connectClient(url);
+    const create = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' });
+    expectCreateRoomSuccess(create);
+    const guest = await connectClient(url);
+    const guestJoinState = nextRoomStateWithin(guest, 'guest lobby join room_state');
+    expectJoinRoomSuccess(await emitAck(guest, 'room:join', { roomCode: create.roomCode, nickname: '玩家二' }));
+    await guestJoinState;
+
+    const hostSeesOwnMessage = nextChatBroadcast(host, 'host chat broadcast');
+    expectRoomActionSuccess(await emitChat(host, '甲'));
+    await hostSeesOwnMessage;
+    const guestSeesOwnMessage = nextChatBroadcast(guest, 'guest chat broadcast');
+    expectRoomActionSuccess(await emitChat(guest, '乙'));
+    await guestSeesOwnMessage;
+
+    // 第三名成员进入后才拿到历史：应当恰好是「甲、乙」，且顺序与发送顺序一致。
+    const latecomer = await connectClient(url);
+    const historyPromise = nextChatHistory(latecomer, 'latecomer chat history');
+    const latecomerJoinState = nextRoomStateWithin(latecomer, 'latecomer join room_state');
+    expectJoinRoomSuccess(await emitAck(latecomer, 'room:join', { roomCode: create.roomCode, nickname: '玩家三' }));
+    await latecomerJoinState;
+
+    const history = await historyPromise;
+    expect(history.messages.map((message) => message.text)).toEqual(['甲', '乙']);
+    expect(history.messages.map((message) => message.nickname)).toEqual(['房主', '玩家二']);
+  });
+
+  test('session:resume replays the room chat history to the reconnecting player', async () => {
+    const { url } = await startTestServer();
+    const host = await connectClient(url);
+    const create = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' });
+    expectCreateRoomSuccess(create);
+    const guest = await connectClient(url);
+    const guestJoinState = nextRoomStateWithin(guest, 'guest lobby join room_state');
+    expectJoinRoomSuccess(await emitAck(guest, 'room:join', { roomCode: create.roomCode, nickname: '玩家二' }));
+    await guestJoinState;
+
+    const hostSeesOwnMessage = nextChatBroadcast(host, 'host chat broadcast');
+    expectRoomActionSuccess(await emitChat(host, '重连前说的话'));
+    await hostSeesOwnMessage;
+
+    const hostOffline = nextPlayerConnection(guest, 'guest sees host offline');
+    host.disconnect();
+    await hostOffline;
+
+    // 换一条连接重连：历史随 ack 之后单播回来，避免「刷新一下记录就空了」。
+    const reconnected = await connectClient(url);
+    const historyPromise = nextChatHistory(reconnected, 'reconnected chat history');
+    const resume = await emitResume(reconnected, {
+      roomCode: create.roomCode,
+      playerId: 'player-host',
+      token: create.token,
+    });
+    expect(resume.ok).toBe(true);
+
+    const history = await historyPromise;
+    expect(history.messages.map((message) => message.text)).toEqual(['重连前说的话']);
+  });
+
+  test('chat history is discarded when the room closes, so a reused room code starts empty', async () => {
+    // 同一个房间号复用两次：房间关闭后历史必须被清掉，不能漏进新房间。
+    // 见证人必须是「旁观者」：主动离开的那个 socket 在 room:closed 广播前已被解绑，收不到该事件。
+    const { url } = await startTestServer({
+      roomNumbers: [7, 7],
+      playerIds: ['player-host', 'player-witness', 'player-new-host', 'player-guest'],
+      tokens: ['token-host', 'token-witness', 'token-new-host', 'token-guest'],
+    });
+    const host = await connectClient(url);
+    const create = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' });
+    expectCreateRoomSuccess(create);
+    const witness = await connectClient(url);
+    const witnessJoinState = nextRoomStateWithin(witness, 'witness spectator join room_state');
+    expectJoinRoomSuccess(await emitAck(witness, 'room:join', {
+      roomCode: create.roomCode,
+      nickname: '见证人',
+      role: 'spectator',
+    }));
+    await witnessJoinState;
+
+    const hostSeesOwnMessage = nextChatBroadcast(host, 'host chat broadcast before closing');
+    expectRoomActionSuccess(await emitChat(host, '旧房间的消息'));
+    await hostSeesOwnMessage;
+
+    const closed = nextRoomClosed(witness, 'witness sees room:closed');
+    expectRoomActionSuccess(await emitLeave(host));
+    expect(await closed).toEqual({ reason: 'empty_lobby' });
+
+    const nextHost = await connectClient(url);
+    const recreated = await emitAck(nextHost, 'room:create', { mapId: 'china-tour', nickname: '新房主' });
+    expectCreateRoomSuccess(recreated);
+    expect(recreated.roomCode).toBe(create.roomCode);
+
+    const guest = await connectClient(url);
+    const noHistory = expectNoChatHistory(guest, 'chat history from the closed room');
+    const guestJoinState = nextRoomStateWithin(guest, 'guest join room_state');
+    expectJoinRoomSuccess(await emitAck(guest, 'room:join', { roomCode: recreated.roomCode, nickname: '玩家二' }));
+    await guestJoinState;
+
+    await noHistory;
+  });
+
+  test('room:chat_message drops messages sent faster than the minimum interval while still acking ok', async () => {
+    const { url } = await startTestServer();
+    const host = await connectClient(url);
+    const create = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' });
+    expectCreateRoomSuccess(create);
+    const broadcasts = collectChatBroadcasts(host);
+
+    const firstBroadcast = nextChatBroadcast(host, 'first chat broadcast');
+    expectRoomActionSuccess(await emitChat(host, '第一条'));
+    await firstBroadcast;
+
+    // 同一条连接紧接着再发一条：被静默丢弃（不给刷屏者任何错误反馈）。
+    expectRoomActionSuccess(await emitChat(host, '第二条'));
+    await expectNoChatBroadcast(host, 'rate limited chat broadcast');
+    expect(broadcasts.messages.map((message) => message.text)).toEqual(['第一条']);
+    broadcasts.stop();
+  });
+
+  test('a spectator chat message is broadcast with the spectator role and nickname', async () => {
+    const { url } = await startTestServer();
+    const host = await connectClient(url);
+    const create = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' });
+    expectCreateRoomSuccess(create);
+    const spectator = await connectClient(url);
+    const spectatorJoinState = nextRoomStateWithin(host, 'host sees spectator join room_state');
+    const join = await emitAck(spectator, 'room:join', {
+      roomCode: create.roomCode,
+      nickname: '围观者',
+      role: 'spectator',
+    });
+    expectJoinRoomSuccess(join);
+    await spectatorJoinState;
+
+    const broadcast = nextChatBroadcast(host, 'host sees spectator chat');
+    expectRoomActionSuccess(await emitChat(spectator, '我只看看'));
+    expect(await broadcast).toMatchObject({
+      playerId: 'player-guest',
+      nickname: '围观者',
+      text: '我只看看',
+      role: 'spectator',
+    });
+  });
+
+  test('room:chat_message rejects a malformed payload and the history stays bounded', async () => {
+    const { url } = await startTestServer();
+    const host = await connectClient(url);
+    const create = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' });
+    expectCreateRoomSuccess(create);
+
+    expectRoomFailure(await emitMalformedChat(host, { text: 42 }), 'INVALID_ROOM_ACTION');
+    expectRoomFailure(await emitMalformedChat(host, 'not-an-object'), 'INVALID_ROOM_ACTION');
+
+    // 三条连接轮流发言，凑出 > CHAT_HISTORY_LIMIT 条消息。
+    const senders: RoomClient[] = [host];
+    for (const nickname of ['玩家二', '玩家三']) {
+      const sender = await connectClient(url);
+      const joinState = nextRoomStateWithin(sender, `${nickname} join room_state`);
+      expectJoinRoomSuccess(await emitAck(sender, 'room:join', { roomCode: create.roomCode, nickname }));
+      await joinState;
+      senders.push(sender);
+    }
+
+    // 只接管 Date.now：聊天频率限流按它计算，而 Socket.IO 的心跳走真实 setTimeout。
+    // 每次只推进 250ms：同一连接的发言间隔是 750ms，刚好越过 700ms 限流线，
+    // 而 51 条累计只推进 ~12.8s，远小于心跳窗口（pingInterval 25s），连接不会被判定失联。
+    const baseTime = Date.now();
+    let fakeNow = baseTime;
+    let lastSentIndex = 0;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => fakeNow);
+    try {
+      for (let index = 1; index <= CHAT_HISTORY_LIMIT + 1; index += 1) {
+        fakeNow += 250;
+        const sender = senders[(index - 1) % senders.length] as RoomClient;
+        // 单条 ack 预算放宽：这里要连续跑真实往返，200ms 在并行 worker 下会偶发不够。
+        try {
+          expectRoomActionSuccess(await emitChat(sender, `消息${index}`, 2000));
+        } catch (error) {
+          throw new Error(`chat index ${index} failed: ${(error as Error).message}`);
+        }
+        lastSentIndex = index;
+      }
+    } finally {
+      nowSpy.mockRestore();
+    }
+    expect(lastSentIndex).toBe(CHAT_HISTORY_LIMIT + 1);
+
+    const latecomer = await connectClient(url);
+    const historyPromise = nextChatHistory(latecomer, 'latecomer chat history');
+    const latecomerJoinState = nextRoomStateWithin(latecomer, 'latecomer join room_state');
+    const latecomerJoin = await emitAck(latecomer, 'room:join', {
+      roomCode: create.roomCode,
+      nickname: '围观者',
+      role: 'spectator',
+    });
+    expectJoinRoomSuccess(latecomerJoin);
+    await latecomerJoinState;
+
+    const history = await historyPromise;
+    expect(history.messages).toHaveLength(CHAT_HISTORY_LIMIT);
+    // 最旧的那条被淘汰，留下的是最后 CHAT_HISTORY_LIMIT 条。
+    expect(history.messages[0]?.text).toBe('消息2');
+    expect(history.messages.at(-1)?.text).toBe(`消息${CHAT_HISTORY_LIMIT + 1}`);
+  });
+});
+
+describe('Socket.IO room:create rate limit', () => {
+  test('a create past the per-window cap is rejected with a dedicated retryable code and never reaches the room manager', async () => {
+    const { url, server } = await startTestServer({
+      rateLimit: { windowMs: 60_000, maxPerWindow: 2 },
+      roomNumbers: [7, 8, 9],
+      playerIds: ['player-host', 'player-host-2', 'player-host-3'],
+      tokens: ['token-host', 'token-host-2', 'token-host-3'],
+    });
+    const host = await connectClient(url);
+
+    expectCreateRoomSuccess(await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' }));
+    expectCreateRoomSuccess(await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' }));
+
+    const limited = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' });
+
+    // 必须是独立错误码：INVALID_ROOM_ACTION 在客户端被归类为「放弃后重开」，
+    // 而这条只要等一会儿就能继续，误判会把玩家赶出正确的操作路径。
+    expect(limited).toEqual({
+      ok: false,
+      code: 'CREATE_RATE_LIMITED',
+      message: '创建房间过于频繁，请稍后再试。',
+    });
+    // 被拒的请求在进入 roomManager 之前掉头：既不消耗房间号，也不留下半个房间。
+    expect(server.roomManager.getPublicRoom('000008')).not.toBeNull();
+    expect(server.roomManager.getPublicRoom('000009')).toBeNull();
+    expect(host.connected).toBe(true);
+  });
+
+  test('the sliding window only counts attempts inside it, so the same client is allowed again once the window passes', async () => {
+    // 时钟由服务端注入（而不是 mock 全局 Date.now）：同进程里 Socket.IO 客户端也读 Date.now，
+    // 全局打桩会把等待 ack 的用例直接挂死。
+    let fakeNow = 1_000_000;
+    const { url } = await startTestServer({
+      rateLimit: { windowMs: 60_000, maxPerWindow: 1 },
+      now: () => fakeNow,
+      roomNumbers: [7, 8],
+      playerIds: ['player-host', 'player-host-2'],
+      tokens: ['token-host', 'token-host-2'],
+    });
+    const host = await connectClient(url);
+
+    expectCreateRoomSuccess(await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' }));
+
+    fakeNow += 59_999;
+    const insideWindow = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' });
+    expectRoomFailure(insideWindow, 'CREATE_RATE_LIMITED');
+
+    // 滑动窗口而非固定计数：刚过 windowMs，第一次尝试即过期，名额重新可用。
+    fakeNow += 1;
+    expectCreateRoomSuccess(await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' }));
+  });
+
+  test('the cap is per client address, so a fresh socket from the same client does not reset it', async () => {
+    const { url } = await startTestServer({
+      rateLimit: { windowMs: 60_000, maxPerWindow: 1 },
+      roomNumbers: [7, 8],
+      playerIds: ['player-host', 'player-host-2'],
+      tokens: ['token-host', 'token-host-2'],
+    });
+    const first = await connectClient(url);
+    expectCreateRoomSuccess(await emitAck(first, 'room:create', { mapId: 'china-tour', nickname: '房主' }));
+
+    // 换个连接（同一客户端地址）绕不过限流：否则「断开重连」就是免费的刷房外挂。
+    const second = await connectClient(url);
+    const limited = await emitAck(second, 'room:create', { mapId: 'china-tour', nickname: '房主二' });
+
+    expectRoomFailure(limited, 'CREATE_RATE_LIMITED');
+    expect(limited.message).toBe('创建房间过于频繁，请稍后再试。');
+  });
+});
+
 async function startTestServer(options: DeterministicManagerOptions = {}): Promise<StartedTestServer> {
   const running = createRoomServer({
+    rateLimit: options.rateLimit ?? false,
+    now: options.now,
     roomManagerFactory: createDeterministicRoomManagerFactory(options),
     logger:
       options.serverErrors === undefined
@@ -1293,6 +1623,25 @@ function nextRoomState(socket: RoomClient): Promise<PublicRoomState> {
 function nextRoomStateWithin(socket: RoomClient, label: string): Promise<PublicRoomState> {
   return withEventTimeout(nextRoomState(socket), label);
 }
+
+/** 等待第一条满足条件 room:state：用于避开「同一动作链里更早那条广播刚好晚到」造成的竞态。 */
+function nextRoomStateMatchingWithin(
+  socket: RoomClient,
+  label: string,
+  predicate: (room: PublicRoomState) => boolean,
+): Promise<PublicRoomState> {
+  return withEventTimeout(
+    new Promise<PublicRoomState>((resolve) => {
+      const listener = (room: PublicRoomState) => {
+        if (!predicate(room)) return;
+        socket.off('room:state', listener);
+        resolve(room);
+      };
+      socket.on('room:state', listener);
+    }),
+    label,
+  );
+}
 function collectRoomStates(socket: RoomClient): {
   states: PublicRoomState[];
   stop(): void;
@@ -1310,7 +1659,70 @@ function collectRoomStates(socket: RoomClient): {
   };
 }
 
+function emitChat(socket: RoomClient, text: string, timeoutMs = EVENT_TIMEOUT_MS): Promise<EmptyAckResponse> {
+  const untypedSocket: ClientSocket = socket;
+  return withEventTimeout(
+    new Promise<EmptyAckResponse>((resolve) => {
+      untypedSocket.emit('room:chat_message', { text }, resolve);
+    }),
+    'room:chat_message ack',
+    timeoutMs,
+  );
+}
 
+function emitMalformedChat(socket: RoomClient, payload: unknown): Promise<EmptyAckResponse> {
+  const untypedSocket: ClientSocket = socket;
+  return withEventTimeout(
+    new Promise<EmptyAckResponse>((resolve) => {
+      untypedSocket.emit('room:chat_message', payload, resolve);
+    }),
+    'room:chat_message malformed ack',
+  );
+}
+
+function nextChatBroadcast(socket: RoomClient, label: string): Promise<ChatMessage> {
+  return withEventTimeout(
+    new Promise<ChatMessage>((resolve) => {
+      socket.once('room:chat_broadcast', resolve);
+    }),
+    label,
+  );
+}
+
+function nextChatHistory(socket: RoomClient, label: string): Promise<{ messages: ChatMessage[] }> {
+  return withEventTimeout(
+    new Promise<{ messages: ChatMessage[] }>((resolve) => {
+      socket.once('room:chat_history', resolve);
+    }),
+    label,
+  );
+}
+
+function nextRoomClosed(socket: RoomClient, label: string): Promise<{ reason: string }> {
+  return withEventTimeout(
+    new Promise<{ reason: string }>((resolve) => {
+      socket.once('room:closed', resolve);
+    }),
+    label,
+  );
+}
+
+function collectChatBroadcasts(socket: RoomClient): {
+  messages: ChatMessage[];
+  stop(): void;
+} {
+  const messages: ChatMessage[] = [];
+  const listener = (message: ChatMessage) => {
+    messages.push(message);
+  };
+  socket.on('room:chat_broadcast', listener);
+  return {
+    messages,
+    stop() {
+      socket.off('room:chat_broadcast', listener);
+    },
+  };
+}
 
 function nextPlayerConnection(socket: RoomClient, label: string): Promise<PlayerConnectionChange> {
   return withEventTimeout(
@@ -1329,9 +1741,17 @@ function expectNoPlayerConnection(socket: RoomClient, label: string): Promise<vo
   return expectNoSocketEvent(socket, 'player:connection', label);
 }
 
+function expectNoChatHistory(socket: RoomClient, label: string): Promise<void> {
+  return expectNoSocketEvent(socket, 'room:chat_history', label);
+}
+
+function expectNoChatBroadcast(socket: RoomClient, label: string): Promise<void> {
+  return expectNoSocketEvent(socket, 'room:chat_broadcast', label);
+}
+
 function expectNoSocketEvent(
   socket: RoomClient,
-  event: 'room:state' | 'player:connection' | 'room:closed',
+  event: 'room:state' | 'player:connection' | 'room:closed' | 'room:chat_history' | 'room:chat_broadcast',
   label: string,
 ): Promise<void> {
   const untypedSocket: ClientSocket = socket;
@@ -1359,12 +1779,12 @@ function expectNoSocketEvent(
   });
 }
 
-function withEventTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+function withEventTimeout<T>(promise: Promise<T>, label: string, timeoutMs = EVENT_TIMEOUT_MS): Promise<T> {
   let timeoutId: NodeJS.Timeout;
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
       reject(new Error(`Timed out waiting for ${label}`));
-    }, EVENT_TIMEOUT_MS);
+    }, timeoutMs);
   });
   const timedPromise = Promise.race([promise, timeout]).finally(() => {
     clearTimeout(timeoutId);

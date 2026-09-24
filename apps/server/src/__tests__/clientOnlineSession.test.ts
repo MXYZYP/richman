@@ -51,6 +51,7 @@ describe('client online session over Socket.IO', () => {
     let roomNumber = 7;
     let playerNumber = 0;
     const server = createRoomServer<TimerHandle>({
+      rateLimit: false,
       roomManagerFactory: (onAsyncEvents) => new RoomManager<TimerHandle>({
         generatePlayerId: () => `player-${++playerNumber}`,
         generateToken: () => `token-${playerNumber}`,
@@ -92,6 +93,7 @@ describe('client online session over Socket.IO', () => {
     let roomNumber = 7;
     let playerNumber = 0;
     const server = createRoomServer<TimerHandle>({
+      rateLimit: false,
       roomManagerFactory: (onAsyncEvents) => new RoomManager<TimerHandle>({
         generatePlayerId: () => `player-${++playerNumber}`,
         generateToken: () => `token-${playerNumber}`,
@@ -140,12 +142,12 @@ describe('client online session over Socket.IO', () => {
     await host.retryPending();
 
     expect(cryptoCalls).toBe(1);
-    expect(host.room.value?.roomCode).toBe('0007');
+    expect(host.room.value?.roomCode).toBe('000007');
     expect(host.localPlayerId.value).toBe('player-1');
-    expect(server.roomManager.getPublicRoom('0007')?.players).toHaveLength(1);
+    expect(server.roomManager.getPublicRoom('000007')?.players).toHaveLength(1);
     host.dispose();
     expect(JSON.parse(hostStorage.getItem(ACTIVE_ONLINE_SESSION_KEY) ?? '')).toMatchObject({
-      roomCode: '0007', playerId: 'player-1', token: 'token-1',
+      roomCode: '000007', playerId: 'player-1', token: 'token-1',
     });
   });
 
@@ -153,6 +155,7 @@ describe('client online session over Socket.IO', () => {
     let roomNumber = 7;
     let playerNumber = 0;
     const server = createRoomServer<TimerHandle>({
+      rateLimit: false,
       roomManagerFactory: (onAsyncEvents) => new RoomManager<TimerHandle>({
         generatePlayerId: () => `player-${++playerNumber}`,
         generateToken: () => `token-${playerNumber}`,
@@ -200,16 +203,16 @@ describe('client online session over Socket.IO', () => {
       },
     });
 
-    await guest.join('0007', '客人');
+    await guest.join('000007', '客人');
     await guest.retryPending();
 
     expect(cryptoCalls).toBe(1);
     expect(guest.localPlayerId.value).toBe('player-2');
-    expect(server.roomManager.getPublicRoom('0007')?.players).toHaveLength(2);
-    expect(server.roomManager.getPublicRoom('0007')?.players.map((player) => player.id)).toEqual(['player-1', 'player-2']);
+    expect(server.roomManager.getPublicRoom('000007')?.players).toHaveLength(2);
+    expect(server.roomManager.getPublicRoom('000007')?.players.map((player) => player.id)).toEqual(['player-1', 'player-2']);
     host.dispose();
     expect(JSON.parse(guestStorage.getItem(ACTIVE_ONLINE_SESSION_KEY) ?? '')).toMatchObject({
-      roomCode: '0007', playerId: 'player-2', token: 'token-2',
+      roomCode: '000007', playerId: 'player-2', token: 'token-2',
     });
     guest.dispose();
   });
@@ -218,6 +221,7 @@ describe('client online session over Socket.IO', () => {
     let roomNumber = 7;
     let playerNumber = 0;
     const server = createRoomServer<TimerHandle>({
+      rateLimit: false,
       roomManagerFactory: (onAsyncEvents) => new RoomManager<TimerHandle>({
         generatePlayerId: () => `player-${++playerNumber}`,
         generateToken: () => `token-${playerNumber}`,
@@ -289,6 +293,7 @@ describe('client online session over Socket.IO', () => {
     let roomNumber = 7;
     let playerNumber = 0;
     const server = createRoomServer<TimerHandle>({
+      rateLimit: false,
       roomManagerFactory: (onAsyncEvents) => new RoomManager<TimerHandle>({
         generatePlayerId: () => `player-${++playerNumber}`,
         generateToken: () => `token-${playerNumber}`,

@@ -74,6 +74,7 @@ function createDependencies(mapResolver: MapResolver): RoomManagerDependencies {
 
 async function startServer(mapResolver: MapResolver, gameGateway?: GameRuntimeGateway): Promise<string> {
   const server = createRoomServer({
+    rateLimit: false,
     roomManagerFactory(onAsyncEvents) {
       return new RoomManager({ ...createDependencies(mapResolver), onAsyncEvents, gameGateway });
     },
@@ -211,7 +212,7 @@ describe('Phase 3 authoritative map locking', () => {
       code: 'INVALID_ROOM_ACTION',
       message: expect.stringMatching(/map.*unavailable/i),
     });
-    expect(manager.getPublicRoom('0007')).toBeNull();
+    expect(manager.getPublicRoom('000007')).toBeNull();
   });
 
   test('same create requestId cannot replay a different map choice', () => {
@@ -239,7 +240,7 @@ describe('Phase 3 authoritative map locking', () => {
     const mismatch = manager.createRoom('房主', testMap.ref.id, REQUEST_ID);
 
     expect(mismatch).toMatchObject({ ok: false, code: 'INVALID_ROOM_ACTION' });
-    expect(manager.getPublicRoom('0008')).toBeNull();
+    expect(manager.getPublicRoom('000008')).toBeNull();
   });
 
   test('rejects an exact resolver result whose ref differs from the room lock', () => {
@@ -337,7 +338,8 @@ describe('Phase 3 authoritative map locking', () => {
     expectSuccess(takeoverHarness.manager.startRoom(takeoverRoom.value.roomCode, takeoverRoom.value.playerId));
     expectSuccess(takeoverHarness.manager.markDisconnected(takeoverRoom.value.roomCode, guest.value.playerId));
     expectSuccess(takeoverHarness.manager.requestSkipOfflineTurn(takeoverRoom.value.roomCode, takeoverRoom.value.playerId));
-    takeoverHarness.timers.find((timer) => timer.active)?.run();
+    // markDisconnected 会先排一个 15s「自动托管宽限」计时器；取最新一个活跃计时器才是真正的托管自动化。
+    takeoverHarness.timers.filter((timer) => timer.active).at(-1)?.run();
     expect(takeoverHarness.manager.getGameSnapshot(takeoverRoom.value.roomCode)).toMatchObject({
       mapRef: testMap.ref,
       lastDice: expect.any(Array),
@@ -350,7 +352,7 @@ describe('Phase 3 authoritative map locking', () => {
     ))).toBe(true);
   });
 
-  test('offline takeover skips a World Tour airport wait without rolling or consuming its pending entry', () => {
+  test('offline takeover plays out a World Tour airport wait and hands the turn back on', () => {
     type TestTimer = { active: boolean; run(): void };
     const timers: TestTimer[] = [];
     const asyncSnapshots: PublicGameSnapshot[] = [];
@@ -422,17 +424,40 @@ describe('Phase 3 authoritative map locking', () => {
     expectSuccess(manager.markDisconnected(room.value.roomCode, actorId));
     const before = manager.getGameSnapshot(room.value.roomCode)!;
     expectSuccess(manager.requestSkipOfflineTurn(room.value.roomCode, room.value.playerId));
-    timers.find((timer) => timer.active)?.run();
-    const after = manager.getGameSnapshot(room.value.roomCode)!;
 
-    expect(after.currentPlayerId).toBe(room.value.playerId);
-    expect(after.seed).toBe(before.seed);
-    expect(after.lastDice).toBeNull();
-    expect(after.players.find((player) => player.id === actorId)?.position).toBe(10);
-    expect(after.publicRuleState.modules['world-tour@1']).toMatchObject({
-      pendingAirportByPlayerId: { [actorId]: 10 },
+    // 托管开始的第一拍必须真的推进：掷出支线骰、棋子离开机场格、消费掉机场待选项。
+    // （历史缺陷：这里曾返回 null 走「跳过回合」，于是离线玩家永远停在机场格、被每回合跳过，
+    //   对局永不收敛——整局冒烟实测回合数到 626 仍未终局，并会演变成静默硬冻结。）
+    const takeoverTick = timers.filter((timer) => timer.active).at(-1);
+    expect(takeoverTick).toBeDefined();
+    takeoverTick?.run();
+    const afterTakeover = manager.getGameSnapshot(room.value.roomCode)!;
+
+    expect(afterTakeover.seed).not.toEqual(before.seed);
+    expect(afterTakeover.lastDice).not.toBeNull();
+    expect(afterTakeover.players.find((player) => player.id === actorId)?.position).not.toBe(10);
+    expect(afterTakeover.publicRuleState.pendingActions).toEqual([]);
+    expect(afterTakeover.publicRuleState.modules['world-tour@1']).toMatchObject({
+      pendingAirportByPlayerId: {},
+      branchAirportByPlayerId: { [actorId]: 10 },
     });
+
+    // 回合必须有界地交回在线房主：绝不允许离线玩家被无限跳过。
+    const hostId = room.value.playerId;
+    let handedOver = false;
+    for (let tick = 0; tick < 8 && !handedOver; tick += 1) {
+      const next = timers.filter((timer) => timer.active).at(-1);
+      if (next === undefined) break;
+      next.run();
+      handedOver = manager.getGameSnapshot(room.value.roomCode)!.currentPlayerId === hostId;
+    }
+    expect(handedOver).toBe(true);
+
+    const after = manager.getGameSnapshot(room.value.roomCode)!;
+    expect(after.currentPlayerId).toBe(hostId);
+    expect(after.turn).toBeGreaterThan(before.turn);
     expect(after.publicRuleState.pendingActions).toEqual([]);
+    // 公开快照与权威状态保持一致（异步广播不得落后于权威状态）。
     expect(asyncSnapshots.at(-1)?.publicRuleState).toEqual(after.publicRuleState);
   });
 });
@@ -592,7 +617,7 @@ describe('Phase 3 real Socket.IO map flow', () => {
       emitCreate(host, { nickname: '房主', mapId: testMap.ref.id, requestId: REQUEST_ID }),
     ]);
     expect(first.ok).toBe(true);
-    if (first.ok) expect(first.roomCode).toBe('0007');
+    if (first.ok) expect(first.roomCode).toBe('000007');
     expect(mismatch).toMatchObject({ ok: false, code: 'INVALID_ROOM_ACTION' });
   });
 
