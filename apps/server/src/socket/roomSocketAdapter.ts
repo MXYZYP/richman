@@ -20,6 +20,10 @@ import type {
 import { CHAT_HISTORY_LIMIT, CHAT_TEXT_MAX_LENGTH } from '@richman/protocol';
 import { toPublicGameSnapshot } from '../publicGameSnapshot';
 import { isValidIntent } from '../game/gameRuntime';
+import {
+  createSlidingWindowRateLimiter,
+  type RateLimitRule,
+} from '../http/slidingWindowRateLimiter';
 import { roomFailure, type RoomFailure } from '../rooms/roomErrors';
 import type { RoomManager } from '../rooms/roomManager';
 import type { GameActionResult, Intent, RoomDomainEvent, RoomResult } from '../rooms/roomTypes';
@@ -41,12 +45,12 @@ export interface RoomSocketAdapter<TTimerHandle = unknown> {
   dispatchDomainEvents(events: RoomDomainEvent[]): void;
 }
 
-export interface CreateRoomRateLimit {
-  /** Sliding window length in milliseconds. */
-  windowMs: number;
-  /** Maximum number of create-room requests allowed per client IP within the window. */
-  maxPerWindow: number;
-}
+/**
+ * 建房限流规则。形状就是通用滑动窗口限流器的 `RateLimitRule`（见 `http/slidingWindowRateLimiter`），
+ * 这里保留一个独立名字，是因为它是**本适配器对外契约**的一部分（`server.ts` 与测试都用它），
+ * 而 `RateLimitRule` 是实现细节 —— 两者同源，不会再各写一套字段。
+ */
+export type CreateRoomRateLimit = RateLimitRule;
 
 export interface RoomSocketAdapterOptions<TTimerHandle = unknown> {
   io: RoomIo;
@@ -109,9 +113,14 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
   // 新加入 / 掉线重连的成员会收到这段历史，避免「刷新一下记录就空了」。房间关闭时清除。
   const chatHistory = new Map<string, ChatMessage[]>();
   // 创建房间频率限流：按客户端 IP 滑动窗口，防公网刷房间码/刷房。
-  const createRate = new Map<string, number[]>();
-  // 公开房间列表频率限流（#108）：同上按 IP 滑动窗口，防止有人拿它枚举全网房间码。
-  const listRate = new Map<string, number[]>();
+  // 公开房间列表限流（#108）与它共用同一个 `rateLimit !== false` 开关。
+  // 两者都走通用限流器（`http/slidingWindowRateLimiter`）—— 这段逻辑原本在本文件里
+  // 内联了两遍，第三个调用方（排行榜接口 #116）出现时就该合并，否则阈值与窗口的语义
+  // 只能靠「抄得对不对」保持一致。
+  const createLimiter = rateLimit === false ? null : createSlidingWindowRateLimiter(rateLimit, now);
+  const listLimiter = rateLimit === false
+    ? null
+    : createSlidingWindowRateLimiter({ windowMs: LIST_WINDOW_MS, maxPerWindow: LIST_MAX_PER_WINDOW }, now);
 
   function bindSocket(socket: RoomSocket, binding: SocketBinding): void {
     unbindSocket(socket);
@@ -384,16 +393,9 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
    * 阈值远比建房宽松（10s 内 30 次），正常「手动刷新几下」永远碰不到。
    */
   function handleListRooms(socket: RoomSocket, ack: (response: Ack<RoomListAck>) => void): void {
-    if (rateLimit !== false) {
-      const clientIp = socket.handshake.address ?? socket.id;
-      const attemptedAt = now();
-      const recent = (listRate.get(clientIp) ?? []).filter((ts) => attemptedAt - ts < LIST_WINDOW_MS);
-      if (recent.length >= LIST_MAX_PER_WINDOW) {
-        ack(ROOM_LIST_RATE_LIMITED_ACK);
-        return;
-      }
-      recent.push(attemptedAt);
-      listRate.set(clientIp, recent);
+    if (listLimiter !== null && !listLimiter.allow(socket.handshake.address ?? socket.id)) {
+      ack(ROOM_LIST_RATE_LIMITED_ACK);
+      return;
     }
 
     try {
@@ -411,17 +413,10 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
     }
 
     // 创建房间滑动窗口限流（按客户端 IP）。超阈值直接拒绝，不给刷房机会。
-    // rateLimit 为 false 时跳过（测试环境禁用，避免快速连续建房被误拦）。
-    if (rateLimit !== false) {
-      const clientIp = socket.handshake.address ?? socket.id;
-      const attemptedAt = now();
-      const createRecent = (createRate.get(clientIp) ?? []).filter((ts) => attemptedAt - ts < rateLimit.windowMs);
-      if (createRecent.length >= rateLimit.maxPerWindow) {
-        ack(CREATE_RATE_LIMITED_ACK);
-        return;
-      }
-      createRecent.push(attemptedAt);
-      createRate.set(clientIp, createRecent);
+    // `rateLimit: false` 时 `createLimiter` 为 null（测试环境禁用，避免快速连续建房被误拦）。
+    if (createLimiter !== null && !createLimiter.allow(socket.handshake.address ?? socket.id)) {
+      ack(CREATE_RATE_LIMITED_ACK);
+      return;
     }
 
     try {

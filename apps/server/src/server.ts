@@ -1,7 +1,11 @@
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http';
+import { fileURLToPath } from 'node:url';
 import sirv from 'sirv';
 import { Server as SocketIoServer } from 'socket.io';
 import type { ClientToServerEvents, InterServerEvents, ServerToClientEvents, SocketData } from '@richman/protocol';
+import type { RateLimitRule } from './http/slidingWindowRateLimiter';
+import { createLeaderboardApi, type LeaderboardApiHandler } from './leaderboard/leaderboardRoutes';
+import { createLeaderboardStore, type LeaderboardStore } from './leaderboard/leaderboardStore';
 import { RoomManager } from './rooms/roomManager';
 import type { RoomDomainEvent } from './rooms/roomTypes';
 import { createRoomSocketAdapter, type CreateRoomRateLimit, type RoomSocketAdapterLogger } from './socket/roomSocketAdapter';
@@ -14,6 +18,16 @@ export interface CreateRoomServerOptions<TTimerHandle = unknown> {
   rateLimit?: CreateRoomRateLimit | false;
   /** Read-only clock used only for the create-room rate-limit window. Defaults to `Date.now`. */
   now?: () => number;
+  /**
+   * 成就排行榜（#116）。省略 = 挂载默认的**落盘**榜单（`.runtime/leaderboard.json`，
+   * 可用环境变量 `RICHMAN_LEADERBOARD_FILE` 覆盖）；`false` = 完全不挂这条路由；
+   * 也可以注入一个现成的存储 —— 测试用临时目录，避免读到开发机上留下的真榜单。
+   */
+  leaderboard?: LeaderboardStore | false;
+  /** 排行榜提交限流（按客户端 IP 滑动窗口）；`false` 关闭（测试）。 */
+  leaderboardRateLimit?: RateLimitRule | false;
+  /** 排行榜请求体上限（字节）；默认 2 KiB。 */
+  leaderboardMaxBodyBytes?: number;
 }
 
 export interface RunningRoomServer<TTimerHandle = unknown> {
@@ -29,8 +43,12 @@ export function createRoomServer<TTimerHandle = unknown>({
   clientDistPath,
   rateLimit,
   now,
+  leaderboard,
+  leaderboardRateLimit,
+  leaderboardMaxBodyBytes,
 }: CreateRoomServerOptions<TTimerHandle>): RunningRoomServer<TTimerHandle> {
-  const requestHandler = createRequestHandler(clientDistPath);
+  const leaderboardApi = resolveLeaderboardApi({ leaderboard, leaderboardRateLimit, leaderboardMaxBodyBytes, logger });
+  const requestHandler = createRequestHandler(clientDistPath, leaderboardApi);
   const httpServer = createServer(requestHandler);
   const io = new SocketIoServer<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(httpServer, {
     serveClient: false,
@@ -59,7 +77,33 @@ export function createRoomServer<TTimerHandle = unknown>({
   };
 }
 
-function createRequestHandler(clientDistPath: string | undefined): (request: IncomingMessage, response: ServerResponse) => void {
+/** 排行榜落盘位置：默认与房间快照同在 server 包的 `.runtime/`，可用环境变量覆盖。 */
+const DEFAULT_LEADERBOARD_FILE = fileURLToPath(new URL('../.runtime/leaderboard.json', import.meta.url));
+
+interface ResolveLeaderboardApiOptions {
+  leaderboard?: LeaderboardStore | false;
+  leaderboardRateLimit?: RateLimitRule | false;
+  leaderboardMaxBodyBytes?: number;
+  logger?: RoomSocketAdapterLogger;
+}
+
+/** `null` = 不挂载排行榜路由（`leaderboard: false`，或调用方明确不要）。 */
+function resolveLeaderboardApi(options: ResolveLeaderboardApiOptions): LeaderboardApiHandler | null {
+  if (options.leaderboard === false) return null;
+  const store = options.leaderboard
+    ?? createLeaderboardStore({ file: process.env.RICHMAN_LEADERBOARD_FILE ?? DEFAULT_LEADERBOARD_FILE });
+  return createLeaderboardApi({
+    store,
+    rateLimit: options.leaderboardRateLimit,
+    maxBodyBytes: options.leaderboardMaxBodyBytes,
+    logger: options.logger,
+  });
+}
+
+function createRequestHandler(
+  clientDistPath: string | undefined,
+  leaderboardApi: LeaderboardApiHandler | null,
+): (request: IncomingMessage, response: ServerResponse) => void {
   const staticHandler = resolveStaticHandler(clientDistPath);
 
   // /healthz 供云平台/负载均衡探活（就绪探针）。返回 200 即代表进程存活。
@@ -70,6 +114,10 @@ function createRequestHandler(clientDistPath: string | undefined): (request: Inc
       response.end('ok');
       return;
     }
+    // 排行榜 API（#116）**必须**排在静态托管之前：sirv 配了 `single: true`，
+    // 任何落到它手里的未知路径都会被当成「前端路由」返回 index.html（200 + HTML），
+    // 客户端 `response.json()` 于是抛出一个与真实原因毫不相干的解析错误。
+    if (leaderboardApi !== null && leaderboardApi(request, response)) return;
     staticHandler(request, response);
   };
 }
