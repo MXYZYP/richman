@@ -1,0 +1,851 @@
+{
+  "boardName": "大富翁·中国之旅",
+  "direction": "clockwise",
+  "cells": [
+    {
+      "id": 0,
+      "type": "start",
+      "name": "起点"
+    },
+    {
+      "id": 1,
+      "type": "property",
+      "subtype": "normal",
+      "name": "纽约市",
+      "subtitle": "曼哈顿",
+      "price": 2200,
+      "houseCost": 1500,
+      "rents": [
+        180,
+        900,
+        2500,
+        7000,
+        8750,
+        10500
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 2,
+      "type": "property",
+      "subtype": "normal",
+      "name": "洛杉矶",
+      "subtitle": "好莱坞",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        3000,
+        7500,
+        9250,
+        11000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 3,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 4,
+      "type": "property",
+      "subtype": "normal",
+      "name": "伦敦",
+      "subtitle": "泰晤士",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3300,
+        8000,
+        9750,
+        11500
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 5,
+      "type": "property",
+      "subtype": "normal",
+      "name": "巴黎",
+      "subtitle": "塞纳河",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3300,
+        8000,
+        9750,
+        11500
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 6,
+      "type": "property",
+      "subtype": "station",
+      "name": "中央车站",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 7,
+      "type": "property",
+      "subtype": "normal",
+      "name": "东京",
+      "subtitle": "涩谷",
+      "price": 2800,
+      "houseCost": 1500,
+      "rents": [
+        240,
+        1200,
+        3600,
+        8500,
+        10250,
+        12000
+      ],
+      "mortgageValue": 1400
+    },
+    {
+      "id": 8,
+      "type": "property",
+      "subtype": "normal",
+      "name": "悉尼",
+      "subtitle": "港湾",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        120,
+        600,
+        1800,
+        5000,
+        7000,
+        9000
+      ],
+      "mortgageValue": 800
+    },
+    {
+      "id": 9,
+      "type": "property",
+      "subtype": "normal",
+      "name": "罗马",
+      "subtitle": "斗兽场",
+      "price": 1400,
+      "houseCost": 1000,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 10,
+      "type": "property",
+      "subtype": "utility",
+      "name": "全球运河",
+      "price": 1500,
+      "mortgageValue": 750
+    },
+    {
+      "id": 11,
+      "type": "property",
+      "subtype": "normal",
+      "name": "旧金山",
+      "subtitle": "金门",
+      "price": 2000,
+      "houseCost": 1000,
+      "rents": [
+        160,
+        800,
+        2200,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 12,
+      "type": "property",
+      "subtype": "normal",
+      "name": "柏林",
+      "subtitle": "勃兰登堡",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5500,
+        7500,
+        9500
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 13,
+      "type": "airport",
+      "name": "国际空港",
+      "branchEntryId": 52
+    },
+    {
+      "id": 14,
+      "type": "property",
+      "subtype": "normal",
+      "name": "莫斯科",
+      "subtitle": "红场",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5500,
+        7500,
+        9500
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 15,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 16,
+      "type": "property",
+      "subtype": "normal",
+      "name": "开罗",
+      "subtitle": "尼罗河",
+      "price": 600,
+      "houseCost": 500,
+      "rents": [
+        20,
+        100,
+        300,
+        900,
+        1600,
+        2500
+      ],
+      "mortgageValue": 300
+    },
+    {
+      "id": 17,
+      "type": "property",
+      "subtype": "normal",
+      "name": "伊斯坦布尔",
+      "subtitle": "博斯",
+      "price": 1000,
+      "houseCost": 500,
+      "rents": [
+        60,
+        300,
+        900,
+        2700,
+        4000,
+        5500
+      ],
+      "mortgageValue": 500
+    },
+    {
+      "id": 18,
+      "type": "property",
+      "subtype": "normal",
+      "name": "新加坡",
+      "subtitle": "狮城",
+      "price": 1200,
+      "houseCost": 500,
+      "rents": [
+        80,
+        400,
+        1000,
+        3000,
+        4500,
+        6000
+      ],
+      "mortgageValue": 600
+    },
+    {
+      "id": 19,
+      "type": "property",
+      "subtype": "station",
+      "name": "欧洲之星",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 20,
+      "type": "property",
+      "subtype": "normal",
+      "name": "多伦多",
+      "subtitle": "湖滨",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3900,
+        9000,
+        11000,
+        12750
+      ],
+      "mortgageValue": 1500
+    },
+    {
+      "id": 21,
+      "type": "property",
+      "subtype": "normal",
+      "name": "芝加哥",
+      "subtitle": "Loop",
+      "price": 2200,
+      "houseCost": 1500,
+      "rents": [
+        180,
+        900,
+        2500,
+        7000,
+        8750,
+        10500
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 22,
+      "type": "property",
+      "subtype": "normal",
+      "name": "圣保罗",
+      "subtitle": "海滨",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3900,
+        9000,
+        11000,
+        12750
+      ],
+      "mortgageValue": 1500
+    },
+    {
+      "id": 23,
+      "type": "tax",
+      "name": "资本利得税",
+      "amount": 1000
+    },
+    {
+      "id": 24,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 25,
+      "type": "property",
+      "subtype": "normal",
+      "name": "马德里",
+      "subtitle": "太阳门",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        3000,
+        7500,
+        9250,
+        11000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 26,
+      "type": "special",
+      "name": "享用英式下午茶",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 1
+      }
+    },
+    {
+      "id": 27,
+      "type": "property",
+      "subtype": "normal",
+      "name": "雅典",
+      "subtitle": "卫城",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3300,
+        8000,
+        9750,
+        11500
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 28,
+      "type": "property",
+      "subtype": "normal",
+      "name": "曼谷",
+      "subtitle": "湄南河",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3300,
+        8000,
+        9750,
+        11500
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 29,
+      "type": "property",
+      "subtype": "normal",
+      "name": "首尔",
+      "subtitle": "汉江",
+      "price": 2200,
+      "houseCost": 1500,
+      "rents": [
+        180,
+        900,
+        2500,
+        7000,
+        8750,
+        10500
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 30,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 31,
+      "type": "property",
+      "subtype": "normal",
+      "name": "迪拜",
+      "subtitle": "塔",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        120,
+        600,
+        1800,
+        5000,
+        7000,
+        9000
+      ],
+      "mortgageValue": 800
+    },
+    {
+      "id": 32,
+      "type": "property",
+      "subtype": "normal",
+      "name": "孟买",
+      "subtitle": "港湾",
+      "price": 1400,
+      "houseCost": 1000,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 33,
+      "type": "property",
+      "subtype": "station",
+      "name": "东方快车",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 34,
+      "type": "property",
+      "subtype": "normal",
+      "name": "墨西哥城",
+      "subtitle": "古城",
+      "price": 1400,
+      "houseCost": 1000,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 35,
+      "type": "property",
+      "subtype": "normal",
+      "name": "开普敦",
+      "subtitle": "好望角",
+      "price": 2000,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5500,
+        7500,
+        9500
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 36,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 37,
+      "type": "property",
+      "subtype": "normal",
+      "name": "里斯本",
+      "subtitle": "电车",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        160,
+        800,
+        2200,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 38,
+      "type": "property",
+      "subtype": "normal",
+      "name": "威尼斯",
+      "price": 1200,
+      "houseCost": 500,
+      "rents": [
+        80,
+        400,
+        1000,
+        3000,
+        4500,
+        6000
+      ],
+      "mortgageValue": 600,
+      "subtitle": "水城"
+    },
+    {
+      "id": 39,
+      "type": "special",
+      "name": "观赏北极极光",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 1
+      }
+    },
+    {
+      "id": 40,
+      "type": "property",
+      "subtype": "normal",
+      "name": "斯德哥尔摩",
+      "subtitle": "群岛",
+      "price": 1000,
+      "houseCost": 500,
+      "rents": [
+        60,
+        300,
+        900,
+        2700,
+        4000,
+        5500
+      ],
+      "mortgageValue": 500
+    },
+    {
+      "id": 41,
+      "type": "property",
+      "subtype": "normal",
+      "name": "卢浮宫",
+      "price": 2600,
+      "houseCost": 2000,
+      "rents": [
+        280,
+        1100,
+        3300,
+        8000,
+        9750,
+        11500
+      ],
+      "mortgageValue": 1300,
+      "subtitle": "艺术"
+    },
+    {
+      "id": 42,
+      "type": "property",
+      "subtype": "normal",
+      "name": "吉萨金字塔",
+      "price": 3500,
+      "houseCost": 2000,
+      "rents": [
+        350,
+        1750,
+        5000,
+        11000,
+        13000,
+        15000
+      ],
+      "mortgageValue": 1750,
+      "subtitle": "沙漠"
+    },
+    {
+      "id": 43,
+      "type": "property",
+      "subtype": "station",
+      "name": "洲际车站",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 44,
+      "type": "property",
+      "subtype": "normal",
+      "name": "巴塞罗那",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3900,
+        9000,
+        11000,
+        12750
+      ],
+      "mortgageValue": 1500,
+      "subtitle": "圣家堂"
+    },
+    {
+      "id": 45,
+      "type": "property",
+      "subtype": "normal",
+      "name": "吴哥窟",
+      "price": 3200,
+      "houseCost": 2000,
+      "rents": [
+        280,
+        1500,
+        4500,
+        10000,
+        12000,
+        14000
+      ],
+      "mortgageValue": 1600,
+      "subtitle": "古迹"
+    },
+    {
+      "id": 46,
+      "type": "property",
+      "subtype": "normal",
+      "name": "京都",
+      "price": 1000,
+      "houseCost": 500,
+      "rents": [
+        60,
+        300,
+        900,
+        2700,
+        4000,
+        5500
+      ],
+      "mortgageValue": 500,
+      "subtitle": "古都"
+    },
+    {
+      "id": 47,
+      "type": "property",
+      "subtype": "utility",
+      "name": "苏伊士运河",
+      "price": 1500,
+      "mortgageValue": 750
+    },
+    {
+      "id": 48,
+      "type": "destiny",
+      "name": "温哥华",
+      "subtitle": "港湾"
+    },
+    {
+      "id": 49,
+      "type": "property",
+      "subtype": "normal",
+      "name": "布宜诺斯艾利斯",
+      "subtitle": "探戈",
+      "price": 2200,
+      "houseCost": 1500,
+      "rents": [
+        180,
+        900,
+        2500,
+        7000,
+        8750,
+        10500
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 50,
+      "type": "property",
+      "subtype": "normal",
+      "name": "里约热内卢",
+      "price": 3200,
+      "houseCost": 2000,
+      "rents": [
+        280,
+        1500,
+        4500,
+        10000,
+        12000,
+        14000
+      ],
+      "mortgageValue": 1600,
+      "subtitle": "基督山"
+    },
+    {
+      "id": 51,
+      "type": "property",
+      "subtype": "normal",
+      "name": "雷克雅未克",
+      "subtitle": "极光",
+      "price": 4000,
+      "houseCost": 2000,
+      "rents": [
+        500,
+        2000,
+        6000,
+        14000,
+        17000,
+        20000
+      ],
+      "mortgageValue": 2000,
+      "nextId": 0
+    },
+    {
+      "id": 52,
+      "type": "world",
+      "name": "比萨斜塔",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": false
+      }
+    },
+    {
+      "id": 53,
+      "type": "world",
+      "name": "自由女神像",
+      "effect": {
+        "type": "move_steps",
+        "steps": 5
+      }
+    },
+    {
+      "id": 54,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 55,
+      "type": "world",
+      "name": "大本钟",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": 56,
+      "type": "world",
+      "name": "埃菲尔铁塔",
+      "effect": {
+        "type": "move_to",
+        "cellId": 19,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": 57,
+      "type": "world",
+      "name": "凯旋门",
+      "effect": {
+        "type": "move_steps",
+        "steps": 1
+      }
+    },
+    {
+      "id": 58,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 59,
+      "type": "world",
+      "name": "双子塔",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": 60,
+      "type": "world",
+      "name": "下龙湾",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 2
+      },
+      "nextId": 40
+    }
+  ]
+}

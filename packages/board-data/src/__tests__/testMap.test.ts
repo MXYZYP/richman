@@ -62,7 +62,18 @@ describe('permanent test-only map fixture', () => {
     expect(registry.getMapPack(testMap.ref)).toEqual(testMap);
     expect(registry.listActiveMaps()).toEqual([]);
     expect(() => registry.getActiveMapPack(testMap.ref.id)).toThrow(/inactive map id/i);
-    expect(listActiveMaps().map((entry) => entry.ref.id)).toEqual(['china-tour', 'world-tour']);
+    expect(listActiveMaps().map((entry) => entry.ref.id)).toEqual([
+      'china-tour',
+      'world-tour',
+      'classic-tour',
+      'silk-road',
+      'great-wall',
+      'yellow-river',
+      'yangtze-tour',
+      'pearl-tour',
+      'xinjiang-tour',
+      'shanxi-tour',
+    ]);
     expect(listActiveMaps().some((entry) => entry.ref.id === testMap.ref.id)).toBe(false);
   });
 });

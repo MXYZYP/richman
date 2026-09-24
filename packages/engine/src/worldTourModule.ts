@@ -7,7 +7,7 @@ import type {
   RuleModuleRef,
 } from '@richman/board-data';
 import type { ApplyResult, GameEvent, GameState, PlayerState } from './types';
-import type { ModuleEffectExecutionContext, RuleModuleDefinition } from './moduleRegistry';
+import type { ModuleEffectExecutionContext, RuleModuleDefinition, RuleModuleRegistry } from './moduleRegistry';
 import {
   advanceToNextPlayableTurn,
   applyCardEffect,
@@ -542,6 +542,7 @@ function finishSingleDieMovement(
   die: number,
   rngState: number,
   worldState: WorldTourPublicModuleState,
+  registry: RuleModuleRegistry,
 ): ApplyResult {
   const events: GameEvent[] = [
     { type: 'dice_rolled', playerId, dice: [die] },
@@ -555,7 +556,8 @@ function finishSingleDieMovement(
     seed: String(rngState),
     lastDice: [die],
   }, worldState, state.publicRuleState.pendingActions.filter((action) => action.playerId !== playerId));
-  const settled = resolveLanding(workingState, playerId, events);
+  // #21 B：注册表由 handler 上下文显式透传，递归落点因此认识「本局实际启用」的模块集合。
+  const settled = resolveLanding(workingState, playerId, events, 0, registry);
   return {
     ok: true,
     state: {
@@ -567,7 +569,13 @@ function finishSingleDieMovement(
   };
 }
 
-function handleAirportEntry(state: GameState, playerId: string, intent: ModuleIntent): ApplyResult {
+function handleAirportEntry(
+  state: GameState,
+  playerId: string,
+  intent: ModuleIntent,
+  // #21 B：递归落点要认识「本局实际启用」的注册表，必须由 handler 上下文透传。
+  registry: RuleModuleRegistry,
+): ApplyResult {
   if (state.turnPhase !== 'awaiting_roll' || !matchingPendingAction(state, playerId, intent)) {
     return { ok: false, code: 'WRONG_PHASE' };
   }
@@ -594,10 +602,16 @@ function handleAirportEntry(state: GameState, playerId: string, intent: ModuleIn
       pendingAirportByPlayerId,
       branchAirportByPlayerId: { ...current.branchAirportByPlayerId, [playerId]: airportId },
     },
+    registry,
   );
 }
 
-function handleBranchRoll(state: GameState, playerId: string, intent: ModuleIntent): ApplyResult {
+function handleBranchRoll(
+  state: GameState,
+  playerId: string,
+  intent: ModuleIntent,
+  registry: RuleModuleRegistry,
+): ApplyResult {
   if (state.turnPhase !== 'awaiting_roll' || !matchingPendingAction(state, playerId, intent)) {
     return { ok: false, code: 'WRONG_PHASE' };
   }
@@ -612,12 +626,17 @@ function handleBranchRoll(state: GameState, playerId: string, intent: ModuleInte
 
   const [die, rngState] = rollSingleDice(Number(state.seed));
   const walk = walkPath(state.board, player.position, die);
-  return finishSingleDieMovement(state, playerId, walk.path, walk.finalCellId, die, rngState, current);
+  return finishSingleDieMovement(state, playerId, walk.path, walk.finalCellId, die, rngState, current, registry);
 }
 
-function handleWorldTourIntent(state: GameState, playerId: string, intent: ModuleIntent): ApplyResult {
-  if (intent.action === 'enter-airport-branch') return handleAirportEntry(state, playerId, intent);
-  if (intent.action === 'roll-branch') return handleBranchRoll(state, playerId, intent);
+function handleWorldTourIntent(
+  state: GameState,
+  playerId: string,
+  intent: ModuleIntent,
+  registry: RuleModuleRegistry,
+): ApplyResult {
+  if (intent.action === 'enter-airport-branch') return handleAirportEntry(state, playerId, intent, registry);
+  if (intent.action === 'roll-branch') return handleBranchRoll(state, playerId, intent, registry);
   const pending = matchingPendingAction(state, playerId, intent);
   if (!pending || !isRecord(pending.payload)) return { ok: false, code: 'WRONG_PHASE' };
   const cleanState = withoutPlayerWorldTourActions(state, playerId);
@@ -628,7 +647,7 @@ function handleWorldTourIntent(state: GameState, playerId: string, intent: Modul
     const result = applyCardEffect(cleanState, playerId, {
       id: 'world-tour-bus-move',
       effect: { type: 'move_steps', steps: steps as number },
-    }, []);
+    }, [], 0, registry);
     return {
       ok: true,
       state: { ...result.state, debt: result.newDebt, recentLog: [...state.recentLog, ...result.events].slice(-200) },
@@ -664,7 +683,7 @@ function handleWorldTourIntent(state: GameState, playerId: string, intent: Modul
           : candidate
       )),
     };
-    const settled = resolveLanding(moved, playerId, events);
+    const settled = resolveLanding(moved, playerId, events, 0, registry);
     return {
       ok: true,
       state: {
@@ -765,14 +784,14 @@ const worldTourRuleModuleInput: RuleModuleDefinition = {
       type: 'module',
       action: 'enter-airport-branch',
       handle: (context) => context.intent.type === 'module'
-        ? handleWorldTourIntent(context.state, context.playerId, context.intent)
+        ? handleWorldTourIntent(context.state, context.playerId, context.intent, context.registry)
         : { ok: false, code: 'ILLEGAL_INTENT' },
     },
     {
       type: 'module',
       action: 'roll-branch',
       handle: (context) => context.intent.type === 'module'
-        ? handleWorldTourIntent(context.state, context.playerId, context.intent)
+        ? handleWorldTourIntent(context.state, context.playerId, context.intent, context.registry)
         : { ok: false, code: 'ILLEGAL_INTENT' },
     },
     ...['bus-move', 'short-flight', 'long-flight', 'free-upgrade', 'dice-duel'].map((action) => ({
@@ -780,7 +799,7 @@ const worldTourRuleModuleInput: RuleModuleDefinition = {
       action,
       handle: (context: Parameters<RuleModuleDefinition['intentHandlers'][number]['handle']>[0]) => (
         context.intent.type === 'module'
-          ? handleWorldTourIntent(context.state, context.playerId, context.intent)
+          ? handleWorldTourIntent(context.state, context.playerId, context.intent, context.registry)
           : { ok: false as const, code: 'ILLEGAL_INTENT' as const }
       ),
     })),

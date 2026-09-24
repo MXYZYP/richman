@@ -1,0 +1,722 @@
+{
+  "ref": {
+    "id": "silk-road",
+    "version": 1,
+    "contentHash": "57236b4eec8b761fa7b66f7ba6cd2a7ea3e830d5910ba7eacb657de2c07249eb"
+  },
+  "metadata": {
+    "title": "丝路之旅",
+    "description": "双环地图：外环走陆上丝路，中途转入内环海上丝路，再回到陆路抵达罗马。"
+  },
+  "requiredRuleModules": [
+    {
+      "id": "core",
+      "version": 1
+    }
+  ],
+  "presentation": {
+    "canvas": {
+      "size": 100
+    },
+    "cells": {
+      "0": {
+        "x": 91,
+        "y": 91,
+        "width": 9,
+        "height": 9,
+        "shortLabel": "起点",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "start"
+        }
+      },
+      "1": {
+        "x": 81.88888888888889,
+        "y": 91,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "长安",
+        "propertyBand": "band:silk-1"
+      },
+      "2": {
+        "x": 72.77777777777777,
+        "y": 91,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "咸阳",
+        "propertyBand": "band:silk-1"
+      },
+      "3": {
+        "x": 63.66666666666667,
+        "y": 91,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "4": {
+        "x": 54.55555555555556,
+        "y": 91,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "宝鸡",
+        "propertyBand": "band:silk-2"
+      },
+      "5": {
+        "x": 45.44444444444444,
+        "y": 91,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "长安站",
+        "propertyBand": "band:station"
+      },
+      "6": {
+        "x": 36.333333333333336,
+        "y": 91,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "天水",
+        "propertyBand": "band:silk-2"
+      },
+      "7": {
+        "x": 27.22222222222223,
+        "y": 91,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "兰州",
+        "propertyBand": "band:silk-3"
+      },
+      "8": {
+        "x": 18.111111111111114,
+        "y": 91,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "9": {
+        "x": 9,
+        "y": 91,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "武威",
+        "propertyBand": "band:silk-3"
+      },
+      "10": {
+        "x": 0,
+        "y": 91,
+        "width": 9,
+        "height": 9,
+        "shortLabel": "水车",
+        "propertyBand": "band:utility"
+      },
+      "11": {
+        "x": 0,
+        "y": 81.88888888888889,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "张掖",
+        "propertyBand": "band:silk-4"
+      },
+      "12": {
+        "x": 0,
+        "y": 72.77777777777777,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "酒泉",
+        "propertyBand": "band:silk-4"
+      },
+      "13": {
+        "x": 0,
+        "y": 63.66666666666667,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "嘉峪关",
+        "propertyBand": "band:silk-4"
+      },
+      "14": {
+        "x": 0,
+        "y": 54.55555555555556,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "15": {
+        "x": 0,
+        "y": 45.44444444444444,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "敦煌",
+        "propertyBand": "band:silk-5"
+      },
+      "16": {
+        "x": 0,
+        "y": 36.333333333333336,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "玉门关",
+        "propertyBand": "band:silk-5"
+      },
+      "17": {
+        "x": 0,
+        "y": 27.22222222222223,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "楼兰",
+        "propertyBand": "band:silk-5"
+      },
+      "18": {
+        "x": 0,
+        "y": 18.111111111111114,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "西域站",
+        "propertyBand": "band:station"
+      },
+      "19": {
+        "x": 0,
+        "y": 9,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "吐鲁番",
+        "propertyBand": "band:silk-6"
+      },
+      "20": {
+        "x": 0,
+        "y": 0,
+        "width": 9,
+        "height": 9,
+        "shortLabel": "关税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "21": {
+        "x": 9,
+        "y": 0,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "龟兹",
+        "propertyBand": "band:silk-6"
+      },
+      "22": {
+        "x": 18.11111111111111,
+        "y": 0,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "疏勒",
+        "propertyBand": "band:silk-6"
+      },
+      "23": {
+        "x": 27.22222222222222,
+        "y": 0,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "24": {
+        "x": 36.33333333333333,
+        "y": 0,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "葱岭",
+        "propertyBand": "band:silk-7"
+      },
+      "25": {
+        "x": 45.44444444444444,
+        "y": 0,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "白沙瓦",
+        "propertyBand": "band:silk-7"
+      },
+      "26": {
+        "x": 54.55555555555556,
+        "y": 0,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "27": {
+        "x": 63.666666666666664,
+        "y": 0,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "中亚站",
+        "propertyBand": "band:station"
+      },
+      "28": {
+        "x": 72.77777777777777,
+        "y": 0,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "撒马尔罕",
+        "propertyBand": "band:silk-8"
+      },
+      "29": {
+        "x": 81.88888888888889,
+        "y": 0,
+        "width": 9.11111111111111,
+        "height": 9,
+        "shortLabel": "布哈拉",
+        "propertyBand": "band:silk-8"
+      },
+      "30": {
+        "x": 91,
+        "y": 0,
+        "width": 9,
+        "height": 9,
+        "shortLabel": "梅尔夫",
+        "propertyBand": "band:silk-8"
+      },
+      "31": {
+        "x": 91,
+        "y": 9,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "巴格达",
+        "propertyBand": "band:silk-8"
+      },
+      "32": {
+        "x": 91,
+        "y": 18.11111111111111,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "33": {
+        "x": 91,
+        "y": 27.22222222222222,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "大马士革",
+        "propertyBand": "band:silk-9"
+      },
+      "34": {
+        "x": 91,
+        "y": 36.33333333333333,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "安条克",
+        "propertyBand": "band:silk-9"
+      },
+      "35": {
+        "x": 91,
+        "y": 45.44444444444444,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "以弗所",
+        "propertyBand": "band:silk-9"
+      },
+      "36": {
+        "x": 91,
+        "y": 54.55555555555556,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "商队",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        }
+      },
+      "37": {
+        "x": 91,
+        "y": 63.666666666666664,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "君堡",
+        "propertyBand": "band:silk-10"
+      },
+      "38": {
+        "x": 91,
+        "y": 72.77777777777777,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "威尼斯",
+        "propertyBand": "band:silk-10"
+      },
+      "39": {
+        "x": 91,
+        "y": 81.88888888888889,
+        "width": 9,
+        "height": 9.11111111111111,
+        "shortLabel": "罗马",
+        "propertyBand": "band:silk-10"
+      },
+      "40": {
+        "x": 63,
+        "y": 63,
+        "width": 7,
+        "height": 7,
+        "shortLabel": "锡兰",
+        "propertyBand": "band:sea-4"
+      },
+      "41": {
+        "x": 56.5,
+        "y": 63,
+        "width": 6.5,
+        "height": 7,
+        "shortLabel": "海税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "42": {
+        "x": 50,
+        "y": 63,
+        "width": 6.5,
+        "height": 7,
+        "shortLabel": "狮子国",
+        "propertyBand": "band:sea-3"
+      },
+      "43": {
+        "x": 43.5,
+        "y": 63,
+        "width": 6.5,
+        "height": 7,
+        "shortLabel": "苏门",
+        "propertyBand": "band:sea-3"
+      },
+      "44": {
+        "x": 37,
+        "y": 63,
+        "width": 6.5,
+        "height": 7,
+        "shortLabel": "季风",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        }
+      },
+      "45": {
+        "x": 30,
+        "y": 63,
+        "width": 7,
+        "height": 7,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "46": {
+        "x": 30,
+        "y": 56.5,
+        "width": 7,
+        "height": 6.5,
+        "shortLabel": "真腊",
+        "propertyBand": "band:sea-2"
+      },
+      "47": {
+        "x": 30,
+        "y": 50,
+        "width": 7,
+        "height": 6.5,
+        "shortLabel": "占城",
+        "propertyBand": "band:sea-2"
+      },
+      "48": {
+        "x": 30,
+        "y": 43.5,
+        "width": 7,
+        "height": 6.5,
+        "shortLabel": "广州港",
+        "propertyBand": "band:station"
+      },
+      "49": {
+        "x": 30,
+        "y": 37,
+        "width": 7,
+        "height": 6.5,
+        "shortLabel": "宁波",
+        "propertyBand": "band:sea-1"
+      },
+      "50": {
+        "x": 30,
+        "y": 30,
+        "width": 7,
+        "height": 7,
+        "shortLabel": "福州",
+        "propertyBand": "band:sea-1"
+      },
+      "51": {
+        "x": 37,
+        "y": 30,
+        "width": 6.5,
+        "height": 7,
+        "shortLabel": "泉州",
+        "propertyBand": "band:sea-1"
+      },
+      "52": {
+        "x": 43.5,
+        "y": 30,
+        "width": 6.5,
+        "height": 7,
+        "shortLabel": "亚历山",
+        "propertyBand": "band:sea-5"
+      },
+      "53": {
+        "x": 50,
+        "y": 30,
+        "width": 6.5,
+        "height": 7,
+        "shortLabel": "吉达",
+        "propertyBand": "band:sea-5"
+      },
+      "54": {
+        "x": 56.5,
+        "y": 30,
+        "width": 6.5,
+        "height": 7,
+        "shortLabel": "逆风",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        }
+      },
+      "55": {
+        "x": 63,
+        "y": 30,
+        "width": 7,
+        "height": 7,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "56": {
+        "x": 63,
+        "y": 37,
+        "width": 7,
+        "height": 6.5,
+        "shortLabel": "海盗",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        }
+      },
+      "57": {
+        "x": 63,
+        "y": 43.5,
+        "width": 7,
+        "height": 6.5,
+        "shortLabel": "霍尔木兹",
+        "propertyBand": "band:sea-5"
+      },
+      "58": {
+        "x": 63,
+        "y": 50,
+        "width": 7,
+        "height": 6.5,
+        "shortLabel": "航标",
+        "propertyBand": "band:utility"
+      },
+      "59": {
+        "x": 63,
+        "y": 56.5,
+        "width": 7,
+        "height": 6.5,
+        "shortLabel": "卡利卡特",
+        "propertyBand": "band:sea-4"
+      }
+    },
+    "routes": [
+      {
+        "type": "polyline",
+        "role": "route",
+        "strokeWidth": 0.9,
+        "dashPattern": [
+          1.8,
+          1.2
+        ],
+        "lineCap": "round",
+        "opacity": 0.8,
+        "zIndex": 0,
+        "points": [
+          {
+            "x": 95.5,
+            "y": 95.5
+          },
+          {
+            "x": 4.5,
+            "y": 95.5
+          },
+          {
+            "x": 4.5,
+            "y": 4.5
+          },
+          {
+            "x": 95.5,
+            "y": 4.5
+          },
+          {
+            "x": 95.5,
+            "y": 95.5
+          }
+        ]
+      },
+      {
+        "type": "polyline",
+        "role": "route",
+        "strokeWidth": 0.7,
+        "dashPattern": [
+          1.4,
+          1
+        ],
+        "lineCap": "round",
+        "opacity": 0.8,
+        "zIndex": 0,
+        "points": [
+          {
+            "x": 66.5,
+            "y": 66.5
+          },
+          {
+            "x": 33.5,
+            "y": 66.5
+          },
+          {
+            "x": 33.5,
+            "y": 33.5
+          },
+          {
+            "x": 66.5,
+            "y": 33.5
+          },
+          {
+            "x": 66.5,
+            "y": 66.5
+          }
+        ]
+      },
+      {
+        "type": "line",
+        "role": "route",
+        "strokeWidth": 0.9,
+        "dashPattern": [
+          1.6,
+          1.1
+        ],
+        "lineCap": "round",
+        "opacity": 0.85,
+        "zIndex": 0,
+        "from": {
+          "x": 40.888888888888886,
+          "y": 9
+        },
+        "to": {
+          "x": 40.25,
+          "y": 30
+        }
+      },
+      {
+        "type": "line",
+        "role": "route",
+        "strokeWidth": 0.9,
+        "dashPattern": [
+          1.6,
+          1.1
+        ],
+        "lineCap": "round",
+        "opacity": 0.85,
+        "zIndex": 0,
+        "from": {
+          "x": 46.75,
+          "y": 30
+        },
+        "to": {
+          "x": 50,
+          "y": 9
+        }
+      }
+    ],
+    "center": [
+      {
+        "type": "panel",
+        "x": 37,
+        "y": 43,
+        "width": 26,
+        "height": 12,
+        "role": "center",
+        "zIndex": -1
+      },
+      {
+        "type": "text",
+        "x": 37,
+        "y": 43,
+        "width": 26,
+        "height": 12,
+        "role": "center",
+        "text": "丝路之旅",
+        "fitContent": true,
+        "zIndex": -1
+      },
+      {
+        "type": "text",
+        "x": 16,
+        "y": 76,
+        "width": 68,
+        "height": 9,
+        "role": "decoration",
+        "text": "外环 · 陆上丝路　　内环 · 海上丝路",
+        "fitContent": true,
+        "zIndex": -1
+      }
+    ],
+    "theme": {
+      "colors": {
+        "board": "#F2E3C4",
+        "cell": "#FFFBF0",
+        "border": "#8A6A3B",
+        "route": "#B07A3C",
+        "title": "#6B4318",
+        "decoration": "#D9B77E",
+        "center": "#FBF0D9"
+      },
+      "propertyBands": {
+        "band:silk-1": "#C9A227",
+        "band:silk-2": "#B5651D",
+        "band:silk-3": "#8C6239",
+        "band:silk-4": "#A0522D",
+        "band:silk-5": "#7A5C2E",
+        "band:silk-6": "#9C6644",
+        "band:silk-7": "#6B8E23",
+        "band:silk-8": "#556B2F",
+        "band:silk-9": "#B8860B",
+        "band:silk-10": "#8B4513",
+        "band:sea-1": "#2E8B9E",
+        "band:sea-2": "#1F7A8C",
+        "band:sea-3": "#2596BE",
+        "band:sea-4": "#14657A",
+        "band:sea-5": "#3C9EB5",
+        "band:station": "#6D4C41",
+        "band:utility": "#7E57C2"
+      }
+    }
+  }
+}

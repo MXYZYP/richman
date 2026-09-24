@@ -1,0 +1,556 @@
+{
+  "ref": {
+    "id": "great-wall",
+    "version": 1,
+    "contentHash": "755f12af25b6461b7ff0e3125c33ab0c2d3f926758a3c7ffdfbb6e1680192400"
+  },
+  "metadata": {
+    "title": "长城之旅",
+    "description": "蛇形网格棋盘：八列六段城墙蛇形排布 48 格关隘，争夺烽火台可向过路者收取通行费。"
+  },
+  "requiredRuleModules": [
+    {
+      "id": "core",
+      "version": 1
+    },
+    {
+      "id": "great-wall",
+      "version": 1
+    }
+  ],
+  "presentation": {
+    "canvas": {
+      "size": 120
+    },
+    "cells": {
+      "0": {
+        "x": 1,
+        "y": 1,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "起点",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "start"
+        }
+      },
+      "1": {
+        "x": 16,
+        "y": 1,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "嘉峪关",
+        "propertyBand": "band:pass-1"
+      },
+      "2": {
+        "x": 31,
+        "y": 1,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "讨赖墩",
+        "propertyBand": "band:pass-1"
+      },
+      "3": {
+        "x": 46,
+        "y": 1,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "4": {
+        "x": 61,
+        "y": 1,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "酒泉",
+        "propertyBand": "band:pass-1"
+      },
+      "5": {
+        "x": 76,
+        "y": 1,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "烽火台",
+        "propertyBand": "band:beacon"
+      },
+      "6": {
+        "x": 91,
+        "y": 1,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "肃州站",
+        "propertyBand": "band:station"
+      },
+      "7": {
+        "x": 106,
+        "y": 1,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "高台",
+        "propertyBand": "band:pass-1"
+      },
+      "8": {
+        "x": 106,
+        "y": 21,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "9": {
+        "x": 91,
+        "y": 21,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "张掖",
+        "propertyBand": "band:pass-2"
+      },
+      "10": {
+        "x": 76,
+        "y": 21,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "水车",
+        "propertyBand": "band:utility"
+      },
+      "11": {
+        "x": 61,
+        "y": 21,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "山丹",
+        "propertyBand": "band:pass-2"
+      },
+      "12": {
+        "x": 46,
+        "y": 21,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "边饷",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "13": {
+        "x": 31,
+        "y": 21,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "烽火台",
+        "propertyBand": "band:beacon"
+      },
+      "14": {
+        "x": 16,
+        "y": 21,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "永昌",
+        "propertyBand": "band:pass-2"
+      },
+      "15": {
+        "x": 1,
+        "y": 21,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "武威",
+        "propertyBand": "band:pass-2"
+      },
+      "16": {
+        "x": 1,
+        "y": 41,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "沙暴",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        }
+      },
+      "17": {
+        "x": 16,
+        "y": 41,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "古浪",
+        "propertyBand": "band:pass-3"
+      },
+      "18": {
+        "x": 31,
+        "y": 41,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "凉州站",
+        "propertyBand": "band:station"
+      },
+      "19": {
+        "x": 46,
+        "y": 41,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "景泰",
+        "propertyBand": "band:pass-3"
+      },
+      "20": {
+        "x": 61,
+        "y": 41,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "21": {
+        "x": 76,
+        "y": 41,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "烽火台",
+        "propertyBand": "band:beacon"
+      },
+      "22": {
+        "x": 91,
+        "y": 41,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "靖远",
+        "propertyBand": "band:pass-3"
+      },
+      "23": {
+        "x": 106,
+        "y": 41,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "24": {
+        "x": 106,
+        "y": 61,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "兰州",
+        "propertyBand": "band:pass-4"
+      },
+      "25": {
+        "x": 91,
+        "y": 61,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "定边",
+        "propertyBand": "band:pass-4"
+      },
+      "26": {
+        "x": 76,
+        "y": 61,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "水车",
+        "propertyBand": "band:utility"
+      },
+      "27": {
+        "x": 61,
+        "y": 61,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "延绥站",
+        "propertyBand": "band:station"
+      },
+      "28": {
+        "x": 46,
+        "y": 61,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "29": {
+        "x": 31,
+        "y": 61,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "烽火台",
+        "propertyBand": "band:beacon"
+      },
+      "30": {
+        "x": 16,
+        "y": 61,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "盐池",
+        "propertyBand": "band:pass-4"
+      },
+      "31": {
+        "x": 1,
+        "y": 61,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "灵武",
+        "propertyBand": "band:pass-4"
+      },
+      "32": {
+        "x": 1,
+        "y": 81,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "33": {
+        "x": 16,
+        "y": 81,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "榆林",
+        "propertyBand": "band:pass-5"
+      },
+      "34": {
+        "x": 31,
+        "y": 81,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "关市",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "35": {
+        "x": 46,
+        "y": 81,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "神木",
+        "propertyBand": "band:pass-5"
+      },
+      "36": {
+        "x": 61,
+        "y": 81,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "烽火台",
+        "propertyBand": "band:beacon"
+      },
+      "37": {
+        "x": 76,
+        "y": 81,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "偏关",
+        "propertyBand": "band:pass-5"
+      },
+      "38": {
+        "x": 91,
+        "y": 81,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "大同站",
+        "propertyBand": "band:station"
+      },
+      "39": {
+        "x": 106,
+        "y": 81,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "宁武关",
+        "propertyBand": "band:pass-6"
+      },
+      "40": {
+        "x": 106,
+        "y": 101,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "雁门关",
+        "propertyBand": "band:pass-6"
+      },
+      "41": {
+        "x": 91,
+        "y": 101,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "募捐",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        }
+      },
+      "42": {
+        "x": 76,
+        "y": 101,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "43": {
+        "x": 61,
+        "y": 101,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "平型关",
+        "propertyBand": "band:pass-6"
+      },
+      "44": {
+        "x": 46,
+        "y": 101,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "烽火台",
+        "propertyBand": "band:beacon"
+      },
+      "45": {
+        "x": 31,
+        "y": 101,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "居庸关",
+        "propertyBand": "band:pass-7"
+      },
+      "46": {
+        "x": 16,
+        "y": 101,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "八达岭",
+        "propertyBand": "band:pass-7"
+      },
+      "47": {
+        "x": 1,
+        "y": 101,
+        "width": 13,
+        "height": 18,
+        "shortLabel": "山海关",
+        "propertyBand": "band:pass-7"
+      }
+    },
+    "routes": [
+      {
+        "type": "polyline",
+        "role": "route",
+        "strokeWidth": 1,
+        "dashPattern": [
+          2,
+          1.4
+        ],
+        "lineCap": "round",
+        "opacity": 0.9,
+        "zIndex": 0,
+        "points": [
+          {
+            "x": 7.5,
+            "y": 10
+          },
+          {
+            "x": 112.5,
+            "y": 10
+          },
+          {
+            "x": 112.5,
+            "y": 30
+          },
+          {
+            "x": 7.5,
+            "y": 30
+          },
+          {
+            "x": 7.5,
+            "y": 50
+          },
+          {
+            "x": 112.5,
+            "y": 50
+          },
+          {
+            "x": 112.5,
+            "y": 70
+          },
+          {
+            "x": 7.5,
+            "y": 70
+          },
+          {
+            "x": 7.5,
+            "y": 90
+          },
+          {
+            "x": 112.5,
+            "y": 90
+          },
+          {
+            "x": 112.5,
+            "y": 110
+          },
+          {
+            "x": 7.5,
+            "y": 110
+          }
+        ]
+      },
+      {
+        "type": "line",
+        "role": "decoration",
+        "strokeWidth": 1,
+        "dashPattern": [
+          1.6,
+          1.2
+        ],
+        "lineCap": "round",
+        "opacity": 0.7,
+        "zIndex": 0,
+        "from": {
+          "x": 0.5,
+          "y": 110
+        },
+        "to": {
+          "x": 0.5,
+          "y": 10
+        }
+      }
+    ],
+    "center": [],
+    "theme": {
+      "colors": {
+        "board": "#E8DCC8",
+        "cell": "#FFFCF5",
+        "border": "#6B5B45",
+        "route": "#A8763E",
+        "title": "#4A3B28",
+        "decoration": "#C9AE86",
+        "center": "#F5EBD8"
+      },
+      "propertyBands": {
+        "band:pass-1": "#C9A227",
+        "band:pass-2": "#B5651D",
+        "band:pass-3": "#8C6239",
+        "band:pass-4": "#A0522D",
+        "band:pass-5": "#7A5C2E",
+        "band:pass-6": "#9C6644",
+        "band:pass-7": "#8B4513",
+        "band:station": "#6D4C41",
+        "band:utility": "#7E57C2",
+        "band:beacon": "#5F7480"
+      }
+    }
+  }
+}

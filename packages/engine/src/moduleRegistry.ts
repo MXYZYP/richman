@@ -11,6 +11,7 @@ import type {
 } from '@richman/board-data';
 import type { ApplyResult, CoreIntent, GameEvent, GameState, Intent } from './types';
 import { worldTourRuleModuleDefinition } from './worldTourModule';
+import { greatWallRuleModuleDefinition } from './greatWallModule';
 
 type ReadonlyCell = DeepReadonly<Cell>;
 
@@ -27,6 +28,14 @@ export interface CellSettlementContext {
   readonly depth: number;
   readonly cell: ReadonlyCell;
   readonly applyCore: () => RuleEffectResult;
+  /**
+   * 当前 `applyIntent(..., registry)` 使用的注册表（#21 B）。
+   * 模块 handler 需要**递归落点**（如移动类效果再结算一次落点）或再次执行卡牌效果时，
+   * 必须把本字段透传给 `resolveLanding` / `applyCardEffect`，不要依赖它们的默认参数
+   * （默认取 `defaultRuleModuleRegistry`，那会让注册在自定义 registry 上的第三方模块
+   * 在递归落点时拿到 `Unknown module` / `No enabled cell handler`）。
+   */
+  readonly registry: RuleModuleRegistry;
 }
 
 export interface EffectExecutionContext {
@@ -36,6 +45,8 @@ export interface EffectExecutionContext {
   readonly events: GameEvent[];
   readonly depth: number;
   readonly applyCore: () => RuleEffectResult;
+  /** 见 `CellSettlementContext.registry`：递归效果必须原样透传。 */
+  readonly registry: RuleModuleRegistry;
 }
 
 export type ReadonlyEffectCard<TEffect extends CellEffect = CellEffect> = DeepReadonly<{
@@ -52,6 +63,8 @@ export interface IntentExecutionContext {
   readonly playerId: string;
   readonly intent: Intent;
   readonly applyCore: () => ApplyResult;
+  /** 见 `CellSettlementContext.registry`：模块意图内若再触发落点/卡牌结算必须原样透传。 */
+  readonly registry: RuleModuleRegistry;
 }
 
 export interface BotStrategyContext {
@@ -59,6 +72,8 @@ export interface BotStrategyContext {
   readonly playerId: string;
   readonly currentDecision?: Intent;
   readonly applyCore: () => Intent;
+  /** 见 `CellSettlementContext.registry`。 */
+  readonly registry: RuleModuleRegistry;
 }
 
 export interface PositiveRentContext {
@@ -68,6 +83,8 @@ export interface PositiveRentContext {
   readonly ownerId: string;
   readonly cellId: number;
   readonly amount: number;
+  /** 见 `CellSettlementContext.registry`。 */
+  readonly registry: RuleModuleRegistry;
 }
 
 export interface PositiveRentResult {
@@ -85,6 +102,8 @@ export interface PostTransitionContext {
   readonly playerId: string;
   readonly intent: Intent;
   readonly result: ApplyResult;
+  /** 见 `CellSettlementContext.registry`。 */
+  readonly registry: RuleModuleRegistry;
 }
 
 export interface PostTransitionHook {
@@ -181,6 +200,7 @@ export const CORE_INTENT_HANDLER_TYPES = Object.freeze({
   redeem_property: true,
   end_turn: true,
   declare_bankrupt: true,
+  surrender: true,
   redraw_card: true,
   accept_card: true,
 } satisfies Record<CoreIntent['type'], true>);
@@ -487,4 +507,5 @@ export const coreRuleModuleDefinition = copyDefinition(coreRuleModuleInput);
 export const defaultRuleModuleRegistry = createRuleModuleRegistry([
   coreRuleModuleDefinition,
   worldTourRuleModuleDefinition,
+  greatWallRuleModuleDefinition,
 ]);

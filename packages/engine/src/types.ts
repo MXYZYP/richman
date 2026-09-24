@@ -140,6 +140,9 @@ export type CoreIntent =
   | { type: 'redeem_property'; cellId: number }
   | { type: 'end_turn' }
   | { type: 'declare_bankrupt' }
+  // 主动投降：不受“是否轮到该玩家 / 是否处于债务态”限制，任何进行中的对局都可发动；
+  // 两人对局按破产流程结算（胜负由破产流程判定），多人对局立即出局、现金清零、名下地产转为无主可售。
+  | { type: 'surrender' }
   // 单机真人作弊：仅当 state.cardChoice.pending 指向该玩家时可用（联机/电脑玩家永不产生 pending）
   | { type: 'redraw_card' }
   | { type: 'accept_card' };
@@ -172,6 +175,8 @@ export type CoreGameEvent =
   | { type: 'debt_entered'; debtorId: string; amount: number; creditorId: string | null }
   | { type: 'debt_resolved'; amount: number; creditorId: string | null }
   | { type: 'player_bankrupt'; playerId: string; creditorId: string | null; transferredCash: number }
+  // 主动投降出局：现金及资产清零、名下地产转为无主可售；两人对局时 creditorId 指向对手（按破产流程结算）。
+  | { type: 'player_surrendered'; playerId: string; creditorId: string | null; transferredCash: number }
   | { type: 'turn_ended'; playerId: string }
   | { type: 'game_over'; winnerId: string; reason: 'last_standing' | 'cash_goal' };
 export type GameEvent = CoreGameEvent | ModuleEvent;

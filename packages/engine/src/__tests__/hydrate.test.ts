@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getActiveMapPack, worldTourMap } from '@richman/board-data';
 import { applyIntent, createGame } from '../engine';
 import { chooseBotIntent } from '../bot';
-import { hydrateGameState } from '../hydrate';
+import { hydrateGameState, resolveOverriddenGameConfig } from '../hydrate';
 
 const chinaMap = getActiveMapPack('china-tour');
 
@@ -69,6 +69,78 @@ function worldAirportWaitState(): any {
   };
   return state;
 }
+
+// 房主自定义规则的对局（#4）：state.config 与地图默认值不同。
+// 这类对局单机存档、联机房间快照都要能恢复，因此 hydrate 必须支持「按本局生效的 config」校验。
+describe('hydrateGameState 的 config 覆盖（房主自定义规则）', () => {
+  const baseConfig = chinaMap.game.config;
+
+  function customizedState(overrides: Partial<typeof baseConfig>): any {
+    return createGame({
+      mapRef: chinaMap.ref,
+      ruleModules: chinaMap.game.requiredRuleModules,
+      board: chinaMap.game.board,
+      cards: chinaMap.game.cards,
+      config: { ...baseConfig, ...overrides },
+      players: [
+        { id: 'p1', nickname: '甲' },
+        { id: 'p2', nickname: '乙', isBot: true },
+      ],
+      seed: 'hydrate-custom-rule',
+    });
+  }
+
+  it('不传 override 时，自定义规则的状态仍按旧行为被拒（默认路径完全不变）', () => {
+    const state = customizedState({ initialCash: baseConfig.initialCash + 5000 });
+
+    expect(hydrateGameState(state, chinaMap)).toMatchObject({ ok: false });
+  });
+
+  it('传入生效 config 后可以恢复，且写回的就是自定义那份', () => {
+    const state = customizedState({
+      initialCash: baseConfig.initialCash + 5000,
+      maxHouseLevel: 3,
+      mortgageInterestRate: 0.2,
+    });
+    const override = resolveOverriddenGameConfig(state.config, chinaMap);
+
+    const result = hydrateGameState(state, chinaMap, override ?? undefined);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.config.initialCash).toBe(baseConfig.initialCash + 5000);
+    expect(result.state.config.maxHouseLevel).toBe(3);
+    expect(result.state.config.mortgageInterestRate).toBe(0.2);
+    expect(Object.isFrozen(result.state.config)).toBe(true);
+    // 必须写回 override：写回地图默认值会让调用方拿到的对局悄悄退回默认规则。
+    expect(result.state.config).toBe(override);
+  });
+
+  it.each<[string, Record<string, unknown>]>([
+    ['初始资金为零', { initialCash: 0 }],
+    ['初始资金为负数', { initialCash: -1 }],
+    ['房级上限超过地图档位', { maxHouseLevel: chinaMap.game.config.maxHouseLevel + 1 }],
+    ['房级上限为零', { maxHouseLevel: 0 }],
+    ['抵押利率超过 100%', { mortgageInterestRate: 1.5 }],
+    ['改动了结构性字段（骰子模式）', { diceMode: 'one_die' }],
+    ['改动了结构性字段（监狱开关）', { jailEnabled: true }],
+    ['改动了结构性字段（水电倍率）', { utilityMultipliers: [1, 2] }],
+  ])('不可信的 config 一律不认：%s', (_label, overrides) => {
+    expect(resolveOverriddenGameConfig({ ...baseConfig, ...overrides }, chinaMap)).toBeNull();
+  });
+
+  it('自定义房级上限收紧后，超出该上限的产权状态被拒（房级也按生效 config 校验）', () => {
+    const state = customizedState({ maxHouseLevel: 2 }) as any;
+    const propertyCell = chinaMap.game.board.cells.find(
+      (cell) => cell.type === 'property' && cell.subtype === 'normal',
+    );
+    if (propertyCell === undefined) throw new Error('test map has no normal property');
+    state.properties[propertyCell.id] = { ownerId: state.players[0].id, level: 3, mortgaged: false };
+    const override = resolveOverriddenGameConfig(state.config, chinaMap);
+
+    expect(hydrateGameState(state, chinaMap, override ?? undefined)).toMatchObject({ ok: false });
+  });
+});
 
 describe('hydrateGameState', () => {
   it('仅在 exact map、module 和 immutable game data 全部一致时返回 GameState', () => {

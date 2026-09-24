@@ -1,0 +1,710 @@
+{
+  "ref": {
+    "id": "pearl-tour",
+    "version": 1,
+    "contentHash": "31f2564ea45231c1a56953d6db380ccd798c4aa499a543257870b4cccfc450b7"
+  },
+  "metadata": {
+    "title": "珠江之旅",
+    "description": "三角洲三角形环路：48 格沿三角三边闭合巡游，自珠江口出发沿东江北上、登顶珠江源后顺西江回落，珠江口最平、珠江源最贵。"
+  },
+  "requiredRuleModules": [
+    {
+      "id": "core",
+      "version": 1
+    }
+  ],
+  "presentation": {
+    "canvas": {
+      "size": 100
+    },
+    "cells": {
+      "0": {
+        "x": 5.5,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "起点",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "start"
+        },
+        "propertyBand": "band:delta"
+      },
+      "1": {
+        "x": 11.0625,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "珠海",
+        "propertyBand": "band:delta"
+      },
+      "2": {
+        "x": 16.625,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "中国澳门",
+        "propertyBand": "band:macao"
+      },
+      "3": {
+        "x": 22.1875,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "中山",
+        "propertyBand": "band:delta"
+      },
+      "4": {
+        "x": 27.75,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        },
+        "propertyBand": "band:delta"
+      },
+      "5": {
+        "x": 33.3125,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "佛山",
+        "propertyBand": "band:delta"
+      },
+      "6": {
+        "x": 38.875,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "广州",
+        "propertyBand": "band:delta"
+      },
+      "7": {
+        "x": 44.4375,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "江门",
+        "propertyBand": "band:delta"
+      },
+      "8": {
+        "x": 50,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "虎门渡",
+        "compactLabel": "渡口"
+      },
+      "9": {
+        "x": 55.5625,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "东莞",
+        "propertyBand": "band:delta"
+      },
+      "10": {
+        "x": 61.125,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "深圳",
+        "propertyBand": "band:delta"
+      },
+      "11": {
+        "x": 66.6875,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "中国香港",
+        "propertyBand": "band:hongkong"
+      },
+      "12": {
+        "x": 72.25,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "珠江船闸",
+        "compactLabel": "船闸"
+      },
+      "13": {
+        "x": 77.8125,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "惠州",
+        "propertyBand": "band:delta"
+      },
+      "14": {
+        "x": 83.375,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        },
+        "propertyBand": "band:delta"
+      },
+      "15": {
+        "x": 88.9375,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "大亚湾",
+        "propertyBand": "band:delta"
+      },
+      "16": {
+        "x": 94.5,
+        "y": 92,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "台风过境",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-moon"
+        },
+        "propertyBand": "band:delta"
+      },
+      "17": {
+        "x": 91.71875,
+        "y": 86.65625,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "河源",
+        "propertyBand": "band:beijiang"
+      },
+      "18": {
+        "x": 88.9375,
+        "y": 81.3125,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        },
+        "propertyBand": "band:beijiang"
+      },
+      "19": {
+        "x": 86.15625,
+        "y": 75.96875,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "龙川",
+        "propertyBand": "band:beijiang"
+      },
+      "20": {
+        "x": 83.375,
+        "y": 70.625,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "梅州",
+        "propertyBand": "band:beijiang"
+      },
+      "21": {
+        "x": 80.59375,
+        "y": 65.28125,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "赣州",
+        "propertyBand": "band:beijiang"
+      },
+      "22": {
+        "x": 77.8125,
+        "y": 59.9375,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "东江渡",
+        "compactLabel": "渡口"
+      },
+      "23": {
+        "x": 75.03125,
+        "y": 54.59375,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "吉安",
+        "propertyBand": "band:beijiang"
+      },
+      "24": {
+        "x": 72.25,
+        "y": 49.25,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "赣江关税",
+        "compactLabel": "关税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        },
+        "propertyBand": "band:beijiang"
+      },
+      "25": {
+        "x": 69.46875,
+        "y": 43.90625,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "井冈山",
+        "propertyBand": "band:beijiang"
+      },
+      "26": {
+        "x": 66.6875,
+        "y": 38.5625,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        },
+        "propertyBand": "band:beijiang"
+      },
+      "27": {
+        "x": 63.90625,
+        "y": 33.21875,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "郴州",
+        "propertyBand": "band:beijiang"
+      },
+      "28": {
+        "x": 61.125,
+        "y": 27.875,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "韶关",
+        "propertyBand": "band:beijiang"
+      },
+      "29": {
+        "x": 58.34375,
+        "y": 22.53125,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "丹霞山",
+        "propertyBand": "band:beijiang"
+      },
+      "30": {
+        "x": 55.5625,
+        "y": 17.1875,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "南岭",
+        "propertyBand": "band:beijiang"
+      },
+      "31": {
+        "x": 52.78125,
+        "y": 11.84375,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "永州",
+        "propertyBand": "band:xijiang"
+      },
+      "32": {
+        "x": 50,
+        "y": 6.5,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "珠江源",
+        "propertyBand": "band:source"
+      },
+      "33": {
+        "x": 47.21875,
+        "y": 11.84375,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "曲靖",
+        "propertyBand": "band:xijiang"
+      },
+      "34": {
+        "x": 44.4375,
+        "y": 17.1875,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "南盘江",
+        "propertyBand": "band:xijiang"
+      },
+      "35": {
+        "x": 41.65625,
+        "y": 22.53125,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "天生桥",
+        "compactLabel": "险滩",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-food"
+        },
+        "propertyBand": "band:xijiang"
+      },
+      "36": {
+        "x": 38.875,
+        "y": 27.875,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "大藤峡渡",
+        "compactLabel": "渡口"
+      },
+      "37": {
+        "x": 36.09375,
+        "y": 33.21875,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "兴义",
+        "propertyBand": "band:xijiang"
+      },
+      "38": {
+        "x": 33.3125,
+        "y": 38.5625,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        },
+        "propertyBand": "band:xijiang"
+      },
+      "39": {
+        "x": 30.53125,
+        "y": 43.90625,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "百色",
+        "propertyBand": "band:xijiang"
+      },
+      "40": {
+        "x": 27.75,
+        "y": 49.25,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "右江电站",
+        "compactLabel": "电站"
+      },
+      "41": {
+        "x": 24.96875,
+        "y": 54.59375,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        },
+        "propertyBand": "band:xijiang"
+      },
+      "42": {
+        "x": 22.1875,
+        "y": 59.9375,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "南宁",
+        "propertyBand": "band:xijiang"
+      },
+      "43": {
+        "x": 19.40625,
+        "y": 65.28125,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "西江关税",
+        "compactLabel": "关税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        },
+        "propertyBand": "band:xijiang"
+      },
+      "44": {
+        "x": 16.625,
+        "y": 70.625,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "桂平",
+        "propertyBand": "band:xijiang"
+      },
+      "45": {
+        "x": 13.84375,
+        "y": 75.96875,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "梧州渡",
+        "compactLabel": "渡口"
+      },
+      "46": {
+        "x": 11.0625,
+        "y": 81.3125,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        },
+        "propertyBand": "band:xijiang"
+      },
+      "47": {
+        "x": 8.28125,
+        "y": 86.65625,
+        "width": 5,
+        "height": 5,
+        "shortLabel": "封开",
+        "propertyBand": "band:xijiang"
+      }
+    },
+    "routes": [
+      {
+        "type": "polyline",
+        "role": "route",
+        "strokeWidth": 1,
+        "dashPattern": [
+          2,
+          1.4
+        ],
+        "lineCap": "round",
+        "opacity": 0.9,
+        "zIndex": 0,
+        "points": [
+          {
+            "x": 5.5,
+            "y": 92
+          },
+          {
+            "x": 11.0625,
+            "y": 92
+          },
+          {
+            "x": 16.625,
+            "y": 92
+          },
+          {
+            "x": 22.1875,
+            "y": 92
+          },
+          {
+            "x": 27.75,
+            "y": 92
+          },
+          {
+            "x": 33.3125,
+            "y": 92
+          },
+          {
+            "x": 38.875,
+            "y": 92
+          },
+          {
+            "x": 44.4375,
+            "y": 92
+          },
+          {
+            "x": 50,
+            "y": 92
+          },
+          {
+            "x": 55.5625,
+            "y": 92
+          },
+          {
+            "x": 61.125,
+            "y": 92
+          },
+          {
+            "x": 66.6875,
+            "y": 92
+          },
+          {
+            "x": 72.25,
+            "y": 92
+          },
+          {
+            "x": 77.8125,
+            "y": 92
+          },
+          {
+            "x": 83.375,
+            "y": 92
+          },
+          {
+            "x": 88.9375,
+            "y": 92
+          },
+          {
+            "x": 94.5,
+            "y": 92
+          },
+          {
+            "x": 91.71875,
+            "y": 86.65625
+          },
+          {
+            "x": 88.9375,
+            "y": 81.3125
+          },
+          {
+            "x": 86.15625,
+            "y": 75.96875
+          },
+          {
+            "x": 83.375,
+            "y": 70.625
+          },
+          {
+            "x": 80.59375,
+            "y": 65.28125
+          },
+          {
+            "x": 77.8125,
+            "y": 59.9375
+          },
+          {
+            "x": 75.03125,
+            "y": 54.59375
+          },
+          {
+            "x": 72.25,
+            "y": 49.25
+          },
+          {
+            "x": 69.46875,
+            "y": 43.90625
+          },
+          {
+            "x": 66.6875,
+            "y": 38.5625
+          },
+          {
+            "x": 63.90625,
+            "y": 33.21875
+          },
+          {
+            "x": 61.125,
+            "y": 27.875
+          },
+          {
+            "x": 58.34375,
+            "y": 22.53125
+          },
+          {
+            "x": 55.5625,
+            "y": 17.1875
+          },
+          {
+            "x": 52.78125,
+            "y": 11.84375
+          },
+          {
+            "x": 50,
+            "y": 6.5
+          },
+          {
+            "x": 47.21875,
+            "y": 11.84375
+          },
+          {
+            "x": 44.4375,
+            "y": 17.1875
+          },
+          {
+            "x": 41.65625,
+            "y": 22.53125
+          },
+          {
+            "x": 38.875,
+            "y": 27.875
+          },
+          {
+            "x": 36.09375,
+            "y": 33.21875
+          },
+          {
+            "x": 33.3125,
+            "y": 38.5625
+          },
+          {
+            "x": 30.53125,
+            "y": 43.90625
+          },
+          {
+            "x": 27.75,
+            "y": 49.25
+          },
+          {
+            "x": 24.96875,
+            "y": 54.59375
+          },
+          {
+            "x": 22.1875,
+            "y": 59.9375
+          },
+          {
+            "x": 19.40625,
+            "y": 65.28125
+          },
+          {
+            "x": 16.625,
+            "y": 70.625
+          },
+          {
+            "x": 13.84375,
+            "y": 75.96875
+          },
+          {
+            "x": 11.0625,
+            "y": 81.3125
+          },
+          {
+            "x": 8.28125,
+            "y": 86.65625
+          }
+        ]
+      }
+    ],
+    "center": [
+      {
+        "type": "panel",
+        "x": 36,
+        "y": 48,
+        "width": 28,
+        "height": 24,
+        "role": "center",
+        "zIndex": 1
+      },
+      {
+        "type": "text",
+        "x": 38,
+        "y": 58,
+        "width": 24,
+        "height": 7,
+        "role": "title",
+        "text": "珠江之旅",
+        "zIndex": 6,
+        "fitContent": true
+      }
+    ],
+    "theme": {
+      "colors": {
+        "board": "#E8F2EC",
+        "cell": "#FBFEFC",
+        "border": "#2C4A3E",
+        "route": "#1B7A9E",
+        "title": "#14536B",
+        "decoration": "#8FBFAF",
+        "center": "#F0F7F3"
+      },
+      "propertyBands": {
+        "band:delta": "#2E8B57",
+        "band:hongkong": "#C0392B",
+        "band:macao": "#16A085",
+        "band:beijiang": "#3FA0C8",
+        "band:source": "#1D6FB8",
+        "band:xijiang": "#4FA876",
+        "band:ferry": "#5B6E7A",
+        "band:utility": "#6E57A8"
+      }
+    }
+  }
+}

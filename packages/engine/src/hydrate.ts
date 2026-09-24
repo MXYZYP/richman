@@ -1,9 +1,13 @@
-import type { JsonValue, MapPack, RuleModuleRef } from '@richman/board-data';
+import type { GameConfig, JsonValue, MapPack, RuleModuleRef } from '@richman/board-data';
 import type { GameEvent, GameState, PendingModuleAction } from './types';
 import {
   validateWorldTourPublicModuleState,
   WORLD_TOUR_MODULE_KEY,
 } from './worldTourModule';
+import {
+  validateGreatWallPublicModuleState,
+  GREAT_WALL_MODULE_KEY,
+} from './greatWallModule';
 
 export type HydrateGameStateResult =
   | { ok: true; state: GameState }
@@ -61,6 +65,16 @@ function deepEqual(left: unknown, right: unknown): boolean {
   const rightKeys = Object.keys(right).sort();
   return leftKeys.length === rightKeys.length
     && leftKeys.every((key, index) => key === rightKeys[index] && deepEqual(left[key], right[key]));
+}
+
+/** 深冻结（config 含 `utilityMultipliers`/`cashGoalPresets` 这类嵌套集合）。 */
+function deepFreezeConfig<T>(value: T): T {
+  if (Array.isArray(value)) {
+    for (const item of value) deepFreezeConfig(item);
+  } else if (isRecord(value)) {
+    for (const key of Object.keys(value)) deepFreezeConfig(value[key]);
+  }
+  return Object.freeze(value);
 }
 
 function moduleKey(module: RuleModuleRef): string {
@@ -173,6 +187,7 @@ function validateRecentEvent(
         && validPlayerReference(value.creditorId, playerIds, true)
         && amount();
     case 'player_bankrupt':
+    case 'player_surrendered':
       return hasExactKeys(value, ['type', 'playerId', 'creditorId', 'transferredCash'])
         && player()
         && validPlayerReference(value.creditorId, playerIds, true)
@@ -231,6 +246,9 @@ function validatePublicRuleState(
     if (!enabledModules.has(key) || !isJsonValue(moduleState)) return false;
     if (key === WORLD_TOUR_MODULE_KEY
       && !validateWorldTourPublicModuleState(moduleState, pack.game.board, state.players)) return false;
+    // 烽火台占据关系必须指向棋盘上真实存在的烽火台格，且占据者是本局存活玩家。
+    if (key === GREAT_WALL_MODULE_KEY
+      && !validateGreatWallPublicModuleState(moduleState, pack.game.board, state.players)) return false;
   }
 
   const optionIds = new Set<string>();
@@ -304,6 +322,17 @@ function validatePublicRuleState(
           return false;
       }
     }
+    if (`${module.id}@${module.version}` === GREAT_WALL_MODULE_KEY) {
+      // 烽火台的「占据 / 不占据」共用动作名 `beacon-choice`，分支放在 payload.claim 里
+      // （同一时刻的待选动作必须是同一个 模块:动作，见 decisionKinds 校验）。
+      if (!isRecord(candidate.payload)
+        || candidate.payload.optionId !== candidate.optionId
+        || candidate.action !== 'beacon-choice'
+        || !hasExactKeys(candidate.payload, ['optionId', 'cellId', 'claim'])
+        || !Number.isSafeInteger(candidate.payload.cellId)
+        || !cellIds.has(candidate.payload.cellId as number)
+        || typeof candidate.payload.claim !== 'boolean') return false;
+    }
   }
   if (decisionKinds.size > 1) return false;
 
@@ -336,8 +365,67 @@ function validatePublicRuleState(
   return true;
 }
 
-/** Hydrate browser-owned JSON only against one already-resolved exact map pack. */
-export function hydrateGameState(value: unknown, pack: MapPack): HydrateGameStateResult {
+/** 允许房主覆盖的三项规则键（#4）：其余 config 键必须与地图默认值逐键相等。 */
+const OVERRIDABLE_CONFIG_KEYS: ReadonlySet<string> = new Set([
+  'initialCash',
+  'maxHouseLevel',
+  'mortgageInterestRate',
+]);
+
+/**
+ * 从「可能被自定义过」的 config 推导出可信的 config（#4 房主自定义规则）。
+ *
+ * 为什么需要它：`hydrateGameState` 原本要求 `config` 与地图 `game.config` 逐键相等，
+ * 于是任何自定义过初始资金/房级的对局（单机存档、联机房间快照）**都恢复不回来**——
+ * 表现为用户一读档就被判定「存档损坏」。反过来，若直接把 config 放开，玩家又能借它
+ * 写入 `utilityMultipliers`/`diceMode`/`jailEnabled` 这类结构性字段，造出引擎根本不会走的规则。
+ *
+ * 折中方案：只放行三项数值差异，且每项都做范围校验。其中最高房级仍以地图档位为天花板——
+ * 过路费按 `rents[level]` 取档，而 `rents.length` 恒为 `maxHouseLevel + 1`，超出即收 0 元。
+ *
+ * 返回 `null` 表示「这份 config 不可信」，调用方应按损坏处理（丢弃存档/快照）。
+ */
+export function resolveOverriddenGameConfig(
+  config: unknown,
+  pack: MapPack,
+): MapPack['game']['config'] | null {
+  const base = pack.game.config as unknown as Record<string, unknown>;
+  if (!isRecord(config)) return null;
+  if (!hasExactKeys(config, Object.keys(base))) return null;
+  for (const key of Object.keys(base)) {
+    if (OVERRIDABLE_CONFIG_KEYS.has(key)) continue;
+    if (!deepEqual(config[key], base[key])) return null;
+  }
+
+  const { initialCash, maxHouseLevel, mortgageInterestRate } = config;
+  if (typeof initialCash !== 'number' || !Number.isFinite(initialCash) || initialCash <= 0) return null;
+  if (typeof maxHouseLevel !== 'number' || !Number.isSafeInteger(maxHouseLevel)
+    || maxHouseLevel < 1 || maxHouseLevel > (base.maxHouseLevel as number)) return null;
+  if (typeof mortgageInterestRate !== 'number' || !Number.isFinite(mortgageInterestRate)
+    || mortgageInterestRate < 0 || mortgageInterestRate > 1) return null;
+
+  return deepFreezeConfig({
+    ...(base as unknown as GameConfig),
+    initialCash,
+    maxHouseLevel,
+    mortgageInterestRate,
+  });
+}
+
+/**
+ * Hydrate browser-owned JSON only against one already-resolved exact map pack.
+ *
+ * `configOverride`（#4）：不传 = 严格使用地图 `game.config`，行为与引入前**完全一致**
+ * （所有既有调用与测试都走这条默认路径）。只有服务端房间才传覆盖值——它的 config 由本进程
+ * 持有并在 `RoomManager` 侧清洗过。客户端存档不要直接把存档里的 config 传进来，
+ * 它来路不可信，应先过 `resolveOverriddenGameConfig` 只放行三项差异。
+ */
+export function hydrateGameState(
+  value: unknown,
+  pack: MapPack,
+  configOverride?: MapPack['game']['config'],
+): HydrateGameStateResult {
+  const targetConfig: MapPack['game']['config'] = configOverride ?? pack.game.config;
   const fail = (reason: string): HydrateGameStateResult => ({ ok: false, reason });
   const stateKeys = [
     'mapRef', 'ruleModules', 'seed', 'turn', 'phase', 'turnPhase', 'currentPlayerId',
@@ -353,7 +441,10 @@ export function hydrateGameState(value: unknown, pack: MapPack): HydrateGameStat
     || !deepEqual(value.ruleModules, pack.game.requiredRuleModules)
     || !deepEqual(value.board, pack.game.board)
     || !deepEqual(value.cards, pack.game.cards)
-    || !deepEqual(value.config, pack.game.config)) {
+    // 地图数据必须逐键与地图包一致；config 比对的则是**本局生效**的那份：
+    // 房主自定义过规则时 targetConfig 不等于地图默认值，仍比 pack.game.config 就会
+    // 把自定义规则的对局（单机存档、联机房间快照）一律判成损坏。
+    || !deepEqual(value.config, targetConfig)) {
     return fail('exact map data or rule modules do not match');
   }
 
@@ -421,7 +512,7 @@ export function hydrateGameState(value: unknown, pack: MapPack): HydrateGameStat
       || !isRecord(property) || !hasExactKeys(property, ['ownerId', 'level', 'mortgaged'])
       || !validPlayerReference(property.ownerId, playerIds, true)
       || typeof property.level !== 'number' || !Number.isSafeInteger(property.level)
-      || property.level < 0 || property.level > pack.game.config.maxHouseLevel
+      || property.level < 0 || property.level > targetConfig.maxHouseLevel
       || typeof property.mortgaged !== 'boolean'
       || (property.ownerId === null && (
         property.mortgaged
@@ -490,7 +581,7 @@ export function hydrateGameState(value: unknown, pack: MapPack): HydrateGameStat
     || value.recentLog.some((event) => !validateRecentEvent(event, playerIds, cellIds, cardIds, enabledModules))) {
     return fail('invalid recent log');
   }
-  if (!(value.cashGoal === null || (isFiniteNonNegative(value.cashGoal) && value.cashGoal > pack.game.config.initialCash))) {
+  if (!(value.cashGoal === null || (isFiniteNonNegative(value.cashGoal) && value.cashGoal > targetConfig.initialCash))) {
     return fail('invalid cash goal');
   }
 
@@ -501,7 +592,9 @@ export function hydrateGameState(value: unknown, pack: MapPack): HydrateGameStat
     ruleModules: pack.game.requiredRuleModules,
     board: pack.game.board,
     cards: pack.game.cards,
-    config: pack.game.config,
+    // 写回本局生效的 config（而不是地图默认值），否则调用方拿到的 state 会丢掉房主自定义的规则。
+    // 地图包自带的那份已冻结、原样复用；房主自定义的那份是运行期拼出来的普通对象，需要就地冻结。
+    config: targetConfig === pack.game.config ? targetConfig : deepFreezeConfig(targetConfig),
   };
   return { ok: true, state };
 }

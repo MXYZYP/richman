@@ -1,0 +1,678 @@
+{
+  "ref": {
+    "id": "shanxi-tour",
+    "version": 1,
+    "contentHash": "64ab61de86d5dd795c5e419e72226e2c45d8c504a7692839a47a2d06ef36b94b"
+  },
+  "metadata": {
+    "title": "山西之旅",
+    "description": "蛇形网格：48 格 6×8 逐层铺开，自雁门关一路南下到蒲津渡，晋南地价最高，走到太行脚下再折回起点。"
+  },
+  "requiredRuleModules": [
+    {
+      "id": "core",
+      "version": 1
+    }
+  ],
+  "presentation": {
+    "canvas": {
+      "size": 100
+    },
+    "cells": {
+      "0": {
+        "x": 4.75,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "起点",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "start"
+        }
+      },
+      "1": {
+        "x": 20.25,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "太原",
+        "propertyBand": "band:central"
+      },
+      "2": {
+        "x": 35.75,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "阳曲",
+        "propertyBand": "band:central"
+      },
+      "3": {
+        "x": 51.25,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "4": {
+        "x": 66.75,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "原平",
+        "propertyBand": "band:north"
+      },
+      "5": {
+        "x": 82.25,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "雁门关",
+        "propertyBand": "band:gate"
+      },
+      "6": {
+        "x": 82.25,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "代县",
+        "propertyBand": "band:north"
+      },
+      "7": {
+        "x": 66.75,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "应县木塔",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-food"
+        }
+      },
+      "8": {
+        "x": 51.25,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "怀仁",
+        "propertyBand": "band:north"
+      },
+      "9": {
+        "x": 35.75,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "大同",
+        "propertyBand": "band:north"
+      },
+      "10": {
+        "x": 20.25,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "云冈石窟",
+        "propertyBand": "band:north"
+      },
+      "11": {
+        "x": 4.75,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "12": {
+        "x": 4.75,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "过路费",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "13": {
+        "x": 20.25,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "右玉",
+        "propertyBand": "band:north"
+      },
+      "14": {
+        "x": 35.75,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "平鲁",
+        "propertyBand": "band:north"
+      },
+      "15": {
+        "x": 51.25,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "朔州",
+        "propertyBand": "band:north"
+      },
+      "16": {
+        "x": 66.75,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "宁武",
+        "propertyBand": "band:north"
+      },
+      "17": {
+        "x": 82.25,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "神池",
+        "propertyBand": "band:north"
+      },
+      "18": {
+        "x": 82.25,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "五寨",
+        "propertyBand": "band:lvliang"
+      },
+      "19": {
+        "x": 66.75,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "岢岚",
+        "propertyBand": "band:lvliang"
+      },
+      "20": {
+        "x": 51.25,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "21": {
+        "x": 35.75,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "静乐",
+        "propertyBand": "band:lvliang"
+      },
+      "22": {
+        "x": 20.25,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "万家寨水",
+        "compactLabel": "万家",
+        "propertyBand": "band:utility"
+      },
+      "23": {
+        "x": 4.75,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "娄烦",
+        "propertyBand": "band:lvliang"
+      },
+      "24": {
+        "x": 4.75,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "岚县",
+        "propertyBand": "band:lvliang"
+      },
+      "25": {
+        "x": 20.25,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "26": {
+        "x": 35.75,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "碛口黄河",
+        "compactLabel": "碛口",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-moon"
+        }
+      },
+      "27": {
+        "x": 51.25,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "临县",
+        "propertyBand": "band:lvliang"
+      },
+      "28": {
+        "x": 66.75,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "方山",
+        "propertyBand": "band:lvliang"
+      },
+      "29": {
+        "x": 82.25,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "30": {
+        "x": 82.25,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "柳林煤层",
+        "compactLabel": "柳林",
+        "propertyBand": "band:utility"
+      },
+      "31": {
+        "x": 66.75,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "孟门渡",
+        "propertyBand": "band:gate"
+      },
+      "32": {
+        "x": 51.25,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "中阳",
+        "propertyBand": "band:lvliang"
+      },
+      "33": {
+        "x": 35.75,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "石楼",
+        "propertyBand": "band:lvliang"
+      },
+      "34": {
+        "x": 20.25,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "永和",
+        "propertyBand": "band:linfen"
+      },
+      "35": {
+        "x": 4.75,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "隰县",
+        "propertyBand": "band:linfen"
+      },
+      "36": {
+        "x": 4.75,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "大宁",
+        "propertyBand": "band:linfen"
+      },
+      "37": {
+        "x": 20.25,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "吉县壶口",
+        "propertyBand": "band:linfen"
+      },
+      "38": {
+        "x": 35.75,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "煤炭税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "39": {
+        "x": 51.25,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "40": {
+        "x": 66.75,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "河津",
+        "propertyBand": "band:yuncheng"
+      },
+      "41": {
+        "x": 82.25,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "稷山",
+        "propertyBand": "band:yuncheng"
+      },
+      "42": {
+        "x": 82.25,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "万荣",
+        "propertyBand": "band:yuncheng"
+      },
+      "43": {
+        "x": 66.75,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "临猗",
+        "propertyBand": "band:yuncheng"
+      },
+      "44": {
+        "x": 51.25,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "蒲津渡",
+        "propertyBand": "band:gate"
+      },
+      "45": {
+        "x": 35.75,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "46": {
+        "x": 20.25,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "解州关帝",
+        "compactLabel": "解州",
+        "propertyBand": "band:yuncheng"
+      },
+      "47": {
+        "x": 4.75,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "芮城永乐",
+        "compactLabel": "芮城",
+        "propertyBand": "band:yuncheng"
+      }
+    },
+    "routes": [
+      {
+        "type": "polyline",
+        "role": "route",
+        "strokeWidth": 1,
+        "dashPattern": [
+          2,
+          1.4
+        ],
+        "lineCap": "round",
+        "opacity": 0.9,
+        "zIndex": 0,
+        "points": [
+          {
+            "x": 11.25,
+            "y": 6.25
+          },
+          {
+            "x": 26.75,
+            "y": 6.25
+          },
+          {
+            "x": 42.25,
+            "y": 6.25
+          },
+          {
+            "x": 57.75,
+            "y": 6.25
+          },
+          {
+            "x": 73.25,
+            "y": 6.25
+          },
+          {
+            "x": 88.75,
+            "y": 6.25
+          },
+          {
+            "x": 88.75,
+            "y": 18.75
+          },
+          {
+            "x": 73.25,
+            "y": 18.75
+          },
+          {
+            "x": 57.75,
+            "y": 18.75
+          },
+          {
+            "x": 42.25,
+            "y": 18.75
+          },
+          {
+            "x": 26.75,
+            "y": 18.75
+          },
+          {
+            "x": 11.25,
+            "y": 18.75
+          },
+          {
+            "x": 11.25,
+            "y": 31.25
+          },
+          {
+            "x": 26.75,
+            "y": 31.25
+          },
+          {
+            "x": 42.25,
+            "y": 31.25
+          },
+          {
+            "x": 57.75,
+            "y": 31.25
+          },
+          {
+            "x": 73.25,
+            "y": 31.25
+          },
+          {
+            "x": 88.75,
+            "y": 31.25
+          },
+          {
+            "x": 88.75,
+            "y": 43.75
+          },
+          {
+            "x": 73.25,
+            "y": 43.75
+          },
+          {
+            "x": 57.75,
+            "y": 43.75
+          },
+          {
+            "x": 42.25,
+            "y": 43.75
+          },
+          {
+            "x": 26.75,
+            "y": 43.75
+          },
+          {
+            "x": 11.25,
+            "y": 43.75
+          },
+          {
+            "x": 11.25,
+            "y": 56.25
+          },
+          {
+            "x": 26.75,
+            "y": 56.25
+          },
+          {
+            "x": 42.25,
+            "y": 56.25
+          },
+          {
+            "x": 57.75,
+            "y": 56.25
+          },
+          {
+            "x": 73.25,
+            "y": 56.25
+          },
+          {
+            "x": 88.75,
+            "y": 56.25
+          },
+          {
+            "x": 88.75,
+            "y": 68.75
+          },
+          {
+            "x": 73.25,
+            "y": 68.75
+          },
+          {
+            "x": 57.75,
+            "y": 68.75
+          },
+          {
+            "x": 42.25,
+            "y": 68.75
+          },
+          {
+            "x": 26.75,
+            "y": 68.75
+          },
+          {
+            "x": 11.25,
+            "y": 68.75
+          },
+          {
+            "x": 11.25,
+            "y": 81.25
+          },
+          {
+            "x": 26.75,
+            "y": 81.25
+          },
+          {
+            "x": 42.25,
+            "y": 81.25
+          },
+          {
+            "x": 57.75,
+            "y": 81.25
+          },
+          {
+            "x": 73.25,
+            "y": 81.25
+          },
+          {
+            "x": 88.75,
+            "y": 81.25
+          },
+          {
+            "x": 88.75,
+            "y": 93.75
+          },
+          {
+            "x": 73.25,
+            "y": 93.75
+          },
+          {
+            "x": 57.75,
+            "y": 93.75
+          },
+          {
+            "x": 42.25,
+            "y": 93.75
+          },
+          {
+            "x": 26.75,
+            "y": 93.75
+          },
+          {
+            "x": 11.25,
+            "y": 93.75
+          }
+        ]
+      }
+    ],
+    "center": [],
+    "theme": {
+      "colors": {
+        "board": "#E9DFC8",
+        "cell": "#FFFBF1",
+        "border": "#6B5230",
+        "route": "#9C3B2E",
+        "title": "#3E2E18",
+        "decoration": "#C9A961",
+        "center": "#F5EBD8"
+      },
+      "propertyBands": {
+        "band:north": "#4E7FA8",
+        "band:central": "#8C5A3C",
+        "band:lvliang": "#A8752E",
+        "band:linfen": "#C46A3C",
+        "band:yuncheng": "#B9A44C",
+        "band:gate": "#5B6E7A",
+        "band:utility": "#6E57A8"
+      }
+    }
+  }
+}

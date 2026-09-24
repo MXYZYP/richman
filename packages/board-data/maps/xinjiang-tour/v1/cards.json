@@ -1,0 +1,218 @@
+{
+  "chance": [
+    {
+      "id": "xj-c01",
+      "text": "在喀纳斯湖畔守到晨雾散开，照片卖了个好价：获得 800 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 800
+      }
+    },
+    {
+      "id": "xj-c02",
+      "text": "布尔津夜市烤鱼摊被游客围满：赚得 1500 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1500
+      }
+    },
+    {
+      "id": "xj-c03",
+      "text": "在达坂城风区搭上顺风车：前进三步",
+      "effect": {
+        "type": "move_steps",
+        "steps": 3
+      }
+    },
+    {
+      "id": "xj-c04",
+      "text": "在那拉提草原的叼羊赛上拔得头筹：得 2000 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2000
+      }
+    },
+    {
+      "id": "xj-c05",
+      "text": "在和田玉巴扎淘到一块籽料：转手赚 2500 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2500
+      }
+    },
+    {
+      "id": "xj-c06",
+      "text": "吐鲁番葡萄沟买下一筐无核白：花费 300 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 300
+      }
+    },
+    {
+      "id": "xj-c07",
+      "text": "沙尘暴掀翻工地帐篷：房屋每栋付 300 元；口岸每处付 900 元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 300,
+        "perHotel": 900
+      }
+    },
+    {
+      "id": "xj-c08",
+      "text": "在喀什老城迷了路，向过往驼队求援：每人接济你 400 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 400
+      }
+    },
+    {
+      "id": "xj-c09",
+      "text": "驼队踩塌一处沙丘工地：赔偿 1200 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1200
+      }
+    },
+    {
+      "id": "xj-c10",
+      "text": "在罗布泊等补给车开进来：暂停一次",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 1
+      }
+    },
+    {
+      "id": "xj-c11",
+      "text": "给地质队绘制天山剖面图获赏：得 1400 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1400
+      }
+    },
+    {
+      "id": "xj-c12",
+      "text": "在塔克拉玛干走丢一峰骆驼：赔偿 900 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 900
+      }
+    }
+  ],
+  "destiny": [
+    {
+      "id": "xj-d01",
+      "text": "沿丝路南道返程，回到乌鲁木齐：回到起点，并可领取起点奖金 2000 元",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": "xj-d02",
+      "text": "在戈壁间走岔了路，退回起点，且不可领取起点奖金",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": false
+      }
+    },
+    {
+      "id": "xj-d03",
+      "text": "搭上独库公路巡查车：直接前往库车，可领起点奖金",
+      "effect": {
+        "type": "move_to",
+        "cellId": 37,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": "xj-d04",
+      "text": "在阿克苏果园里帮着摘了一季苹果：得 2200 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2200
+      }
+    },
+    {
+      "id": "xj-d05",
+      "text": "为口岸检修界碑与巡边路：房屋每栋付 250 元；口岸每处付 1000 元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 250,
+        "perHotel": 1000
+      }
+    },
+    {
+      "id": "xj-d06",
+      "text": "在伊犁河谷听了一夜冬不拉",
+      "effect": {
+        "type": "none"
+      }
+    },
+    {
+      "id": "xj-d07",
+      "text": "抵达帕米尔的慕士塔格峰，取回冰川纪念水：奖金 3000 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 3000
+      }
+    },
+    {
+      "id": "xj-d08",
+      "text": "给驼队补了一只驮筐：得 1100 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1100
+      }
+    },
+    {
+      "id": "xj-d09",
+      "text": "帮牧民转场，获赠两头牦牛：得 1600 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1600
+      }
+    },
+    {
+      "id": "xj-d10",
+      "text": "请南来的商队喝了一壶奶茶：每人送礼金 700 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 700
+      }
+    },
+    {
+      "id": "xj-d11",
+      "text": "被海关抽检补税：损失 1300 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1300
+      }
+    },
+    {
+      "id": "xj-d12",
+      "text": "沙漠公路上翻了车，众人赶来搭救：每人各出 800 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 800
+      }
+    },
+    {
+      "id": "xj-d13",
+      "text": "在巴扎里遇到老朋友：可以再翻一张机会",
+      "effect": {
+        "type": "draw_card",
+        "deck": "chance"
+      }
+    },
+    {
+      "id": "xj-d14",
+      "text": "在塔里木河边捡到一块奇石：获得 1800 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1800
+      }
+    }
+  ]
+}

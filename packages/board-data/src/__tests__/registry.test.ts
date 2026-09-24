@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 import { chinaTourMap } from '../chinaTourMap';
+import { classicTourMap } from '../classicTourMap';
+import { greatWallMap } from '../greatWallMap';
 import { computeContentHash } from '../hash';
 import type { MapPack, MapRef } from '../mapTypes';
+import { pearlTourMap } from '../pearlTourMap';
+import { shanxiTourMap } from '../shanxiTourMap';
+import { silkRoadMap } from '../silkRoadMap';
 import { worldTourMap } from '../worldTourMap';
+import { xinjiangTourMap } from '../xinjiangTourMap';
+import { yangtzeTourMap } from '../yangtzeTourMap';
+import { yellowRiverMap } from '../yellowRiverMap';
 import {
   createMapRegistry,
   getActiveMapPack,
@@ -33,7 +41,7 @@ function createRegistry(activeMapRefs: readonly MapRef[], assets: readonly {
 }
 
 describe('production map registry', () => {
-  it('按批准顺序公开并精确解析两张正式地图', async () => {
+  it('按批准顺序公开并精确解析十张正式地图', async () => {
     expect(listActiveMaps()).toEqual([
       {
         ref: chinaTourMap.ref,
@@ -45,11 +53,67 @@ describe('production map registry', () => {
         title: worldTourMap.metadata.title,
         description: worldTourMap.metadata.description,
       },
+      {
+        ref: classicTourMap.ref,
+        title: classicTourMap.metadata.title,
+        description: classicTourMap.metadata.description,
+      },
+      {
+        ref: silkRoadMap.ref,
+        title: silkRoadMap.metadata.title,
+        description: silkRoadMap.metadata.description,
+      },
+      {
+        ref: greatWallMap.ref,
+        title: greatWallMap.metadata.title,
+        description: greatWallMap.metadata.description,
+      },
+      {
+        ref: yellowRiverMap.ref,
+        title: yellowRiverMap.metadata.title,
+        description: yellowRiverMap.metadata.description,
+      },
+      {
+        ref: yangtzeTourMap.ref,
+        title: yangtzeTourMap.metadata.title,
+        description: yangtzeTourMap.metadata.description,
+      },
+      {
+        ref: pearlTourMap.ref,
+        title: pearlTourMap.metadata.title,
+        description: pearlTourMap.metadata.description,
+      },
+      {
+        ref: xinjiangTourMap.ref,
+        title: xinjiangTourMap.metadata.title,
+        description: xinjiangTourMap.metadata.description,
+      },
+      {
+        ref: shanxiTourMap.ref,
+        title: shanxiTourMap.metadata.title,
+        description: shanxiTourMap.metadata.description,
+      },
     ]);
     expect(getActiveMapPack('china-tour')).toBe(getMapPack(chinaTourMap.ref));
     expect(getMapPack(chinaTourMap.ref)).toEqual(chinaTourMap);
     expect(getActiveMapPack('world-tour')).toBe(getMapPack(worldTourMap.ref));
     expect(getMapPack(worldTourMap.ref)).toEqual(worldTourMap);
+    expect(getActiveMapPack('classic-tour')).toBe(getMapPack(classicTourMap.ref));
+    expect(getMapPack(classicTourMap.ref)).toEqual(classicTourMap);
+    expect(getActiveMapPack('silk-road')).toBe(getMapPack(silkRoadMap.ref));
+    expect(getMapPack(silkRoadMap.ref)).toEqual(silkRoadMap);
+    expect(getActiveMapPack('great-wall')).toBe(getMapPack(greatWallMap.ref));
+    expect(getMapPack(greatWallMap.ref)).toEqual(greatWallMap);
+    expect(getActiveMapPack('yellow-river')).toBe(getMapPack(yellowRiverMap.ref));
+    expect(getMapPack(yellowRiverMap.ref)).toEqual(yellowRiverMap);
+    expect(getActiveMapPack('yangtze-tour')).toBe(getMapPack(yangtzeTourMap.ref));
+    expect(getMapPack(yangtzeTourMap.ref)).toEqual(yangtzeTourMap);
+    expect(getActiveMapPack('pearl-tour')).toBe(getMapPack(pearlTourMap.ref));
+    expect(getMapPack(pearlTourMap.ref)).toEqual(pearlTourMap);
+    expect(getActiveMapPack('xinjiang-tour')).toBe(getMapPack(xinjiangTourMap.ref));
+    expect(getMapPack(xinjiangTourMap.ref)).toEqual(xinjiangTourMap);
+    expect(getActiveMapPack('shanxi-tour')).toBe(getMapPack(shanxiTourMap.ref));
+    expect(getMapPack(shanxiTourMap.ref)).toEqual(shanxiTourMap);
     expect(() => getMapPack({ ...worldTourMap.ref, contentHash: 'f'.repeat(64) }))
       .toThrow(/hash mismatch.*world-tour@1/i);
 
@@ -66,7 +130,9 @@ describe('production map registry', () => {
 
   it('package exports 只开放根入口，阻止消费者绕过 public API 导入 registry subpath', () => {
     const require = createRequire(import.meta.url);
-    expect(require.resolve('@richman/board-data')).toMatch(/packages\/board-data\/src\/index\.ts$/);
+    // Windows 上 require.resolve 返回反斜杠路径；统一成 POSIX 分隔符再断言，避免平台相关假失败。
+    expect(require.resolve('@richman/board-data').replace(/\\/g, '/'))
+      .toMatch(/packages\/board-data\/src\/index\.ts$/);
 
     let error: unknown;
     try {
@@ -83,6 +149,7 @@ describe('production map registry', () => {
     expect(Object.isFrozen(catalog)).toBe(true);
     expect(Object.isFrozen(catalog[0])).toBe(true);
     expect(Object.isFrozen(catalog[1])).toBe(true);
+    expect(Object.isFrozen(catalog[2])).toBe(true);
     expect(Object.isFrozen(catalog[0]!.ref)).toBe(true);
     expect(Object.keys(catalog[0]!).sort()).toEqual(['description', 'ref', 'title']);
     expect(catalog[0]).not.toHaveProperty('game');

@@ -1,0 +1,615 @@
+{
+  "boardName": "大富翁·新疆之旅",
+  "direction": "clockwise",
+  "cells": [
+    {
+      "id": 0,
+      "name": "起点",
+      "type": "start"
+    },
+    {
+      "id": 1,
+      "name": "阜康",
+      "type": "property",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 800,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 2,
+      "name": "天山天池",
+      "type": "property",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        130,
+        600,
+        1800,
+        4500,
+        6000,
+        7500
+      ],
+      "mortgageValue": 800
+    },
+    {
+      "id": 3,
+      "name": "命运",
+      "type": "destiny"
+    },
+    {
+      "id": 4,
+      "name": "奇台",
+      "type": "property",
+      "subtype": "normal",
+      "price": 1200,
+      "houseCost": 500,
+      "rents": [
+        60,
+        300,
+        900,
+        2700,
+        4000,
+        5500
+      ],
+      "mortgageValue": 600
+    },
+    {
+      "id": 5,
+      "name": "机会",
+      "type": "chance"
+    },
+    {
+      "id": 6,
+      "name": "巴里坤",
+      "type": "property",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 800,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 7,
+      "name": "伊吾",
+      "type": "property",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 800,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 8,
+      "name": "资源税",
+      "type": "tax",
+      "amount": 1000
+    },
+    {
+      "id": 9,
+      "name": "哈密",
+      "type": "property",
+      "subtype": "normal",
+      "price": 2200,
+      "houseCost": 1200,
+      "rents": [
+        180,
+        900,
+        2500,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 10,
+      "name": "吐鲁番",
+      "type": "property",
+      "subtype": "normal",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        2800,
+        6500,
+        8800,
+        11000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 11,
+      "name": "鄯善",
+      "type": "property",
+      "subtype": "normal",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3000,
+        7200,
+        9600,
+        12000
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 12,
+      "name": "库木塔格沙漠",
+      "type": "special",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 1
+      }
+    },
+    {
+      "id": 13,
+      "name": "若羌",
+      "type": "property",
+      "subtype": "normal",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5000,
+        6600,
+        8200
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 14,
+      "name": "伊尔克什坦口岸",
+      "type": "property",
+      "subtype": "station",
+      "price": 2000,
+      "mortgageValue": 1000,
+      "rents": [
+        200,
+        700,
+        1600
+      ]
+    },
+    {
+      "id": 15,
+      "name": "塔中油气田",
+      "type": "property",
+      "subtype": "utility",
+      "price": 1500,
+      "mortgageValue": 750
+    },
+    {
+      "id": 16,
+      "name": "命运",
+      "type": "destiny"
+    },
+    {
+      "id": 17,
+      "name": "民丰",
+      "type": "property",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        130,
+        600,
+        1800,
+        4500,
+        6000,
+        7500
+      ],
+      "mortgageValue": 800
+    },
+    {
+      "id": 18,
+      "name": "于田",
+      "type": "property",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        130,
+        600,
+        1800,
+        4500,
+        6000,
+        7500
+      ],
+      "mortgageValue": 800
+    },
+    {
+      "id": 19,
+      "name": "命运",
+      "type": "destiny"
+    },
+    {
+      "id": 20,
+      "name": "洛浦",
+      "type": "property",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 800,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 21,
+      "name": "和田",
+      "type": "property",
+      "subtype": "normal",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        2800,
+        6500,
+        8800,
+        11000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 22,
+      "name": "墨玉",
+      "type": "property",
+      "subtype": "normal",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        2800,
+        6500,
+        8800,
+        11000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 23,
+      "name": "卡拉苏口岸",
+      "type": "property",
+      "subtype": "station",
+      "price": 2000,
+      "mortgageValue": 1000,
+      "rents": [
+        200,
+        700,
+        1600
+      ]
+    },
+    {
+      "id": 24,
+      "name": "机会",
+      "type": "chance"
+    },
+    {
+      "id": 25,
+      "name": "叶城",
+      "type": "property",
+      "subtype": "normal",
+      "price": 2000,
+      "houseCost": 1000,
+      "rents": [
+        160,
+        800,
+        2200,
+        5500,
+        7200,
+        9000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 26,
+      "name": "命运",
+      "type": "destiny"
+    },
+    {
+      "id": 27,
+      "name": "莎车",
+      "type": "property",
+      "subtype": "normal",
+      "price": 2000,
+      "houseCost": 1000,
+      "rents": [
+        160,
+        800,
+        2200,
+        5500,
+        7200,
+        9000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 28,
+      "name": "乌鲁瓦提水利枢纽",
+      "type": "property",
+      "subtype": "utility",
+      "price": 1500,
+      "mortgageValue": 750
+    },
+    {
+      "id": 29,
+      "name": "机会",
+      "type": "chance"
+    },
+    {
+      "id": 30,
+      "name": "喀什",
+      "type": "property",
+      "subtype": "normal",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3600,
+        8500,
+        11200,
+        14000
+      ],
+      "mortgageValue": 1500
+    },
+    {
+      "id": 31,
+      "name": "红其拉甫口岸",
+      "type": "property",
+      "subtype": "station",
+      "price": 2000,
+      "mortgageValue": 1000,
+      "rents": [
+        200,
+        700,
+        1600
+      ]
+    },
+    {
+      "id": 32,
+      "name": "阿图什",
+      "type": "property",
+      "subtype": "normal",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3000,
+        7200,
+        9600,
+        12000
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 33,
+      "name": "乌恰",
+      "type": "property",
+      "subtype": "normal",
+      "price": 2200,
+      "houseCost": 1200,
+      "rents": [
+        180,
+        900,
+        2500,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 34,
+      "name": "阿克苏",
+      "type": "airport",
+      "branchEntryId": 40
+    },
+    {
+      "id": 35,
+      "name": "阿瓦提",
+      "type": "property",
+      "subtype": "normal",
+      "price": 2200,
+      "houseCost": 1200,
+      "rents": [
+        180,
+        900,
+        2500,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 36,
+      "name": "过路费",
+      "type": "tax",
+      "amount": 1200
+    },
+    {
+      "id": 37,
+      "name": "库车",
+      "type": "property",
+      "subtype": "normal",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3000,
+        7200,
+        9600,
+        12000
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 38,
+      "name": "沙尘暴",
+      "type": "special",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1200
+      }
+    },
+    {
+      "id": 39,
+      "name": "库尔勒",
+      "type": "property",
+      "subtype": "normal",
+      "price": 3200,
+      "houseCost": 2000,
+      "rents": [
+        280,
+        1500,
+        4200,
+        10000,
+        12800,
+        15600
+      ],
+      "mortgageValue": 1600,
+      "nextId": 0
+    },
+    {
+      "id": 40,
+      "name": "温宿大峡谷",
+      "type": "property",
+      "subtype": "normal",
+      "price": 2800,
+      "houseCost": 1500,
+      "rents": [
+        240,
+        1200,
+        3300,
+        7800,
+        10400,
+        13000
+      ],
+      "mortgageValue": 1400
+    },
+    {
+      "id": 41,
+      "name": "神木园",
+      "type": "property",
+      "subtype": "normal",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3600,
+        8500,
+        11200,
+        14000
+      ],
+      "mortgageValue": 1500
+    },
+    {
+      "id": 42,
+      "name": "托木尔峰",
+      "type": "property",
+      "subtype": "normal",
+      "price": 3200,
+      "houseCost": 2000,
+      "rents": [
+        280,
+        1500,
+        4200,
+        10000,
+        12800,
+        15600
+      ],
+      "mortgageValue": 1600
+    },
+    {
+      "id": 43,
+      "name": "克孜尔千佛洞",
+      "type": "property",
+      "subtype": "normal",
+      "price": 3500,
+      "houseCost": 2000,
+      "rents": [
+        320,
+        1700,
+        4800,
+        11000,
+        14000,
+        17000
+      ],
+      "mortgageValue": 1750
+    },
+    {
+      "id": 44,
+      "name": "库车大峡谷",
+      "type": "property",
+      "subtype": "normal",
+      "price": 3500,
+      "houseCost": 2000,
+      "rents": [
+        320,
+        1700,
+        4800,
+        11000,
+        14000,
+        17000
+      ],
+      "mortgageValue": 1750
+    },
+    {
+      "id": 45,
+      "name": "巴音布鲁克",
+      "type": "property",
+      "subtype": "normal",
+      "price": 4000,
+      "houseCost": 2000,
+      "rents": [
+        400,
+        2000,
+        5500,
+        13000,
+        16000,
+        19000
+      ],
+      "mortgageValue": 2000,
+      "nextId": 35
+    }
+  ]
+}

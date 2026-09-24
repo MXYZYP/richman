@@ -1,0 +1,753 @@
+{
+  "boardName": "大富翁·长江之旅",
+  "direction": "clockwise",
+  "cells": [
+    {
+      "id": 0,
+      "type": "start",
+      "name": "起点"
+    },
+    {
+      "id": 1,
+      "type": "property",
+      "subtype": "normal",
+      "name": "上海",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5500,
+        7500,
+        9500
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 2,
+      "type": "property",
+      "subtype": "normal",
+      "name": "外滩",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5500,
+        7500,
+        9500
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 3,
+      "type": "property",
+      "subtype": "normal",
+      "name": "崇明",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5500,
+        7500,
+        9500
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 4,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 5,
+      "type": "property",
+      "subtype": "normal",
+      "name": "南通",
+      "price": 2000,
+      "houseCost": 1000,
+      "rents": [
+        160,
+        800,
+        2200,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 6,
+      "type": "property",
+      "subtype": "normal",
+      "name": "镇江",
+      "price": 2000,
+      "houseCost": 1000,
+      "rents": [
+        160,
+        800,
+        2200,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 7,
+      "type": "property",
+      "subtype": "station",
+      "name": "江阴渡",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 8,
+      "type": "property",
+      "subtype": "normal",
+      "name": "南京",
+      "price": 2000,
+      "houseCost": 1000,
+      "rents": [
+        160,
+        800,
+        2200,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 9,
+      "type": "property",
+      "subtype": "normal",
+      "name": "扬州",
+      "price": 2000,
+      "houseCost": 1000,
+      "rents": [
+        160,
+        800,
+        2200,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 10,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 11,
+      "type": "property",
+      "subtype": "normal",
+      "name": "马鞍山",
+      "price": 2200,
+      "houseCost": 1500,
+      "rents": [
+        180,
+        900,
+        2500,
+        6500,
+        9000,
+        11000
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 12,
+      "type": "property",
+      "subtype": "utility",
+      "name": "江都水利枢纽",
+      "price": 1500,
+      "mortgageValue": 750
+    },
+    {
+      "id": 13,
+      "type": "property",
+      "subtype": "normal",
+      "name": "芜湖",
+      "price": 2200,
+      "houseCost": 1500,
+      "rents": [
+        180,
+        900,
+        2500,
+        6500,
+        9000,
+        11000
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 14,
+      "type": "property",
+      "subtype": "normal",
+      "name": "铜陵",
+      "price": 2200,
+      "houseCost": 1500,
+      "rents": [
+        180,
+        900,
+        2500,
+        6500,
+        9000,
+        11000
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 15,
+      "type": "special",
+      "name": "皖江洪峰",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": 16,
+      "type": "property",
+      "subtype": "normal",
+      "name": "安庆",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        2800,
+        7000,
+        9500,
+        12000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 17,
+      "type": "property",
+      "subtype": "normal",
+      "name": "池州",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        2800,
+        7000,
+        9500,
+        12000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 18,
+      "type": "property",
+      "subtype": "normal",
+      "name": "九江",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        2800,
+        7000,
+        9500,
+        12000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 19,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 20,
+      "type": "property",
+      "subtype": "normal",
+      "name": "湖口",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3000,
+        7500,
+        10000,
+        12500
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 21,
+      "type": "property",
+      "subtype": "station",
+      "name": "湖口渡",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 22,
+      "type": "property",
+      "subtype": "normal",
+      "name": "鄱阳湖",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3000,
+        7500,
+        10000,
+        12500
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 23,
+      "type": "property",
+      "subtype": "normal",
+      "name": "瑞昌",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3000,
+        7500,
+        10000,
+        12500
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 24,
+      "type": "tax",
+      "name": "江关税",
+      "amount": 1000
+    },
+    {
+      "id": 25,
+      "type": "property",
+      "subtype": "normal",
+      "name": "黄石",
+      "price": 2800,
+      "houseCost": 2000,
+      "rents": [
+        240,
+        1200,
+        3300,
+        8000,
+        11000,
+        13500
+      ],
+      "mortgageValue": 1400
+    },
+    {
+      "id": 26,
+      "type": "property",
+      "subtype": "normal",
+      "name": "鄂州",
+      "price": 2800,
+      "houseCost": 2000,
+      "rents": [
+        240,
+        1200,
+        3300,
+        8000,
+        11000,
+        13500
+      ],
+      "mortgageValue": 1400
+    },
+    {
+      "id": 27,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 28,
+      "type": "property",
+      "subtype": "normal",
+      "name": "武汉",
+      "price": 2800,
+      "houseCost": 2000,
+      "rents": [
+        240,
+        1200,
+        3300,
+        8000,
+        11000,
+        13500
+      ],
+      "mortgageValue": 1400
+    },
+    {
+      "id": 29,
+      "type": "property",
+      "subtype": "normal",
+      "name": "岳阳",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3500,
+        9000,
+        12000,
+        15000
+      ],
+      "mortgageValue": 1500
+    },
+    {
+      "id": 30,
+      "type": "property",
+      "subtype": "normal",
+      "name": "洞庭湖",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3500,
+        9000,
+        12000,
+        15000
+      ],
+      "mortgageValue": 1500
+    },
+    {
+      "id": 31,
+      "type": "property",
+      "subtype": "station",
+      "name": "城陵矶渡",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 32,
+      "type": "property",
+      "subtype": "normal",
+      "name": "荆州",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3500,
+        9000,
+        12000,
+        15000
+      ],
+      "mortgageValue": 1500
+    },
+    {
+      "id": 33,
+      "type": "special",
+      "name": "三峡船闸检修",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 1
+      }
+    },
+    {
+      "id": 34,
+      "type": "property",
+      "subtype": "normal",
+      "name": "宜昌",
+      "price": 3200,
+      "houseCost": 2000,
+      "rents": [
+        280,
+        1400,
+        3800,
+        10000,
+        13500,
+        17000
+      ],
+      "mortgageValue": 1600
+    },
+    {
+      "id": 35,
+      "type": "property",
+      "subtype": "normal",
+      "name": "三峡大坝",
+      "price": 3200,
+      "houseCost": 2000,
+      "rents": [
+        280,
+        1400,
+        3800,
+        10000,
+        13500,
+        17000
+      ],
+      "mortgageValue": 1600
+    },
+    {
+      "id": 36,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 37,
+      "type": "property",
+      "subtype": "normal",
+      "name": "涪陵",
+      "price": 3200,
+      "houseCost": 2000,
+      "rents": [
+        280,
+        1400,
+        3800,
+        10000,
+        13500,
+        17000
+      ],
+      "mortgageValue": 1600
+    },
+    {
+      "id": 38,
+      "type": "property",
+      "subtype": "normal",
+      "name": "万州",
+      "price": 3600,
+      "houseCost": 2000,
+      "rents": [
+        320,
+        1600,
+        4500,
+        11000,
+        15000,
+        18000
+      ],
+      "mortgageValue": 1800
+    },
+    {
+      "id": 39,
+      "type": "property",
+      "subtype": "normal",
+      "name": "重庆",
+      "price": 3600,
+      "houseCost": 2000,
+      "rents": [
+        320,
+        1600,
+        4500,
+        11000,
+        15000,
+        18000
+      ],
+      "mortgageValue": 1800
+    },
+    {
+      "id": 40,
+      "type": "property",
+      "subtype": "utility",
+      "name": "三峡电站",
+      "price": 1500,
+      "mortgageValue": 750
+    },
+    {
+      "id": 41,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 42,
+      "type": "property",
+      "subtype": "normal",
+      "name": "江津",
+      "price": 3600,
+      "houseCost": 2000,
+      "rents": [
+        320,
+        1600,
+        4500,
+        11000,
+        15000,
+        18000
+      ],
+      "mortgageValue": 1800
+    },
+    {
+      "id": 43,
+      "type": "property",
+      "subtype": "normal",
+      "name": "泸州",
+      "price": 4000,
+      "houseCost": 2500,
+      "rents": [
+        400,
+        2000,
+        5500,
+        13000,
+        17000,
+        20000
+      ],
+      "mortgageValue": 2000
+    },
+    {
+      "id": 44,
+      "type": "property",
+      "subtype": "normal",
+      "name": "宜宾",
+      "price": 4000,
+      "houseCost": 2500,
+      "rents": [
+        400,
+        2000,
+        5500,
+        13000,
+        17000,
+        20000
+      ],
+      "mortgageValue": 2000
+    },
+    {
+      "id": 45,
+      "type": "property",
+      "subtype": "normal",
+      "name": "乐山",
+      "price": 4000,
+      "houseCost": 2500,
+      "rents": [
+        400,
+        2000,
+        5500,
+        13000,
+        17000,
+        20000
+      ],
+      "mortgageValue": 2000
+    },
+    {
+      "id": 46,
+      "type": "tax",
+      "name": "巴蜀栈道税",
+      "amount": 1000
+    },
+    {
+      "id": 47,
+      "type": "property",
+      "subtype": "normal",
+      "name": "攀枝花",
+      "price": 4500,
+      "houseCost": 2500,
+      "rents": [
+        600,
+        2400,
+        7000,
+        16000,
+        19000,
+        22500
+      ],
+      "mortgageValue": 2250
+    },
+    {
+      "id": 48,
+      "type": "property",
+      "subtype": "station",
+      "name": "金沙江渡",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 49,
+      "type": "property",
+      "subtype": "normal",
+      "name": "水富",
+      "price": 4500,
+      "houseCost": 2500,
+      "rents": [
+        600,
+        2400,
+        7000,
+        16000,
+        19000,
+        22500
+      ],
+      "mortgageValue": 2250
+    },
+    {
+      "id": 50,
+      "type": "special",
+      "name": "虎跳峡险滩",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": 51,
+      "type": "property",
+      "subtype": "normal",
+      "name": "通天河",
+      "price": 4500,
+      "houseCost": 2500,
+      "rents": [
+        600,
+        2400,
+        7000,
+        16000,
+        19000,
+        22500
+      ],
+      "mortgageValue": 2250
+    },
+    {
+      "id": 52,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 53,
+      "type": "property",
+      "subtype": "normal",
+      "name": "各拉丹冬",
+      "price": 4500,
+      "houseCost": 2500,
+      "rents": [
+        600,
+        2400,
+        7000,
+        16000,
+        19000,
+        22500
+      ],
+      "mortgageValue": 2250,
+      "nextId": 0
+    }
+  ]
+}

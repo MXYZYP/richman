@@ -1,0 +1,218 @@
+{
+  "chance": [
+    {
+      "id": "zj-c01",
+      "text": "在珠江口拍到大湾区天际线：获得赞助金600元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 600
+      }
+    },
+    {
+      "id": "zj-c02",
+      "text": "白海豚跃出水面，护豚志愿队送来谢礼：得1250元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1250
+      }
+    },
+    {
+      "id": "zj-c03",
+      "text": "荔枝丰收季游客爆满：获利2400元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2400
+      }
+    },
+    {
+      "id": "zj-c04",
+      "text": "乘珠江夜游船顺流快进：前进三步",
+      "effect": {
+        "type": "move_steps",
+        "steps": 3
+      }
+    },
+    {
+      "id": "zj-c05",
+      "text": "在码头买到一尾新鲜桂花鱼：花费250元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 250
+      }
+    },
+    {
+      "id": "zj-c06",
+      "text": "在陈皮仓库入股分红：得1800元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1800
+      }
+    },
+    {
+      "id": "zj-c07",
+      "text": "汛前加固堤围：房屋每栋400元；渡口每座1150元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 400,
+        "perHotel": 1150
+      }
+    },
+    {
+      "id": "zj-c08",
+      "text": "在沙面市集走散，向沿岸商队求援：每人给予500元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 500
+      }
+    },
+    {
+      "id": "zj-c09",
+      "text": "误购劣质船板，血本无归：损失1000元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": "zj-c10",
+      "text": "在伶仃洋等风停：暂停一次",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 1
+      }
+    },
+    {
+      "id": "zj-c11",
+      "text": "为水文站绘制珠江水系图获赏：得900元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 900
+      }
+    },
+    {
+      "id": "zj-c12",
+      "text": "打碎一只广彩瓷瓶：赔偿1800元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1800
+      }
+    }
+  ],
+  "destiny": [
+    {
+      "id": "zj-d01",
+      "text": "顺流返航回到珠江口：回到起点，并可领取起点奖金2000元",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": "zj-d02",
+      "text": "在分汊河道迷路，退回起点，且不可领取起点奖金",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": false
+      }
+    },
+    {
+      "id": "zj-d03",
+      "text": "虎门快马传讯：直接前往虎门渡，可领起点奖金",
+      "effect": {
+        "type": "move_to",
+        "cellId": 8,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": "zj-d04",
+      "text": "向沿岸农户传授防洪经验：获利2200元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2200
+      }
+    },
+    {
+      "id": "zj-d05",
+      "text": "冬季整修堤防：房屋每座付250元；渡口每座付1000元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 250,
+        "perHotel": 1000
+      }
+    },
+    {
+      "id": "zj-d06",
+      "text": "在江边唱起咸水歌，全场喝彩十下",
+      "effect": {
+        "type": "none"
+      }
+    },
+    {
+      "id": "zj-d07",
+      "text": "抵达珠江源马雄山，取回源头圣水：奖金3000元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 3000
+      }
+    },
+    {
+      "id": "zj-d08",
+      "text": "为船工扎一只竹筏：得1250元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1250
+      }
+    },
+    {
+      "id": "zj-d09",
+      "text": "参与疏浚航道，获当地酬谢：得1250元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1250
+      }
+    },
+    {
+      "id": "zj-d10",
+      "text": "请下游商客品鉴源头水：每人礼金800元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 800
+      }
+    },
+    {
+      "id": "zj-d11",
+      "text": "被关卡税吏刁难，货物被扣：损失1000元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": "zj-d12",
+      "text": "竹筏触礁，众人搭救：每人各出1000元救济金",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 1000
+      }
+    },
+    {
+      "id": "zj-d13",
+      "text": "在渡口遇到老朋友：可再翻一张机会",
+      "effect": {
+        "type": "draw_card",
+        "deck": "chance"
+      }
+    },
+    {
+      "id": "zj-d14",
+      "text": "在江底捞起一枚古钱：获得1500元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1500
+      }
+    }
+  ]
+}

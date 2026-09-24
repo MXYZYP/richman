@@ -1,0 +1,218 @@
+{
+  "chance": [
+    {
+      "id": "yr-c01",
+      "text": "在壶口瀑布拍到彩虹：获得赞助金600元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 600
+      }
+    },
+    {
+      "id": "yr-c02",
+      "text": "连降暴雨，加固堤防：房屋每栋400元；渡口每座1150元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 400,
+        "perHotel": 1150
+      }
+    },
+    {
+      "id": "yr-c03",
+      "text": "河套平原小麦丰收：获利2400元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2400
+      }
+    },
+    {
+      "id": "yr-c04",
+      "text": "在河曲迷路，向下游船队求援：每人给予500元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 500
+      }
+    },
+    {
+      "id": "yr-c05",
+      "text": "打碎一只彩陶罐：赔偿1800元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1800
+      }
+    },
+    {
+      "id": "yr-c06",
+      "text": "搭上顺流快船：前进三步",
+      "effect": {
+        "type": "move_steps",
+        "steps": 3
+      }
+    },
+    {
+      "id": "yr-c07",
+      "text": "在湖畔捡到一块璞玉：获得1250元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1250
+      }
+    },
+    {
+      "id": "yr-c08",
+      "text": "皮筏搁浅，雇人拖回：花费250元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 250
+      }
+    },
+    {
+      "id": "yr-c09",
+      "text": "济南开张新铺：银行发2000元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2000
+      }
+    },
+    {
+      "id": "yr-c10",
+      "text": "在渡口等汛期过去：暂停一次",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 1
+      }
+    },
+    {
+      "id": "yr-c11",
+      "text": "为水文站绘制河图获赏：得900元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 900
+      }
+    },
+    {
+      "id": "yr-c12",
+      "text": "误买劣质河工料，血本无归：损失1000元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1000
+      }
+    }
+  ],
+  "destiny": [
+    {
+      "id": "yr-d01",
+      "text": "顺流返航回到入海口：回到起点，并可领取起点奖金2000元",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": "yr-d02",
+      "text": "在河道岔口迷路，退回起点，且不可领取起点奖金",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": false
+      }
+    },
+    {
+      "id": "yr-d03",
+      "text": "兰州渡快马传讯：直接前往兰州渡，可领起点奖金",
+      "effect": {
+        "type": "move_to",
+        "cellId": 44,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": "yr-d04",
+      "text": "向宁夏农户传授引黄灌溉：获利2200元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2200
+      }
+    },
+    {
+      "id": "yr-d05",
+      "text": "冬季封河整修：房屋每座付250元；渡口每座付1000元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 250,
+        "perHotel": 1000
+      }
+    },
+    {
+      "id": "yr-d06",
+      "text": "在渡口唱起花儿，全场喝彩十下",
+      "effect": {
+        "type": "none"
+      }
+    },
+    {
+      "id": "yr-d07",
+      "text": "抵达黄河源，取回源头圣水：奖金3000元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 3000
+      }
+    },
+    {
+      "id": "yr-d08",
+      "text": "为船工扎一只羊皮筏：得1250元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1250
+      }
+    },
+    {
+      "id": "yr-d09",
+      "text": "参与疏浚河道，获当地酬谢：得1250元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1250
+      }
+    },
+    {
+      "id": "yr-d10",
+      "text": "请下游客商品鉴源头水：每人礼金800元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 800
+      }
+    },
+    {
+      "id": "yr-d11",
+      "text": "被河工吏刁难，货物被扣：损失1000元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": "yr-d12",
+      "text": "皮筏触礁，众人搭救：每人各出1000元救济金",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 1000
+      }
+    },
+    {
+      "id": "yr-d13",
+      "text": "在渡口遇到老朋友：可再翻一张机会",
+      "effect": {
+        "type": "draw_card",
+        "deck": "chance"
+      }
+    },
+    {
+      "id": "yr-d14",
+      "text": "在河床里挖出古代铜钱：获得1500元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1500
+      }
+    }
+  ]
+}

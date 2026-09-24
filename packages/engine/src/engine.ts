@@ -9,7 +9,7 @@ import type {
   RuleModuleRef,
 } from '@richman/board-data';
 import type {
-  GameState, PlayerState, PlayerColor, PropertyState,
+  GameState, PlayerState, PlayerColor, PropertyState, DebtResumeState,
   Intent, ApplyResult, GameEvent,
 } from './types';
 import { hashSeed, shuffle, rollDice, rollSingleDice } from './rng';
@@ -203,17 +203,21 @@ export function applyIntent(
 ): ApplyResult {
   // 全局校验
   if (state.phase !== 'playing') return { ok: false, code: 'WRONG_PHASE' };
+  // 投降不受“是否轮到该玩家 / 是否处于债务态”限制：任何仍在局的玩家都能随时认输出局。
   if (state.debt) {
-    if (playerId !== state.debt.debtorId) return { ok: false, code: 'NOT_YOUR_TURN' };
-  } else if (playerId !== state.currentPlayerId) {
+    if (playerId !== state.debt.debtorId && intent.type !== 'surrender') return { ok: false, code: 'NOT_YOUR_TURN' };
+  } else if (playerId !== state.currentPlayerId && intent.type !== 'surrender') {
     return { ok: false, code: 'NOT_YOUR_TURN' };
   }
 
-  // 单机真人作弊：待确认卡牌存在时冻结其他一切操作，只接受重抽/接受。
+  // 单机真人作弊：待确认卡牌存在时冻结其他一切操作，只接受重抽/接受；投降可随时发动。
   const pendingCardChoice = state.cardChoice?.pending;
   if (pendingCardChoice) {
-    if (playerId !== pendingCardChoice.playerId) return { ok: false, code: 'NOT_YOUR_TURN' };
-    if (intent.type !== 'redraw_card' && intent.type !== 'accept_card') {
+    if (intent.type === 'surrender') {
+      // 允许：投降不受待确认卡牌冻结限制。
+    } else if (playerId !== pendingCardChoice.playerId) {
+      return { ok: false, code: 'NOT_YOUR_TURN' };
+    } else if (intent.type !== 'redraw_card' && intent.type !== 'accept_card') {
       return { ok: false, code: 'WRONG_PHASE' };
     }
   } else if (intent.type === 'redraw_card' || intent.type === 'accept_card') {
@@ -221,7 +225,8 @@ export function applyIntent(
     return { ok: false, code: 'WRONG_PHASE' };
   }
 
-  if (state.publicRuleState.pendingActions.length > 0) {
+  // 模块待选动作存在时，非匹配的意图一律非法；投降例外（不受模块流程阻挡）。
+  if (intent.type !== 'surrender' && state.publicRuleState.pendingActions.length > 0) {
     const pending = state.publicRuleState.pendingActions.find((action) => (
       intent.type === 'module'
       && action.playerId === playerId
@@ -234,13 +239,14 @@ export function applyIntent(
     if (!pending) return { ok: false, code: 'WRONG_PHASE' };
   }
 
-  // 债务状态：冻结正常流程，只能卖房/卖地/破产（01 §11；步 9 完整实现筹款）
+  // 债务状态：冻结正常流程，只能卖房/卖地/破产/投降（01 §11；步 9 完整实现筹款）
   if (state.debt) {
     switch (intent.type) {
       case 'sell_house':
       case 'sell_property':
       case 'mortgage_property':
       case 'declare_bankrupt':
+      case 'surrender':
         break; // 允许，继续到下面的 switch 处理
       default:
         return { ok: false, code: 'WRONG_PHASE' };
@@ -250,7 +256,7 @@ export function applyIntent(
   const handler = registry.getIntentHandler(state.ruleModules, intent);
   if (!handler) return { ok: false, code: 'ILLEGAL_INTENT' };
 
-  const result = handler.handle({ state, playerId, intent, applyCore: () => {
+  const result = handler.handle({ state, playerId, intent, registry, applyCore: () => {
     switch (intent.type) {
     case 'roll_dice':
       return handleRollDice(state, playerId, registry);
@@ -276,6 +282,8 @@ export function applyIntent(
       return handleEndTurn(state, playerId);
     case 'declare_bankrupt':
       return handleDeclareBankrupt(state, playerId);
+    case 'surrender':
+      return handleSurrender(state, playerId);
     case 'redraw_card':
       return handleRedrawCard(state, playerId);
     case 'accept_card':
@@ -293,6 +301,7 @@ export function applyIntent(
     playerId,
     intent,
     result: finalized,
+    registry,
   });
   return transitioned;
 }
@@ -325,6 +334,7 @@ export function skipCurrentTurn(
     playerId,
     intent: { type: 'end_turn' },
     result,
+    registry,
   });
 }
 
@@ -917,26 +927,48 @@ function handleSellProperty(
   };
 }
 
-function handleDeclareBankrupt(state: GameState, playerId: string): ApplyResult {
-  if (!state.debt || state.debt.debtorId !== playerId) return { ok: false, code: 'WRONG_PHASE' };
-  const debt = state.debt;
+/** 玩家出局的统一结算：现金清零、标记破产、名下地产转为无主可售，并按 creditorId 转移剩余现金。
+ *  - declare_bankrupt 与 surrender 共用本函数，确保两种出局路径的结算结果完全一致。
+ *  - 两人对局：creditorId 指向对手（或既有债务债主），cash_goal / last_standing 由现有破产流程判定。
+ *  - 多人对局且无债主（creditorId=null）：现金缴银行、地产释放，其余玩家继续（turnPhase 仅在出局者是当前行动者时重置为 managing）。 */
+interface BankruptcySettlementOptions {
+  creditorId: string | null;
+  resume?: DebtResumeState;
+  /** 出局原因：破产走 player_bankrupt 事件，投降走 player_surrendered 事件（仅影响战报文案）。 */
+  eventType: 'bankrupt' | 'surrender';
+}
+
+function settlePlayerBankruptcy(
+  state: GameState,
+  playerId: string,
+  options: BankruptcySettlementOptions,
+): ApplyResult {
+  const { creditorId, eventType } = options;
   const debtor = state.players.find((p) => p.id === playerId);
   if (!debtor) return { ok: false, code: 'ILLEGAL_INTENT' };
 
   const transferredCash = debtor.cash;
-  const events: GameEvent[] = [{ type: 'player_bankrupt', playerId, creditorId: debt.creditorId, transferredCash: transferredCash }];
-  let players = state.players.map((p) => {
+  const bankruptEvent: GameEvent = eventType === 'surrender'
+    ? { type: 'player_surrendered', playerId, creditorId, transferredCash }
+    : { type: 'player_bankrupt', playerId, creditorId, transferredCash };
+  const events: GameEvent[] = [bankruptEvent];
+  const players = state.players.map((p) => {
     if (p.id === playerId) return { ...p, cash: 0, bankrupt: true, bankruptTurn: state.turn };
-    if (debt.creditorId && p.id === debt.creditorId) return { ...p, cash: p.cash + transferredCash };
+    if (creditorId !== null && p.id === creditorId) return { ...p, cash: p.cash + transferredCash };
     return p;
   });
+
+  // 仅当出局者就是当前行动者（当前玩家或债务人）时，才把回合阶段重置为 managing；
+  // 否则不动手它的玩家正在进行的回合（避免 turPhase 被错误改写）。
+  const isDebtor = state.debt !== null && state.debt.debtorId === playerId;
+  const isActivePlayer = state.currentPlayerId === playerId || isDebtor;
 
   let newState: GameState = {
     ...state,
     players,
     properties: clearPlayerProperties(state, playerId),
-    debt: null,
-    turnPhase: 'managing',
+    debt: isDebtor ? null : state.debt,
+    turnPhase: isActivePlayer ? 'managing' : state.turnPhase,
   };
 
   const alive = alivePlayers(newState);
@@ -944,14 +976,14 @@ function handleDeclareBankrupt(state: GameState, playerId: string): ApplyResult 
     events.push({ type: 'game_over', winnerId: alive[0].id, reason: 'last_standing' });
     newState = { ...newState, phase: 'game_over', winnerId: alive[0].id };
   } else {
-    // E18：破产现金转移给玩家债主后，债主可能 cash_goal 即时终局（多人局）
+    // E18：现金转移给玩家债主后，债主可能 cash_goal 即时终局（多人局）
     const cashGoalWin = finishCashGoalIfReached(newState, events);
     if (cashGoalWin) {
       newState = cashGoalWin.state;
       events.splice(0, events.length, ...cashGoalWin.events);
     } else {
-      if (debt.resume?.payments.length) {
-        const queued = processQueuedPayments(newState, debt.resume.payments, events);
+      if (options.resume !== undefined && options.resume.payments.length) {
+        const queued = processQueuedPayments(newState, options.resume.payments, events);
         newState = { ...queued.state, debt: queued.newDebt, turnPhase: queued.newDebt ? 'managing' : queued.state.turnPhase };
         events.splice(0, events.length, ...queued.events);
       }
@@ -968,6 +1000,37 @@ function handleDeclareBankrupt(state: GameState, playerId: string): ApplyResult 
     state: { ...newState, recentLog: [...state.recentLog, ...events].slice(-200) },
     events,
   };
+}
+
+function handleDeclareBankrupt(state: GameState, playerId: string): ApplyResult {
+  if (!state.debt || state.debt.debtorId !== playerId) return { ok: false, code: 'WRONG_PHASE' };
+  return settlePlayerBankruptcy(state, playerId, {
+    creditorId: state.debt.creditorId,
+    ...(state.debt.resume ? { resume: state.debt.resume } : {}),
+    eventType: 'bankrupt',
+  });
+}
+
+/** 处理 surrender：主动投降出局（无债务或非本人回合亦可发动，applyIntent 已放开相应校验）。
+ *  - 两人对局：与破产完全一致的结算（有债务给债主、无债务给对手），胜负由破产流程判定。
+ *  - 多人对局：立即出局，现金清零（缴银行），名下地产全部转为无主可售，其余玩家继续。 */
+function handleSurrender(state: GameState, playerId: string): ApplyResult {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) return { ok: false, code: 'ILLEGAL_INTENT' };
+  if (player.bankrupt) return { ok: false, code: 'ILLEGAL_INTENT' };
+  const alive = alivePlayers(state);
+  if (alive.length <= 1) return { ok: false, code: 'WRONG_PHASE' }; // 已无对手可认输
+
+  const debt = state.debt !== null && state.debt.debtorId === playerId ? state.debt : null;
+  const twoPlayer = state.players.length === 2;
+  // 两人对局、且投降者无既有债务时，把对手视为现金接收方（与破产一致）；多人对局缴银行。
+  const fallbackCreditor = twoPlayer ? (alive.find((p) => p.id !== playerId)?.id ?? null) : null;
+
+  return settlePlayerBankruptcy(state, playerId, {
+    creditorId: debt !== null ? debt.creditorId : fallbackCreditor,
+    ...(debt?.resume ? { resume: debt.resume } : {}),
+    eventType: 'surrender',
+  });
 }
 
 /** 处理 end_turn：结束当前回合，推进到下一位未破产玩家（01 §4 状态机）

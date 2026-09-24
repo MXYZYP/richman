@@ -59,7 +59,11 @@ for (const pack of formalPacks) printPackSummary(pack);
 
 try {
   // Build registration Gate：raw/map source 仅在 Node CLI 校验，绝不进入 browser runtime registry。
-  const knownModules = [{ id: 'core', version: 1 }, { id: 'world-tour', version: 1 }];
+  const knownModules = [
+    { id: 'core', version: 1 },
+    { id: 'world-tour', version: 1 },
+    { id: 'great-wall', version: 1 },
+  ];
   for (const pack of formalPacks) assertValidMapPack(pack, knownModules, []);
   const registeredChinaPack = formalPacks[0];
   assertChinaTourMapDataParity(registeredChinaPack, {

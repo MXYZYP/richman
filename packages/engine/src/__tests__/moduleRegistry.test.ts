@@ -88,6 +88,7 @@ describe('rule-module registry', () => {
       redeem_property: true,
       end_turn: true,
       declare_bankrupt: true,
+      surrender: true,
       redraw_card: true,
       accept_card: true,
     } satisfies Record<CoreIntent['type'], true>;
@@ -192,7 +193,7 @@ describe('rule-module registry', () => {
 
     registry.runBotStrategyHooks(
       [{ id: 'zeta', version: 2 }, { id: 'alpha', version: 3 }, { id: 'alpha', version: 1 }],
-      { state, playerId: 'p1', applyCore: () => ({ type: 'end_turn' }) },
+      { state, playerId: 'p1', registry, applyCore: () => ({ type: 'end_turn' }) },
     );
 
     expect(calls).toEqual(['alpha@1', 'alpha@3', 'zeta@2']);
@@ -218,7 +219,7 @@ describe('rule-module registry', () => {
 
     const result = registry.runPositiveRentHooks(
       [{ id: 'zeta', version: 1 }, { id: 'alpha', version: 2 }, { id: 'alpha', version: 1 }],
-      { state, events: [], payerId: 'p1', ownerId: 'p2', cellId: 1, amount: 100 },
+      { state, events: [], payerId: 'p1', ownerId: 'p2', cellId: 1, amount: 100, registry },
     );
 
     expect(calls).toEqual(['alpha@1:100', 'alpha@2:130', 'zeta@1:150']);
@@ -254,6 +255,7 @@ describe('rule-module registry', () => {
         playerId: 'p1',
         intent: { type: 'end_turn' },
         result: { ok: true, state, events: [] },
+        registry,
       },
     );
 
@@ -303,6 +305,7 @@ describe('rule-module registry', () => {
         state: {} as GameState,
         playerId: 'p1',
         currentDecision: undefined,
+        registry,
         applyCore: () => ({ type: 'declare_bankrupt' }),
       },
     );
@@ -322,7 +325,7 @@ describe('rule-module registry', () => {
     expect(Object.isFrozen(registry)).toBe(true);
     expect(() => registry.runBotStrategyHooks(
       [{ id: 'stable', version: 1 }],
-      { state: {} as GameState, playerId: 'p1', applyCore: () => ({ type: 'end_turn' }) },
+      { state: {} as GameState, playerId: 'p1', applyCore: () => ({ type: 'end_turn' }), registry },
     )).not.toThrow();
     expect(calls).toHaveLength(1);
   });
@@ -363,7 +366,9 @@ describe('rule-module registry', () => {
       { id: 'none', effect: { type: 'none' } },
       [],
     )).toThrow(/no enabled effect handler/i);
-    expect(() => chooseBotIntent(withoutModules, playerId)).toThrow(/no enabled bot strategy hook/i);
+    // 电脑玩家决策不再因"没有启用的 bot hook"抛错：所有模块 hook 都未产出决策时回退到核心策略，
+    // 保证任何可达局面下电脑至少能掷骰 / 结束回合（修复"电脑玩家整局卡死"）。
+    expect(chooseBotIntent(withoutModules, playerId)).toEqual({ type: 'roll_dice' });
   });
 
   it('registry wrapper 保留既有 game-over 短路与 effect depth guard 优先级', () => {

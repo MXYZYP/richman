@@ -92,6 +92,7 @@ export function resolveLanding(
     events,
     depth,
     cell,
+    registry,
     applyCore: () => resolveCoreLanding(state, playerId, events, depth, registry),
   });
 }
@@ -135,6 +136,7 @@ function resolveCoreLanding(
           ownerId: prop.ownerId,
           cellId: player.position,
           amount: toll,
+          registry,
         });
         s = intercepted.state;
         evts = [...intercepted.events];
@@ -258,6 +260,7 @@ export function applyCardEffect(
       card: moduleCard,
       events,
       depth,
+      registry,
       applyCore: () => applyCoreCardEffect(state, playerId, card, events, depth, registry),
     });
   }
@@ -269,6 +272,7 @@ export function applyCardEffect(
     card,
     events,
     depth,
+    registry,
     applyCore: () => applyCoreCardEffect(state, playerId, card, events, depth, registry),
   });
 }

@@ -1,0 +1,880 @@
+{
+  "ref": {
+    "id": "yellow-river",
+    "version": 1,
+    "contentHash": "139a4c98823e458ccd3aaf711e80e4ab473820da89389d74872f9f8ea68c0aff"
+  },
+  "metadata": {
+    "title": "黄河之旅",
+    "description": "螺旋棋盘：64 格 8×8 盘旋布局，自入海口一路溯源收束到河源，越近源头地价越高，河源之后回到入海口重新启程。"
+  },
+  "requiredRuleModules": [
+    {
+      "id": "core",
+      "version": 1
+    }
+  ],
+  "presentation": {
+    "canvas": {
+      "size": 100
+    },
+    "cells": {
+      "0": {
+        "x": 3,
+        "y": 3,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "入海口",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "start"
+        }
+      },
+      "1": {
+        "x": 15,
+        "y": 3,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "济南",
+        "propertyBand": "band:shandong"
+      },
+      "2": {
+        "x": 27,
+        "y": 3,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "泺口渡",
+        "propertyBand": "band:station"
+      },
+      "3": {
+        "x": 39,
+        "y": 3,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "滨州",
+        "propertyBand": "band:shandong"
+      },
+      "4": {
+        "x": 51,
+        "y": 3,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "5": {
+        "x": 63,
+        "y": 3,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "东阿",
+        "propertyBand": "band:shandong"
+      },
+      "6": {
+        "x": 75,
+        "y": 3,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "菏泽",
+        "propertyBand": "band:shandong"
+      },
+      "7": {
+        "x": 87,
+        "y": 3,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "濮阳",
+        "propertyBand": "band:henan"
+      },
+      "8": {
+        "x": 87,
+        "y": 15,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "凌汛",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-moon"
+        }
+      },
+      "9": {
+        "x": 87,
+        "y": 27,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "开封",
+        "propertyBand": "band:henan"
+      },
+      "10": {
+        "x": 87,
+        "y": 39,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "郑州",
+        "propertyBand": "band:henan"
+      },
+      "11": {
+        "x": 87,
+        "y": 51,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "12": {
+        "x": 87,
+        "y": 63,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "洛阳",
+        "propertyBand": "band:henan"
+      },
+      "13": {
+        "x": 87,
+        "y": 75,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "茅津渡",
+        "compactLabel": "渡口",
+        "propertyBand": "band:station"
+      },
+      "14": {
+        "x": 87,
+        "y": 87,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "芮城",
+        "propertyBand": "band:shanxi"
+      },
+      "15": {
+        "x": 75,
+        "y": 87,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "风陵渡",
+        "propertyBand": "band:station"
+      },
+      "16": {
+        "x": 63,
+        "y": 87,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "河工税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "17": {
+        "x": 51,
+        "y": 87,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "永济",
+        "propertyBand": "band:shanxi"
+      },
+      "18": {
+        "x": 39,
+        "y": 87,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "河津",
+        "propertyBand": "band:shanxi"
+      },
+      "19": {
+        "x": 27,
+        "y": 87,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "吉县",
+        "propertyBand": "band:shanxi"
+      },
+      "20": {
+        "x": 15,
+        "y": 87,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "21": {
+        "x": 3,
+        "y": 87,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "保德",
+        "propertyBand": "band:shanxi"
+      },
+      "22": {
+        "x": 3,
+        "y": 75,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "河曲",
+        "propertyBand": "band:shanxi"
+      },
+      "23": {
+        "x": 3,
+        "y": 63,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "潼关",
+        "propertyBand": "band:shaanxi"
+      },
+      "24": {
+        "x": 3,
+        "y": 51,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "抢险",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        }
+      },
+      "25": {
+        "x": 3,
+        "y": 39,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "韩城",
+        "propertyBand": "band:shaanxi"
+      },
+      "26": {
+        "x": 3,
+        "y": 27,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "宜川",
+        "propertyBand": "band:shaanxi"
+      },
+      "27": {
+        "x": 3,
+        "y": 15,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "28": {
+        "x": 15,
+        "y": 15,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "延川",
+        "propertyBand": "band:shaanxi"
+      },
+      "29": {
+        "x": 27,
+        "y": 15,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "府谷",
+        "propertyBand": "band:shaanxi"
+      },
+      "30": {
+        "x": 39,
+        "y": 15,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "托克托",
+        "propertyBand": "band:inner-mongolia"
+      },
+      "31": {
+        "x": 51,
+        "y": 15,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "包头",
+        "propertyBand": "band:inner-mongolia"
+      },
+      "32": {
+        "x": 63,
+        "y": 15,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "乌海",
+        "propertyBand": "band:inner-mongolia"
+      },
+      "33": {
+        "x": 75,
+        "y": 15,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "磴口",
+        "propertyBand": "band:inner-mongolia"
+      },
+      "34": {
+        "x": 75,
+        "y": 27,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "临河",
+        "propertyBand": "band:inner-mongolia"
+      },
+      "35": {
+        "x": 75,
+        "y": 39,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "中卫",
+        "propertyBand": "band:ningxia"
+      },
+      "36": {
+        "x": 75,
+        "y": 51,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "羊皮筏子",
+        "propertyBand": "band:utility"
+      },
+      "37": {
+        "x": 75,
+        "y": 63,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "青铜峡",
+        "propertyBand": "band:ningxia"
+      },
+      "38": {
+        "x": 75,
+        "y": 75,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "39": {
+        "x": 63,
+        "y": 75,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "吴忠",
+        "propertyBand": "band:ningxia"
+      },
+      "40": {
+        "x": 51,
+        "y": 75,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "银川",
+        "propertyBand": "band:ningxia"
+      },
+      "41": {
+        "x": 39,
+        "y": 75,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "石嘴山",
+        "propertyBand": "band:ningxia"
+      },
+      "42": {
+        "x": 27,
+        "y": 75,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "断流",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-moon"
+        }
+      },
+      "43": {
+        "x": 15,
+        "y": 75,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "兰州",
+        "propertyBand": "band:gansu"
+      },
+      "44": {
+        "x": 15,
+        "y": 63,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "兰州渡",
+        "compactLabel": "渡口",
+        "propertyBand": "band:station"
+      },
+      "45": {
+        "x": 15,
+        "y": 51,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "46": {
+        "x": 15,
+        "y": 39,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "白银",
+        "propertyBand": "band:gansu"
+      },
+      "47": {
+        "x": 15,
+        "y": 27,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "靖远",
+        "propertyBand": "band:gansu"
+      },
+      "48": {
+        "x": 27,
+        "y": 27,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "漕运税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "49": {
+        "x": 39,
+        "y": 27,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "景泰",
+        "propertyBand": "band:gansu"
+      },
+      "50": {
+        "x": 51,
+        "y": 27,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "永靖",
+        "propertyBand": "band:gansu"
+      },
+      "51": {
+        "x": 63,
+        "y": 27,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "玛曲",
+        "propertyBand": "band:gansu"
+      },
+      "52": {
+        "x": 63,
+        "y": 39,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "民和",
+        "propertyBand": "band:qinghai"
+      },
+      "53": {
+        "x": 63,
+        "y": 51,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "化隆",
+        "propertyBand": "band:qinghai"
+      },
+      "54": {
+        "x": 63,
+        "y": 63,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "55": {
+        "x": 51,
+        "y": 63,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "尖扎",
+        "propertyBand": "band:qinghai"
+      },
+      "56": {
+        "x": 39,
+        "y": 63,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "龙羊峡电站",
+        "compactLabel": "电站",
+        "propertyBand": "band:utility"
+      },
+      "57": {
+        "x": 27,
+        "y": 63,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "灌溉",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-food"
+        }
+      },
+      "58": {
+        "x": 27,
+        "y": 51,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "贵德",
+        "propertyBand": "band:qinghai"
+      },
+      "59": {
+        "x": 27,
+        "y": 39,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "共和",
+        "propertyBand": "band:qinghai"
+      },
+      "60": {
+        "x": 39,
+        "y": 39,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "61": {
+        "x": 51,
+        "y": 39,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "玛多",
+        "propertyBand": "band:qinghai"
+      },
+      "62": {
+        "x": 51,
+        "y": 51,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "扎陵湖",
+        "propertyBand": "band:qinghai"
+      },
+      "63": {
+        "x": 39,
+        "y": 51,
+        "width": 10,
+        "height": 10,
+        "shortLabel": "鄂陵湖",
+        "propertyBand": "band:qinghai"
+      }
+    },
+    "routes": [
+      {
+        "type": "polyline",
+        "role": "route",
+        "strokeWidth": 1,
+        "dashPattern": [
+          2,
+          1.4
+        ],
+        "lineCap": "round",
+        "opacity": 0.9,
+        "zIndex": 0,
+        "points": [
+          {
+            "x": 8,
+            "y": 8
+          },
+          {
+            "x": 20,
+            "y": 8
+          },
+          {
+            "x": 32,
+            "y": 8
+          },
+          {
+            "x": 44,
+            "y": 8
+          },
+          {
+            "x": 56,
+            "y": 8
+          },
+          {
+            "x": 68,
+            "y": 8
+          },
+          {
+            "x": 80,
+            "y": 8
+          },
+          {
+            "x": 92,
+            "y": 8
+          },
+          {
+            "x": 92,
+            "y": 20
+          },
+          {
+            "x": 92,
+            "y": 32
+          },
+          {
+            "x": 92,
+            "y": 44
+          },
+          {
+            "x": 92,
+            "y": 56
+          },
+          {
+            "x": 92,
+            "y": 68
+          },
+          {
+            "x": 92,
+            "y": 80
+          },
+          {
+            "x": 92,
+            "y": 92
+          },
+          {
+            "x": 80,
+            "y": 92
+          },
+          {
+            "x": 68,
+            "y": 92
+          },
+          {
+            "x": 56,
+            "y": 92
+          },
+          {
+            "x": 44,
+            "y": 92
+          },
+          {
+            "x": 32,
+            "y": 92
+          },
+          {
+            "x": 20,
+            "y": 92
+          },
+          {
+            "x": 8,
+            "y": 92
+          },
+          {
+            "x": 8,
+            "y": 80
+          },
+          {
+            "x": 8,
+            "y": 68
+          },
+          {
+            "x": 8,
+            "y": 56
+          },
+          {
+            "x": 8,
+            "y": 44
+          },
+          {
+            "x": 8,
+            "y": 32
+          },
+          {
+            "x": 8,
+            "y": 20
+          },
+          {
+            "x": 20,
+            "y": 20
+          },
+          {
+            "x": 32,
+            "y": 20
+          },
+          {
+            "x": 44,
+            "y": 20
+          },
+          {
+            "x": 56,
+            "y": 20
+          },
+          {
+            "x": 68,
+            "y": 20
+          },
+          {
+            "x": 80,
+            "y": 20
+          },
+          {
+            "x": 80,
+            "y": 32
+          },
+          {
+            "x": 80,
+            "y": 44
+          },
+          {
+            "x": 80,
+            "y": 56
+          },
+          {
+            "x": 80,
+            "y": 68
+          },
+          {
+            "x": 80,
+            "y": 80
+          },
+          {
+            "x": 68,
+            "y": 80
+          },
+          {
+            "x": 56,
+            "y": 80
+          },
+          {
+            "x": 44,
+            "y": 80
+          },
+          {
+            "x": 32,
+            "y": 80
+          },
+          {
+            "x": 20,
+            "y": 80
+          },
+          {
+            "x": 20,
+            "y": 68
+          },
+          {
+            "x": 20,
+            "y": 56
+          },
+          {
+            "x": 20,
+            "y": 44
+          },
+          {
+            "x": 20,
+            "y": 32
+          },
+          {
+            "x": 32,
+            "y": 32
+          },
+          {
+            "x": 44,
+            "y": 32
+          },
+          {
+            "x": 56,
+            "y": 32
+          },
+          {
+            "x": 68,
+            "y": 32
+          },
+          {
+            "x": 68,
+            "y": 44
+          },
+          {
+            "x": 68,
+            "y": 56
+          },
+          {
+            "x": 68,
+            "y": 68
+          },
+          {
+            "x": 56,
+            "y": 68
+          },
+          {
+            "x": 44,
+            "y": 68
+          },
+          {
+            "x": 32,
+            "y": 68
+          },
+          {
+            "x": 32,
+            "y": 56
+          },
+          {
+            "x": 32,
+            "y": 44
+          },
+          {
+            "x": 44,
+            "y": 44
+          },
+          {
+            "x": 56,
+            "y": 44
+          },
+          {
+            "x": 56,
+            "y": 56
+          },
+          {
+            "x": 44,
+            "y": 56
+          }
+        ]
+      }
+    ],
+    "center": [],
+    "theme": {
+      "colors": {
+        "board": "#E8DCC0",
+        "cell": "#FFFCF5",
+        "border": "#6B5230",
+        "route": "#1F7A8C",
+        "title": "#3E2E18",
+        "decoration": "#C9A961",
+        "center": "#F5EBD8"
+      },
+      "propertyBands": {
+        "band:shandong": "#8C5A3C",
+        "band:henan": "#C46A3C",
+        "band:shanxi": "#A8752E",
+        "band:shaanxi": "#C08A3E",
+        "band:inner-mongolia": "#B9A44C",
+        "band:ningxia": "#7BA05B",
+        "band:gansu": "#4E7FA8",
+        "band:qinghai": "#3E8E9C",
+        "band:station": "#5B6E7A",
+        "band:utility": "#6E57A8"
+      }
+    }
+  }
+}

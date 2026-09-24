@@ -1,0 +1,687 @@
+{
+  "ref": {
+    "id": "xinjiang-tour",
+    "version": 1,
+    "contentHash": "08a39b81e3534d6c24664b4a2d218de732c2e2577e5442fcb26384c09759a169"
+  },
+  "metadata": {
+    "title": "新疆之旅",
+    "description": "环形棋路：40 格主环绕行天山南北，阿克苏可转入「独库公路」6 格支线，越深入腹地地价越高。"
+  },
+  "requiredRuleModules": [
+    {
+      "id": "core",
+      "version": 1
+    }
+  ],
+  "presentation": {
+    "canvas": {
+      "size": 100
+    },
+    "cells": {
+      "0": {
+        "x": 1.4,
+        "y": 4.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "起点",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "start"
+        }
+      },
+      "1": {
+        "x": 9.6,
+        "y": 4.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "阜康",
+        "propertyBand": "band:north"
+      },
+      "2": {
+        "x": 17.8,
+        "y": 4.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "天山天池",
+        "propertyBand": "band:north"
+      },
+      "3": {
+        "x": 26,
+        "y": 4.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "4": {
+        "x": 34.2,
+        "y": 4.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "奇台",
+        "propertyBand": "band:north"
+      },
+      "5": {
+        "x": 42.4,
+        "y": 4.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "6": {
+        "x": 50.6,
+        "y": 4.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "巴里坤",
+        "propertyBand": "band:north"
+      },
+      "7": {
+        "x": 58.8,
+        "y": 4.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "伊吾",
+        "propertyBand": "band:north"
+      },
+      "8": {
+        "x": 67,
+        "y": 4.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "资源税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "9": {
+        "x": 75.2,
+        "y": 4.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "哈密",
+        "propertyBand": "band:north"
+      },
+      "10": {
+        "x": 83.4,
+        "y": 4.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "吐鲁番",
+        "propertyBand": "band:turpan"
+      },
+      "11": {
+        "x": 91.6,
+        "y": 4.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "鄯善",
+        "propertyBand": "band:turpan"
+      },
+      "12": {
+        "x": 91.6,
+        "y": 13.8,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "库木塔格",
+        "compactLabel": "库木",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-moon"
+        }
+      },
+      "13": {
+        "x": 91.6,
+        "y": 23,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "若羌",
+        "propertyBand": "band:turpan"
+      },
+      "14": {
+        "x": 91.6,
+        "y": 32.2,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "伊尔克什",
+        "compactLabel": "伊尔",
+        "propertyBand": "band:gate"
+      },
+      "15": {
+        "x": 91.6,
+        "y": 41.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "塔中油气",
+        "compactLabel": "塔中",
+        "propertyBand": "band:utility"
+      },
+      "16": {
+        "x": 91.6,
+        "y": 50.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "17": {
+        "x": 91.6,
+        "y": 59.8,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "民丰",
+        "propertyBand": "band:kashgar"
+      },
+      "18": {
+        "x": 91.6,
+        "y": 69,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "于田",
+        "propertyBand": "band:kashgar"
+      },
+      "19": {
+        "x": 91.6,
+        "y": 78.2,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "20": {
+        "x": 91.6,
+        "y": 87.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "洛浦",
+        "propertyBand": "band:kashgar"
+      },
+      "21": {
+        "x": 83.4,
+        "y": 87.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "和田",
+        "propertyBand": "band:kashgar"
+      },
+      "22": {
+        "x": 75.2,
+        "y": 87.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "墨玉",
+        "propertyBand": "band:kashgar"
+      },
+      "23": {
+        "x": 67,
+        "y": 87.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "卡拉苏口",
+        "compactLabel": "卡拉",
+        "propertyBand": "band:gate"
+      },
+      "24": {
+        "x": 58.8,
+        "y": 87.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "25": {
+        "x": 50.6,
+        "y": 87.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "叶城",
+        "propertyBand": "band:kashgar"
+      },
+      "26": {
+        "x": 42.4,
+        "y": 87.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "27": {
+        "x": 34.2,
+        "y": 87.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "莎车",
+        "propertyBand": "band:kashgar"
+      },
+      "28": {
+        "x": 26,
+        "y": 87.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "乌鲁瓦提",
+        "compactLabel": "乌鲁",
+        "propertyBand": "band:utility"
+      },
+      "29": {
+        "x": 17.8,
+        "y": 87.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "30": {
+        "x": 9.6,
+        "y": 87.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "喀什",
+        "propertyBand": "band:kashgar"
+      },
+      "31": {
+        "x": 1.4,
+        "y": 87.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "红其拉甫",
+        "compactLabel": "红其",
+        "propertyBand": "band:gate"
+      },
+      "32": {
+        "x": 1.4,
+        "y": 78.2,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "阿图什",
+        "propertyBand": "band:kashgar"
+      },
+      "33": {
+        "x": 1.4,
+        "y": 69,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "乌恰",
+        "propertyBand": "band:kashgar"
+      },
+      "34": {
+        "x": 1.4,
+        "y": 59.8,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "阿克苏",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "airport"
+        }
+      },
+      "35": {
+        "x": 1.4,
+        "y": 50.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "阿瓦提",
+        "propertyBand": "band:transhan"
+      },
+      "36": {
+        "x": 1.4,
+        "y": 41.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "过路费",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "37": {
+        "x": 1.4,
+        "y": 32.2,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "库车",
+        "propertyBand": "band:transhan"
+      },
+      "38": {
+        "x": 1.4,
+        "y": 23,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "沙尘暴",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-food"
+        }
+      },
+      "39": {
+        "x": 1.4,
+        "y": 13.8,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "库尔勒",
+        "propertyBand": "band:transhan"
+      },
+      "40": {
+        "x": 42.4,
+        "y": 23,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "温宿大峡",
+        "compactLabel": "温宿",
+        "propertyBand": "band:transhan"
+      },
+      "41": {
+        "x": 42.4,
+        "y": 32.2,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "神木园",
+        "propertyBand": "band:transhan"
+      },
+      "42": {
+        "x": 42.4,
+        "y": 41.4,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "托木尔峰",
+        "propertyBand": "band:transhan"
+      },
+      "43": {
+        "x": 42.4,
+        "y": 50.6,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "克孜尔千",
+        "compactLabel": "克孜",
+        "propertyBand": "band:transhan"
+      },
+      "44": {
+        "x": 42.4,
+        "y": 59.8,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "库车大峡",
+        "compactLabel": "库车",
+        "propertyBand": "band:transhan"
+      },
+      "45": {
+        "x": 50.6,
+        "y": 59.8,
+        "width": 7,
+        "height": 8,
+        "shortLabel": "巴音布鲁",
+        "compactLabel": "巴音",
+        "propertyBand": "band:transhan"
+      }
+    },
+    "routes": [
+      {
+        "type": "polyline",
+        "role": "route",
+        "strokeWidth": 1,
+        "dashPattern": [
+          2,
+          1.4
+        ],
+        "lineCap": "round",
+        "opacity": 0.9,
+        "zIndex": 0,
+        "points": [
+          {
+            "x": 4.9,
+            "y": 8.6
+          },
+          {
+            "x": 13.1,
+            "y": 8.6
+          },
+          {
+            "x": 21.3,
+            "y": 8.6
+          },
+          {
+            "x": 29.5,
+            "y": 8.6
+          },
+          {
+            "x": 37.7,
+            "y": 8.6
+          },
+          {
+            "x": 45.9,
+            "y": 8.6
+          },
+          {
+            "x": 54.1,
+            "y": 8.6
+          },
+          {
+            "x": 62.3,
+            "y": 8.6
+          },
+          {
+            "x": 70.5,
+            "y": 8.6
+          },
+          {
+            "x": 78.7,
+            "y": 8.6
+          },
+          {
+            "x": 86.9,
+            "y": 8.6
+          },
+          {
+            "x": 95.1,
+            "y": 8.6
+          },
+          {
+            "x": 95.1,
+            "y": 17.8
+          },
+          {
+            "x": 95.1,
+            "y": 27
+          },
+          {
+            "x": 95.1,
+            "y": 36.2
+          },
+          {
+            "x": 95.1,
+            "y": 45.4
+          },
+          {
+            "x": 95.1,
+            "y": 54.6
+          },
+          {
+            "x": 95.1,
+            "y": 63.8
+          },
+          {
+            "x": 95.1,
+            "y": 73
+          },
+          {
+            "x": 95.1,
+            "y": 82.2
+          },
+          {
+            "x": 95.1,
+            "y": 91.4
+          },
+          {
+            "x": 86.9,
+            "y": 91.4
+          },
+          {
+            "x": 78.7,
+            "y": 91.4
+          },
+          {
+            "x": 70.5,
+            "y": 91.4
+          },
+          {
+            "x": 62.3,
+            "y": 91.4
+          },
+          {
+            "x": 54.1,
+            "y": 91.4
+          },
+          {
+            "x": 45.9,
+            "y": 91.4
+          },
+          {
+            "x": 37.7,
+            "y": 91.4
+          },
+          {
+            "x": 29.5,
+            "y": 91.4
+          },
+          {
+            "x": 21.3,
+            "y": 91.4
+          },
+          {
+            "x": 13.1,
+            "y": 91.4
+          },
+          {
+            "x": 4.9,
+            "y": 91.4
+          },
+          {
+            "x": 4.9,
+            "y": 82.2
+          },
+          {
+            "x": 4.9,
+            "y": 73
+          },
+          {
+            "x": 4.9,
+            "y": 63.8
+          },
+          {
+            "x": 4.9,
+            "y": 54.6
+          },
+          {
+            "x": 4.9,
+            "y": 45.4
+          },
+          {
+            "x": 4.9,
+            "y": 36.2
+          },
+          {
+            "x": 4.9,
+            "y": 27
+          },
+          {
+            "x": 4.9,
+            "y": 17.8
+          },
+          {
+            "x": 4.9,
+            "y": 8.6
+          }
+        ]
+      },
+      {
+        "type": "polyline",
+        "role": "route",
+        "strokeWidth": 1,
+        "dashPattern": [
+          2,
+          1.4
+        ],
+        "lineCap": "round",
+        "opacity": 0.9,
+        "zIndex": 1,
+        "points": [
+          {
+            "x": 4.9,
+            "y": 63.8
+          },
+          {
+            "x": 45.9,
+            "y": 27
+          },
+          {
+            "x": 45.9,
+            "y": 36.2
+          },
+          {
+            "x": 45.9,
+            "y": 45.4
+          },
+          {
+            "x": 45.9,
+            "y": 54.6
+          },
+          {
+            "x": 45.9,
+            "y": 63.8
+          },
+          {
+            "x": 54.1,
+            "y": 63.8
+          },
+          {
+            "x": 4.9,
+            "y": 54.6
+          }
+        ]
+      }
+    ],
+    "center": [],
+    "theme": {
+      "colors": {
+        "board": "#EFE3CB",
+        "cell": "#FFFCF3",
+        "border": "#7A5A2E",
+        "route": "#2E7D6F",
+        "title": "#3C2A12",
+        "decoration": "#C9A227",
+        "center": "#F7EFDD"
+      },
+      "propertyBands": {
+        "band:north": "#4E7FA8",
+        "band:turpan": "#C46A3C",
+        "band:kashgar": "#A8752E",
+        "band:transhan": "#6E57A8",
+        "band:gate": "#5B6E7A",
+        "band:utility": "#3E8E9C"
+      }
+    }
+  }
+}

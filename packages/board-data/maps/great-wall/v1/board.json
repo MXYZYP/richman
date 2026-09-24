@@ -1,0 +1,640 @@
+{
+  "boardName": "大富翁·长城之旅",
+  "cells": [
+    {
+      "id": 0,
+      "type": "start",
+      "name": "起点"
+    },
+    {
+      "id": 1,
+      "type": "property",
+      "name": "嘉峪关",
+      "subtype": "normal",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5500,
+        7500,
+        9500
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 2,
+      "type": "property",
+      "name": "讨赖河墩",
+      "subtype": "normal",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5500,
+        7500,
+        9500
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 3,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 4,
+      "type": "property",
+      "name": "酒泉",
+      "subtype": "normal",
+      "price": 2000,
+      "houseCost": 1000,
+      "rents": [
+        160,
+        800,
+        2200,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 5,
+      "type": "module",
+      "module": {
+        "id": "great-wall",
+        "version": 1
+      },
+      "cellType": "beacon",
+      "name": "烽火台·肃州",
+      "payload": {
+        "claimCost": 600,
+        "toll": 300
+      }
+    },
+    {
+      "id": 6,
+      "type": "property",
+      "name": "肃州驿站",
+      "subtype": "station",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 7,
+      "type": "property",
+      "name": "高台",
+      "subtype": "normal",
+      "price": 2000,
+      "houseCost": 1000,
+      "rents": [
+        160,
+        800,
+        2200,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 8,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 9,
+      "type": "property",
+      "name": "张掖",
+      "subtype": "normal",
+      "price": 2200,
+      "houseCost": 1500,
+      "rents": [
+        180,
+        900,
+        2500,
+        7000,
+        8750,
+        10500
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 10,
+      "type": "property",
+      "name": "黑河水车",
+      "subtype": "utility",
+      "price": 1500,
+      "mortgageValue": 750
+    },
+    {
+      "id": 11,
+      "type": "property",
+      "name": "山丹",
+      "subtype": "normal",
+      "price": 2200,
+      "houseCost": 1500,
+      "rents": [
+        180,
+        900,
+        2500,
+        7000,
+        8750,
+        10500
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 12,
+      "type": "tax",
+      "name": "边饷",
+      "amount": 1000
+    },
+    {
+      "id": 13,
+      "type": "module",
+      "module": {
+        "id": "great-wall",
+        "version": 1
+      },
+      "cellType": "beacon",
+      "name": "烽火台·焉支",
+      "payload": {
+        "claimCost": 600,
+        "toll": 300
+      }
+    },
+    {
+      "id": 14,
+      "type": "property",
+      "name": "永昌",
+      "subtype": "normal",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        3000,
+        7500,
+        9250,
+        11000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 15,
+      "type": "property",
+      "name": "武威",
+      "subtype": "normal",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        3000,
+        7500,
+        9250,
+        11000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 16,
+      "type": "special",
+      "name": "沙暴掩埋边墙",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 800
+      }
+    },
+    {
+      "id": 17,
+      "type": "property",
+      "name": "古浪",
+      "subtype": "normal",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        3000,
+        7500,
+        9250,
+        11000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 18,
+      "type": "property",
+      "name": "凉州驿站",
+      "subtype": "station",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 19,
+      "type": "property",
+      "name": "景泰",
+      "subtype": "normal",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3300,
+        8000,
+        9750,
+        11500
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 20,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 21,
+      "type": "module",
+      "module": {
+        "id": "great-wall",
+        "version": 1
+      },
+      "cellType": "beacon",
+      "name": "烽火台·索桥",
+      "payload": {
+        "claimCost": 800,
+        "toll": 400
+      }
+    },
+    {
+      "id": 22,
+      "type": "property",
+      "name": "靖远",
+      "subtype": "normal",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3300,
+        8000,
+        9750,
+        11500
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 23,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 24,
+      "type": "property",
+      "name": "兰州",
+      "subtype": "normal",
+      "price": 2800,
+      "houseCost": 1500,
+      "rents": [
+        240,
+        1200,
+        3600,
+        8500,
+        10250,
+        12000
+      ],
+      "mortgageValue": 1400
+    },
+    {
+      "id": 25,
+      "type": "property",
+      "name": "定边",
+      "subtype": "normal",
+      "price": 2800,
+      "houseCost": 1500,
+      "rents": [
+        240,
+        1200,
+        3600,
+        8500,
+        10250,
+        12000
+      ],
+      "mortgageValue": 1400
+    },
+    {
+      "id": 26,
+      "type": "property",
+      "name": "黄河水车",
+      "subtype": "utility",
+      "price": 1500,
+      "mortgageValue": 750
+    },
+    {
+      "id": 27,
+      "type": "property",
+      "name": "延绥驿站",
+      "subtype": "station",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 28,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 29,
+      "type": "module",
+      "module": {
+        "id": "great-wall",
+        "version": 1
+      },
+      "cellType": "beacon",
+      "name": "烽火台·花马池",
+      "payload": {
+        "claimCost": 800,
+        "toll": 400
+      }
+    },
+    {
+      "id": 30,
+      "type": "property",
+      "name": "盐池",
+      "subtype": "normal",
+      "price": 2800,
+      "houseCost": 1500,
+      "rents": [
+        240,
+        1200,
+        3600,
+        8500,
+        10250,
+        12000
+      ],
+      "mortgageValue": 1400
+    },
+    {
+      "id": 31,
+      "type": "property",
+      "name": "灵武",
+      "subtype": "normal",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3900,
+        9000,
+        11000,
+        12750
+      ],
+      "mortgageValue": 1500
+    },
+    {
+      "id": 32,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 33,
+      "type": "property",
+      "name": "榆林",
+      "subtype": "normal",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3900,
+        9000,
+        11000,
+        12750
+      ],
+      "mortgageValue": 1500
+    },
+    {
+      "id": 34,
+      "type": "tax",
+      "name": "关市税",
+      "amount": 1200
+    },
+    {
+      "id": 35,
+      "type": "property",
+      "name": "神木",
+      "subtype": "normal",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3900,
+        9000,
+        11000,
+        12750
+      ],
+      "mortgageValue": 1500
+    },
+    {
+      "id": 36,
+      "type": "module",
+      "module": {
+        "id": "great-wall",
+        "version": 1
+      },
+      "cellType": "beacon",
+      "name": "烽火台·府谷",
+      "payload": {
+        "claimCost": 1000,
+        "toll": 500
+      }
+    },
+    {
+      "id": 37,
+      "type": "property",
+      "name": "偏关",
+      "subtype": "normal",
+      "price": 3200,
+      "houseCost": 2000,
+      "rents": [
+        280,
+        1500,
+        4500,
+        10000,
+        12000,
+        14000
+      ],
+      "mortgageValue": 1600
+    },
+    {
+      "id": 38,
+      "type": "property",
+      "name": "大同驿站",
+      "subtype": "station",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 39,
+      "type": "property",
+      "name": "宁武关",
+      "subtype": "normal",
+      "price": 3200,
+      "houseCost": 2000,
+      "rents": [
+        280,
+        1500,
+        4500,
+        10000,
+        12000,
+        14000
+      ],
+      "mortgageValue": 1600
+    },
+    {
+      "id": 40,
+      "type": "property",
+      "name": "雁门关",
+      "subtype": "normal",
+      "price": 3200,
+      "houseCost": 2000,
+      "rents": [
+        280,
+        1500,
+        4500,
+        10000,
+        12000,
+        14000
+      ],
+      "mortgageValue": 1600
+    },
+    {
+      "id": 41,
+      "type": "special",
+      "name": "戍卒募捐",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": 42,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 43,
+      "type": "property",
+      "name": "平型关",
+      "subtype": "normal",
+      "price": 3500,
+      "houseCost": 2000,
+      "rents": [
+        350,
+        1750,
+        5000,
+        11000,
+        13000,
+        15000
+      ],
+      "mortgageValue": 1750
+    },
+    {
+      "id": 44,
+      "type": "module",
+      "module": {
+        "id": "great-wall",
+        "version": 1
+      },
+      "cellType": "beacon",
+      "name": "烽火台·居庸",
+      "payload": {
+        "claimCost": 1000,
+        "toll": 500
+      }
+    },
+    {
+      "id": 45,
+      "type": "property",
+      "name": "居庸关",
+      "subtype": "normal",
+      "price": 3600,
+      "houseCost": 2000,
+      "rents": [
+        360,
+        1800,
+        5200,
+        11500,
+        13500,
+        15500
+      ],
+      "mortgageValue": 1800
+    },
+    {
+      "id": 46,
+      "type": "property",
+      "name": "八达岭",
+      "subtype": "normal",
+      "price": 3800,
+      "houseCost": 2000,
+      "rents": [
+        400,
+        1900,
+        5600,
+        12000,
+        14000,
+        16000
+      ],
+      "mortgageValue": 1900
+    },
+    {
+      "id": 47,
+      "type": "property",
+      "name": "山海关",
+      "subtype": "normal",
+      "price": 4000,
+      "houseCost": 2000,
+      "rents": [
+        500,
+        2000,
+        6000,
+        14000,
+        17000,
+        20000
+      ],
+      "mortgageValue": 2000,
+      "nextId": 0
+    }
+  ]
+}

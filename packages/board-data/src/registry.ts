@@ -3,6 +3,14 @@ import { canonicalStringify } from './hash';
 import type { MapCatalogEntry, MapPack, MapRef, RuleModuleRef } from './mapTypes';
 import { assertValidMapPack } from './mapValidation';
 import { worldTourMap } from './worldTourMap';
+import { classicTourMap } from './classicTourMap';
+import { greatWallMap } from './greatWallMap';
+import { silkRoadMap } from './silkRoadMap';
+import { yellowRiverMap } from './yellowRiverMap';
+import { yangtzeTourMap } from './yangtzeTourMap';
+import { pearlTourMap } from './pearlTourMap';
+import { xinjiangTourMap } from './xinjiangTourMap';
+import { shanxiTourMap } from './shanxiTourMap';
 
 interface AssetAllowlistEntry {
   readonly ref: MapRef;
@@ -133,16 +141,47 @@ export function createMapRegistry(options: MapRegistryOptions): MapRegistry {
 }
 
 const productionRegistry = createMapRegistry({
-  activeMapRefs: [chinaTourMap.ref, worldTourMap.ref],
-  knownRuleModules: [{ id: 'core', version: 1 }, { id: 'world-tour', version: 1 }],
+  activeMapRefs: [
+    chinaTourMap.ref,
+    worldTourMap.ref,
+    classicTourMap.ref,
+    silkRoadMap.ref,
+    greatWallMap.ref,
+    yellowRiverMap.ref,
+    yangtzeTourMap.ref,
+    pearlTourMap.ref,
+    xinjiangTourMap.ref,
+    shanxiTourMap.ref,
+  ],
+  knownRuleModules: [
+    { id: 'core', version: 1 },
+    { id: 'world-tour', version: 1 },
+    { id: 'great-wall', version: 1 },
+  ],
   assetAllowlist: [
     { ref: chinaTourMap.ref, paths: [] },
     { ref: worldTourMap.ref, paths: [] },
+    { ref: classicTourMap.ref, paths: [] },
+    { ref: silkRoadMap.ref, paths: [] },
+    { ref: greatWallMap.ref, paths: [] },
+    { ref: yellowRiverMap.ref, paths: [] },
+    { ref: yangtzeTourMap.ref, paths: [] },
+    { ref: pearlTourMap.ref, paths: [] },
+    { ref: xinjiangTourMap.ref, paths: [] },
+    { ref: shanxiTourMap.ref, paths: [] },
   ],
 });
 
 productionRegistry.registerMapPack(chinaTourMap);
 productionRegistry.registerMapPack(worldTourMap);
+productionRegistry.registerMapPack(classicTourMap);
+productionRegistry.registerMapPack(silkRoadMap);
+productionRegistry.registerMapPack(greatWallMap);
+productionRegistry.registerMapPack(yellowRiverMap);
+productionRegistry.registerMapPack(yangtzeTourMap);
+productionRegistry.registerMapPack(pearlTourMap);
+productionRegistry.registerMapPack(xinjiangTourMap);
+productionRegistry.registerMapPack(shanxiTourMap);
 
 export function listActiveMaps(): readonly MapCatalogEntry[] {
   return productionRegistry.listActiveMaps();

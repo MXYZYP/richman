@@ -98,6 +98,7 @@ function assertEffect(
       }
       assertJsonPayload(effect.payload, `${path}.payload`);
       assertWorldTourEffectPayload(effect, path);
+      assertGreatWallEffectPayload(effect, path);
       break;
     case 'move_to':
       if (!Number.isSafeInteger(effect.cellId) || !cellIds.has(effect.cellId!)) {
@@ -263,6 +264,59 @@ function assertWorldTourAirportPayloadShape(payload: unknown, path: string): Wor
     branchIds.add(cellId);
   });
   return value;
+}
+
+function isGreatWallModule(ref: unknown): boolean {
+  return ref !== null
+    && typeof ref === 'object'
+    && (ref as RuleModuleRef).id === 'great-wall'
+    && (ref as RuleModuleRef).version === 1;
+}
+
+interface GreatWallBeaconPayload {
+  claimCost: number;
+  toll: number;
+}
+
+/**
+ * 烽火台（great-wall@1 的 `beacon` 模块格）payload。
+ * engine 的 `beaconPayload` 用 `Number.isSafeInteger` 读这两个字段，非整数会被它当作非法 payload
+ * 而静默跳过落点结算（表现为「烽火台不生效」）。所以这里同样要求安全整数，别用 isFiniteNumber，
+ * 否则地图能过校验、运行时却失效。
+ */
+function assertGreatWallBeaconPayloadShape(
+  payload: unknown,
+  path: string,
+): GreatWallBeaconPayload {
+  assertExactKeys(payload, ['claimCost', 'toll'], path);
+  const value = payload as unknown as GreatWallBeaconPayload;
+  if (!Number.isSafeInteger(value.claimCost) || value.claimCost < 0) {
+    fail(`${path}.claimCost`, 'must be a non-negative safe integer');
+  }
+  if (!Number.isSafeInteger(value.toll) || value.toll <= 0) {
+    fail(`${path}.toll`, 'must be a positive safe integer');
+  }
+  return value;
+}
+
+/**
+ * great-wall@1 的卡牌/格效果 payload。与 world-tour 一样只对自己模块的 ref 生效，
+ * 非本模块的效果直接放行；一旦确认是本模块，未支持的 effectType 必须 fail（不能静默吞掉）。
+ */
+function assertGreatWallEffectPayload(effect: any, path: string): void {
+  if (!isGreatWallModule(effect.module)) return;
+
+  const payloadPath = `${path}.payload`;
+  switch (effect.effectType) {
+    case 'beacon-patrol':
+      assertExactKeys(effect.payload, ['perBeacon'], payloadPath);
+      if (!Number.isSafeInteger(effect.payload.perBeacon) || effect.payload.perBeacon <= 0) {
+        fail(`${payloadPath}.perBeacon`, 'must be a positive safe integer');
+      }
+      return;
+    default:
+      fail(`${path}.effectType`, 'is not supported by great-wall@1');
+  }
 }
 
 function assertMapPackStructure(value: unknown): asserts value is MapPack {
@@ -659,6 +713,12 @@ function assertBoard(
           fail(`${path}.cellType`, 'must be airport-branch for world-tour@1');
         }
         assertWorldTourAirportPayloadShape(cell.payload, `${path}.payload`);
+      }
+      if (isGreatWallModule(cell.module)) {
+        if (cell.cellType !== 'beacon') {
+          fail(`${path}.cellType`, 'must be beacon for great-wall@1');
+        }
+        assertGreatWallBeaconPayloadShape(cell.payload, `${path}.payload`);
       }
     } else if (!CORE_CELL_TYPES.has(cell.type)) {
       fail(`game.board.cells[${index}].type`, 'must be a supported core cell type');

@@ -18,6 +18,7 @@ import {
   type ModuleEffectExecutionHandler,
   type RuleModuleDefinition,
 } from '../moduleRegistry';
+import { landingFor } from '../moduleToolkit';
 import type { GameEvent, GameState } from '../types';
 
 const coreRef = { id: 'core', version: 1 } as const;
@@ -192,6 +193,56 @@ describe('formal module envelopes', () => {
       0,
       registry,
     )).toThrow(/alpha@1.*enabled/i);
+  });
+
+  it('#21 B：自定义 registry 上「模块 handler 内递归落点」仍用同一 registry，不回落 default', () => {
+    let seenRegistry: unknown = null;
+    const registry = createRuleModuleRegistry([
+      coreRuleModuleDefinition,
+      {
+        ...moduleDefinition(alphaRef),
+        cellHandlers: [{
+          type: 'module',
+          cellType: 'shared',
+          handle: (context) => {
+            seenRegistry = context.registry;
+            // 模块 handler 内部递归落点：把玩家挪到 beta 格后原地再结算一次 beta 落点。
+            // 若 registry 未透传（回落 defaultRuleModuleRegistry），这里会因 default 上没有
+            // alpha@1/beta@1 而抛 `Unknown rule module`，正是 #21 B 要消除的扩展性缺陷。
+            const moved = {
+              ...context.state,
+              players: context.state.players.map((player) => (
+                player.id === context.playerId ? { ...player, position: betaCellId } : player
+              )),
+            };
+            const inner = landingFor(context)(moved, context.playerId, context.events);
+            return {
+              state: { ...inner.state, turnPhase: 'managing' as const },
+              events: [...inner.events, moduleEvent(alphaRef, 'cell_settled')],
+              newDebt: inner.newDebt,
+            };
+          },
+        }],
+      },
+      moduleDefinition(betaRef),
+    ]);
+    const { state, alphaCellId, betaCellId } = makeState();
+    const playerId = state.currentPlayerId;
+    const onAlpha = {
+      ...state,
+      players: state.players.map((player) => (
+        player.id === playerId ? { ...player, position: alphaCellId } : player
+      )),
+    };
+
+    const result = resolveLanding(onAlpha, playerId, [], 0, registry);
+
+    expect(seenRegistry).toBe(registry);
+    const landed = result.events
+      .filter((event): event is ModuleEvent => event.type === 'module')
+      .map((event) => `${event.module.id}@${event.module.version}:${event.eventType}`);
+    expect(landed).toContain('beta@1:cell_settled');
+    expect(landed).toContain('alpha@1:cell_settled');
   });
 
   it('chooseBotIntent 使用可注入 registry，并返回 module intent', () => {

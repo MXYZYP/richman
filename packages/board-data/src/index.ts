@@ -18,4 +18,13 @@ export type {
 } from './mapTypes';
 
 export { listActiveMaps, getActiveMapPack, getMapPack } from './registry';
+export { chinaTourMap } from './chinaTourMap';
 export { worldTourMap } from './worldTourMap';
+export { classicTourMap } from './classicTourMap';
+export { silkRoadMap } from './silkRoadMap';
+export { greatWallMap } from './greatWallMap';
+export { yellowRiverMap } from './yellowRiverMap';
+export { yangtzeTourMap } from './yangtzeTourMap';
+export { pearlTourMap } from './pearlTourMap';
+export { xinjiangTourMap } from './xinjiangTourMap';
+export { shanxiTourMap } from './shanxiTourMap';

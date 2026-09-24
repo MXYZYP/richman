@@ -1,0 +1,218 @@
+{
+  "chance": [
+    {
+      "id": "sx-c01",
+      "text": "在平遥古城投宿一晚老客栈：花费 300 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 300
+      }
+    },
+    {
+      "id": "sx-c02",
+      "text": "云冈石窟拓片被藏家高价收走：得 1500 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1500
+      }
+    },
+    {
+      "id": "sx-c03",
+      "text": "沿大运线一路南下不耽搁：前进四步",
+      "effect": {
+        "type": "move_steps",
+        "steps": 4
+      }
+    },
+    {
+      "id": "sx-c04",
+      "text": "老陈醋作坊年底分红：得 1800 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1800
+      }
+    },
+    {
+      "id": "sx-c05",
+      "text": "在碛口古镇拍下黄河落日：稿酬 900 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 900
+      }
+    },
+    {
+      "id": "sx-c06",
+      "text": "壶口涨水冲垮一段栈道：赔偿 1200 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1200
+      }
+    },
+    {
+      "id": "sx-c07",
+      "text": "加固窑洞与关隘：房屋每栋付 300 元；关隘每处付 950 元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 300,
+        "perHotel": 950
+      }
+    },
+    {
+      "id": "sx-c08",
+      "text": "翻出晋商票号的旧账，分到红利：得 2400 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2400
+      }
+    },
+    {
+      "id": "sx-c09",
+      "text": "与驼帮走散，向沿路商队求援：每人接济你 450 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 450
+      }
+    },
+    {
+      "id": "sx-c10",
+      "text": "太行山隧道塌方，等抢修放行：暂停一次",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 1
+      }
+    },
+    {
+      "id": "sx-c11",
+      "text": "煤田产能核查罚款：损失 1000 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": "sx-c12",
+      "text": "给古建测绘队当向导获赏：得 1100 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1100
+      }
+    }
+  ],
+  "destiny": [
+    {
+      "id": "sx-d01",
+      "text": "顺着汾河返程回到太原：回到起点，并可领取起点奖金 2000 元",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": "sx-d02",
+      "text": "在山间走岔了路，退回起点，且不可领取起点奖金",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": false
+      }
+    },
+    {
+      "id": "sx-d03",
+      "text": "雁门关驿马传讯：直接前往雁门关，可领起点奖金",
+      "effect": {
+        "type": "move_to",
+        "cellId": 5,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": "sx-d04",
+      "text": "在晋祠修复一眼古泉：得 2200 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2200
+      }
+    },
+    {
+      "id": "sx-d05",
+      "text": "修缮庙宇与关隘：房屋每栋付 250 元；关隘每处付 1000 元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 250,
+        "perHotel": 1000
+      }
+    },
+    {
+      "id": "sx-d06",
+      "text": "在太行山里听了半宿上党梆子",
+      "effect": {
+        "type": "none"
+      }
+    },
+    {
+      "id": "sx-d07",
+      "text": "登上五台山黛螺顶，取回一捧山泉：奖金 3000 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 3000
+      }
+    },
+    {
+      "id": "sx-d08",
+      "text": "帮老乡收了半亩莜麦：得 1100 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1100
+      }
+    },
+    {
+      "id": "sx-d09",
+      "text": "在黄河滩上采到一筐滩枣：得 1500 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1500
+      }
+    },
+    {
+      "id": "sx-d10",
+      "text": "请同行走商队喝了一壶老茶：每人送礼金 700 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 700
+      }
+    },
+    {
+      "id": "sx-d11",
+      "text": "被关卡税吏刁难，货物被扣：损失 1000 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": "sx-d12",
+      "text": "窑洞塌方，乡邻赶来相助：每人各出 900 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 900
+      }
+    },
+    {
+      "id": "sx-d13",
+      "text": "在古镇遇到老朋友：可以再翻一张机会",
+      "effect": {
+        "type": "draw_card",
+        "deck": "chance"
+      }
+    },
+    {
+      "id": "sx-d14",
+      "text": "在吕梁山挖到一块成色极好的煤标本：得 1600 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1600
+      }
+    }
+  ]
+}

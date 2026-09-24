@@ -1,0 +1,225 @@
+{
+  "chance": [
+    {
+      "id": "gw-c01",
+      "text": "登上烽火台点起狼烟：获得 600 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 600
+      }
+    },
+    {
+      "id": "gw-c02",
+      "text": "边墙年久失修，出钱修补：房屋每栋 400 元；关城每座 1150 元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 400,
+        "perHotel": 1150
+      }
+    },
+    {
+      "id": "gw-c03",
+      "text": "沿边墙巡视一圈：你名下每座烽火台带来 400 元",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "great-wall",
+          "version": 1
+        },
+        "effectType": "beacon-patrol",
+        "payload": {
+          "perBeacon": 400
+        }
+      }
+    },
+    {
+      "id": "gw-c04",
+      "text": "与草原马市互市：获利 2400 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2400
+      }
+    },
+    {
+      "id": "gw-c05",
+      "text": "私自出关被查获：向银行缴纳 1800 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1800
+      }
+    },
+    {
+      "id": "gw-c06",
+      "text": "换乘驿马加鞭赶路：前进三步",
+      "effect": {
+        "type": "move_steps",
+        "steps": 3
+      }
+    },
+    {
+      "id": "gw-c07",
+      "text": "军屯开垦丰收：获得 1250 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1250
+      }
+    },
+    {
+      "id": "gw-c08",
+      "text": "军马走失，雇人寻回：花费 250 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 250
+      }
+    },
+    {
+      "id": "gw-c09",
+      "text": "朝廷拨下修墙银：银行发放 2000 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2000
+      }
+    },
+    {
+      "id": "gw-c10",
+      "text": "在墩台休整，等待换防：暂停一次",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 1
+      }
+    },
+    {
+      "id": "gw-c11",
+      "text": "绘制边墙舆图获赏：得 900 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 900
+      }
+    },
+    {
+      "id": "gw-c12",
+      "text": "误信走私商人，货银两空：损失 1000 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1000
+      }
+    }
+  ],
+  "destiny": [
+    {
+      "id": "gw-d01",
+      "text": "奉调回京述职：回到起点，并可领取起点奖金 2000 元",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": "gw-d02",
+      "text": "在大漠中迷失方向，退回起点，且不可领取起点奖金",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": false
+      }
+    },
+    {
+      "id": "gw-d03",
+      "text": "六百里加急直抵肃州驿站，可领起点奖金",
+      "effect": {
+        "type": "move_to",
+        "cellId": 6,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": "gw-d04",
+      "text": "向戍卒传授筑城之法：获利 2200 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2200
+      }
+    },
+    {
+      "id": "gw-d05",
+      "text": "边墙越冬维护：房屋每座付 250 元；关城每座付 1000 元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 250,
+        "perHotel": 1000
+      }
+    },
+    {
+      "id": "gw-d06",
+      "text": "登上敌楼远眺塞外，安然无事",
+      "effect": {
+        "type": "none"
+      }
+    },
+    {
+      "id": "gw-d07",
+      "text": "押运粮草到山海关，交付验收：奖金 3000 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 3000
+      }
+    },
+    {
+      "id": "gw-d08",
+      "text": "为守军修缮兵器：得 1250 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1250
+      }
+    },
+    {
+      "id": "gw-d09",
+      "text": "疏浚边墙壕堑，获当地酬谢：得 1250 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1250
+      }
+    },
+    {
+      "id": "gw-d10",
+      "text": "随钦差巡边受赏：每人馈赠 800 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 800
+      }
+    },
+    {
+      "id": "gw-d11",
+      "text": "被税吏刁难，货物被扣：损失 1000 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": "gw-d12",
+      "text": "遭遇风沙被困，同行商队搭救：每人各出 1000 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 1000
+      }
+    },
+    {
+      "id": "gw-d13",
+      "text": "在凉州驿站遇到故人：可再翻一张机会",
+      "effect": {
+        "type": "draw_card",
+        "deck": "chance"
+      }
+    },
+    {
+      "id": "gw-d14",
+      "text": "挖出前朝箭镞与铜钱：获得 1500 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1500
+      }
+    }
+  ]
+}
