@@ -722,31 +722,37 @@ onMounted(() => {
           </div>
         </dl>
 
-        <!-- 成就（#116）：与上面的战绩同源，全部在本机算出，不上传任何东西。 -->
-        <div v-if="achievementSummary" class="achievements">
-          <p class="achievements-summary">
+        <!-- 成就（#116）：与上面的战绩同源，全部在本机算出，不上传任何东西。
+             做成下拉块 —— 收起时只留一行「成就 X / Y」，不占主屏；展开才铺三组明细。
+             用 <details> 而不是 v-if：明细始终留在 DOM 里，折叠只是视觉收起，
+             因此展开不会有「先空一下再填」的跳动，也不需要额外状态。 -->
+        <details v-if="achievementSummary" class="achievements">
+          <summary class="achievements-summary">
             <strong>成就 {{ achievementSummary.unlockedCount }} / {{ achievementSummary.total }}</strong>
-            <span class="achievements-next">{{ describeNextAchievement(achievementSummary) }}</span>
-          </p>
-          <div v-for="group in achievementGroups" :key="group.label" class="achievement-group">
-            <span class="achievement-group-label">{{ group.label }}</span>
-            <ul class="achievement-list">
-              <li
-                v-for="achievement in group.items"
-                :key="achievement.id"
-                class="achievement"
-                :class="{ 'achievement-unlocked': achievement.unlocked }"
-              >
-                <span class="achievement-head">
-                  <span class="achievement-mark">{{ achievement.unlocked ? '已解锁' : '未解锁' }}</span>
-                  <span class="achievement-title">{{ achievement.title }}</span>
-                  <span class="achievement-progress">{{ achievement.progress.current }} / {{ achievement.progress.target }}</span>
-                </span>
-                <span class="achievement-desc">{{ achievement.description }}</span>
-              </li>
-            </ul>
+            <span class="achievements-toggle" aria-hidden="true"></span>
+          </summary>
+          <div class="achievements-body">
+            <p class="achievements-next">{{ describeNextAchievement(achievementSummary) }}</p>
+            <div v-for="group in achievementGroups" :key="group.label" class="achievement-group">
+              <span class="achievement-group-label">{{ group.label }}</span>
+              <ul class="achievement-list">
+                <li
+                  v-for="achievement in group.items"
+                  :key="achievement.id"
+                  class="achievement"
+                  :class="{ 'achievement-unlocked': achievement.unlocked }"
+                >
+                  <span class="achievement-head">
+                    <span class="achievement-mark">{{ achievement.unlocked ? '已解锁' : '未解锁' }}</span>
+                    <span class="achievement-title">{{ achievement.title }}</span>
+                    <span class="achievement-progress">{{ achievement.progress.current }} / {{ achievement.progress.target }}</span>
+                  </span>
+                  <span class="achievement-desc">{{ achievement.description }}</span>
+                </li>
+              </ul>
+            </div>
           </div>
-        </div>
+        </details>
 
         <div class="stats-transfer">
           <p class="stats-transfer-hint">
@@ -1348,25 +1354,58 @@ onMounted(() => {
 }
 
 
-/* ---- 成就（#116）：与战绩同格，视觉上也是「战绩的延伸」。 ---- */
+/* ---- 成就（#116）：与战绩同格，视觉上也是「战绩的延伸」。
+        收成下拉块：收起时只占一行，默认不占主屏。 ---- */
 .achievements {
-  display: grid;
-  gap: 8px;
   padding-top: 12px;
   border-top: 1px dashed var(--color-border);
 }
 
 .achievements-summary {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 4px 10px;
-  margin: 0;
+  min-height: 32px;
   font-size: 12px;
   color: var(--color-muted);
+  cursor: pointer;
+  /* 去掉浏览器自带的三角，改用右侧的「展开 / 收起」文字：手机上手指点起来更明确。 */
+  list-style: none;
+}
+
+.achievements-summary::-webkit-details-marker {
+  display: none;
 }
 
 .achievements-summary strong {
   color: var(--color-text);
+}
+
+.achievements-toggle {
+  margin-inline-start: auto;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.achievements-toggle::after {
+  content: '展开 ▾';
+}
+
+.achievements[open] .achievements-toggle::after {
+  content: '收起 ▴';
+}
+
+.achievements-body {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.achievements-next {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-muted);
 }
 
 .achievement-group {

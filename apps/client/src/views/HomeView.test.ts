@@ -250,6 +250,20 @@ describe('HomeView 成就与排行榜（#116）', () => {
     expect(html).toContain('下一个：开局');
   });
 
+  it('成就收成下拉块：默认收起，明细仍然留在 DOM 里', async () => {
+    const html = await withStats(statsJson(), () => renderHome());
+
+    // 认「是不是下拉块」一律用**结构标记**：`<details>` + `<summary>`。
+    // 不整段匹配 `<details class="achievements">`：scoped 样式会给元素额外挂 `data-v-*`。
+    expect(html).toMatch(/<details[^>]*class="achievements"/);
+    expect(html).toMatch(/<summary[^>]*class="achievements-summary"/);
+    // 默认收起 —— 没有 open 属性，所以收起时只占 summary 那一行，不占主屏。
+    expect(html).not.toMatch(/<details[^>]*class="achievements"[^>]*\sopen/);
+    // 收起只是视觉收起：三组明细与「下一个目标」必须仍在 DOM 里，否则展开会是空的。
+    expect(html).toContain('achievement-group-label');
+    expect(html).toContain('下一个：开局');
+  });
+
   it('战绩上来之后解锁项真的点亮（不是永远停在未解锁）', async () => {
     const html = await withStats(
       statsJson({
