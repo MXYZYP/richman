@@ -77,7 +77,33 @@ function assertConfig(pack: MapPack): void {
   if (config.airportBranchDice !== 1) {
     fail('game.config.airportBranchDice', 'must be exactly 1');
   }
-  if (config.jailEnabled !== false) fail('game.config.jailEnabled', 'must be false');
+  // 监狱开关必须与地图声明的规则模块保持一致：要求 prison@1 的图必须打开，其余图必须关闭。
+  // （这里原先写死 `must be false` —— 那是「监狱规格保留、本版关闭」时期的占位约束；
+  //   prison@1 实现之后必须同步放宽，否则带监狱的新图会被自己的校验器挡在注册之外。）
+  const requiresPrison = pack.game.requiredRuleModules.some((module) => (
+    module.id === 'prison' && module.version === 1
+  ));
+  if (typeof config.jailEnabled !== 'boolean') {
+    fail('game.config.jailEnabled', 'must be a boolean');
+  }
+  if (config.jailEnabled !== requiresPrison) {
+    fail(
+      'game.config.jailEnabled',
+      requiresPrison
+        ? 'must be true when the map requires prison@1'
+        : 'must be false unless the map requires prison@1',
+    );
+  }
+  // 保释金（prison@1）：只在声明了监狱模块的图上存在，且必须是正安全整数。
+  // 其余地图必须**完全不写**这个键 —— game.config 参与 contentHash，多一个键就会让已上线地图
+  // 的哈希漂移，本地存档与房间快照随即被判为「地图不匹配」。
+  if (requiresPrison) {
+    if (!Number.isSafeInteger(config.jailBailCost) || (config.jailBailCost as number) <= 0) {
+      fail('game.config.jailBailCost', 'must be a positive integer when the map requires prison@1');
+    }
+  } else if (config.jailBailCost !== undefined) {
+    fail('game.config.jailBailCost', 'must be absent unless the map requires prison@1');
+  }
 }
 
 function assertEffect(
@@ -99,6 +125,7 @@ function assertEffect(
       assertJsonPayload(effect.payload, `${path}.payload`);
       assertWorldTourEffectPayload(effect, path);
       assertGreatWallEffectPayload(effect, path);
+      assertPrisonEffectPayload(effect, path);
       break;
     case 'move_to':
       if (!Number.isSafeInteger(effect.cellId) || !cellIds.has(effect.cellId!)) {
@@ -316,6 +343,51 @@ function assertGreatWallEffectPayload(effect: any, path: string): void {
       return;
     default:
       fail(`${path}.effectType`, 'is not supported by great-wall@1');
+  }
+}
+
+function isPrisonModule(ref: unknown): boolean {
+  return ref !== null
+    && typeof ref === 'object'
+    && (ref as RuleModuleRef).id === 'prison'
+    && (ref as RuleModuleRef).version === 1;
+}
+
+const PRISON_CELL_TYPES = new Set(['goto-jail', 'jail']);
+
+/**
+ * prison@1 的模块格 payload：两种格都不需要参数（进牢格把棋子送去哪一格，由引擎按
+ * 「棋盘上唯一的 jail 角格」自行决定），因此必须是空对象 —— 与 world-tour 的空 payload 同一标准。
+ * 顺带锁死 cellType 只能是 goto-jail / jail，避免地图里写出引擎根本不认的格子（表现为「落上去没反应」）。
+ */
+function assertPrisonCellPayloadShape(cellType: string, payload: unknown, path: string): void {
+  if (!PRISON_CELL_TYPES.has(cellType)) {
+    fail(path, 'cellType must be goto-jail or jail for prison@1');
+  }
+  assertExactKeys(payload, [], path);
+}
+
+/**
+ * prison@1 的卡牌/格效果 payload。与 world-tour / great-wall 一样只对自己模块的 ref 生效，
+ * 非本模块的效果直接放行；一旦确认是本模块，未支持的 effectType 必须 fail（不能静默吞掉）。
+ */
+function assertPrisonEffectPayload(effect: any, path: string): void {
+  if (!isPrisonModule(effect.module)) return;
+
+  const payloadPath = `${path}.payload`;
+  switch (effect.effectType) {
+    case 'prison-confine':
+      assertEmptyPayload(effect.payload, payloadPath);
+      return;
+    case 'prison-card':
+      // 卡面取自被抽到的那张卡本身，payload 只声明它属于哪个牌堆（用于战报与回放）。
+      assertExactKeys(effect.payload, ['deck'], payloadPath);
+      if (effect.payload.deck !== 'chance' && effect.payload.deck !== 'destiny') {
+        fail(`${payloadPath}.deck`, 'must be chance or destiny');
+      }
+      return;
+    default:
+      fail(`${path}.effectType`, 'is not supported by prison@1');
   }
 }
 
@@ -719,6 +791,9 @@ function assertBoard(
           fail(`${path}.cellType`, 'must be beacon for great-wall@1');
         }
         assertGreatWallBeaconPayloadShape(cell.payload, `${path}.payload`);
+      }
+      if (isPrisonModule(cell.module)) {
+        assertPrisonCellPayloadShape(cell.cellType, cell.payload, `${path}.payload`);
       }
     } else if (!CORE_CELL_TYPES.has(cell.type)) {
       fail(`game.board.cells[${index}].type`, 'must be a supported core cell type');

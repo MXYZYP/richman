@@ -3060,6 +3060,8 @@ describe('online session public room list', () => {
     spectatable: true,
     turnTimeLimitSec: 0,
     botDifficulty: 'normal',
+    hasPassword: false,
+    allowSpectators: true,
   };
 
   it('可以在没有任何存档的情况下拉取列表，且请求体里没有幂等键', async () => {

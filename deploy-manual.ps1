@@ -138,6 +138,11 @@ $files = @(
   # Imported by moduleRegistry.ts, so a missing upload leaves a stale copy (or none) and the
   # server dies at startup with "Unknown rule module" while building the default registry.
   "packages/engine/src/greatWallModule.ts",
+  # prison@1 (roadmap #127 third rule module, enabled only by the northeast-tour map):
+  # goto-jail / jail cells, jail-exit rolls, jail-free cards and the optional bail cost.
+  # Same hazard as greatWallModule.ts above: moduleRegistry.ts imports it, so a stale or
+  # missing copy makes the server fail while building the default registry.
+  "packages/engine/src/prisonModule.ts",
   # ---------- Engine tests (keep the server copies current with the 2.x registry API) ----------
   "packages/engine/src/__tests__/moduleEnvelope.test.ts",
   "packages/engine/src/__tests__/moduleRegistry.test.ts",
@@ -145,6 +150,7 @@ $files = @(
   "packages/engine/src/__tests__/surrender.test.ts",
   "packages/engine/src/__tests__/botDifficulty.test.ts",
   "packages/engine/src/__tests__/greatWallModule.test.ts",
+  "packages/engine/src/__tests__/prisonModule.test.ts",
   # Bargain tests (#105 trade / #106 auction). The server runs the client build (vue-tsc) but
   # engine tests are executed there too; a stale copy would validate the old engine contract.
   "packages/engine/src/__tests__/bargain.test.ts",
@@ -160,6 +166,9 @@ $files = @(
   # builds the production registry at startup, so a stale mapValidation.ts would mis-validate
   # (or reject) the new map's `beacon` module cells.
   "packages/board-data/src/greatWallMap.ts",
+  # types.ts carries GameConfig (incl. the optional prison bail cost) and the module cell
+  # types; registry.ts / mapValidation.ts import it, so a stale copy breaks the build.
+  "packages/board-data/src/types.ts",
   "packages/board-data/src/mapValidation.ts",
   "packages/board-data/src/validate.ts",
   "packages/board-data/src/registry.ts",
@@ -212,6 +221,12 @@ $files = @(
   "packages/board-data/maps/shanxi-tour/v1/cards.json",
   "packages/board-data/maps/shanxi-tour/v1/game-config.json",
   "packages/board-data/maps/shanxi-tour/v1/manifest.json",
+  "packages/board-data/maps/northeast-tour/v1/board.json",
+  "packages/board-data/maps/northeast-tour/v1/cards.json",
+  "packages/board-data/maps/northeast-tour/v1/game-config.json",
+  "packages/board-data/maps/northeast-tour/v1/manifest.json",
+  "packages/board-data/src/northeastTourMap.ts",
+  "packages/board-data/src/__tests__/northeastTourMap.test.ts",
   "packages/board-data/src/shanxiTourMap.ts",
   "packages/board-data/src/__tests__/shanxiTourMap.test.ts",
   "packages/board-data/src/xinjiangTourMap.ts",
@@ -334,7 +349,22 @@ $files = @(
   "apps/server/src/__tests__/leaderboard.test.ts",
   "apps/server/src/http/slidingWindowRateLimiter.ts",
   "apps/server/src/leaderboard/leaderboardStore.ts",
-  "apps/server/src/leaderboard/leaderboardRoutes.ts"
+  "apps/server/src/leaderboard/leaderboardRoutes.ts",
+  # Fifth batch: cloud save ("stats in the cloud") through server-issued recovery codes (#123).
+  # httpJson.ts is the shared helper module that leaderboardRoutes.ts now imports, so the two
+  # must ship together -- a stale leaderboardRoutes.ts would still work, but a stale httpJson.ts
+  # would not exist at all on the server.
+  # playerAccountStore.ts keeps the sha256 hashes of the recovery codes (never the plaintext).
+  # server.ts imports both route modules and mounts them BEFORE the static handler; tsx only
+  # fails at runtime, so a stale or missing server copy stays silent until a player syncs.
+  "apps/server/src/http/httpJson.ts",
+  "apps/server/src/player/playerAccountStore.ts",
+  "apps/server/src/player/playerAccountRoutes.ts",
+  "apps/server/src/__tests__/playerAccount.test.ts",
+  # Client side of the same feature: sync/delta helpers + the home-screen cloud-sync block.
+  # HomeView.vue imports ./session/playerAccount, so leaving it out breaks vue-tsc TS2307.
+  "apps/client/src/session/playerAccount.ts",
+  "apps/client/src/session/playerAccount.test.ts"
 )
 
 # ---------- Pre-flight guard (added 2026-09-23 after a failed deploy) ----------

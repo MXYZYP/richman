@@ -16,12 +16,15 @@ import { formatMoney } from './format';
 const MODULE_LABELS: Readonly<Record<string, string>> = {
   'world-tour': '世界巡游',
   'great-wall': '烽火台',
+  'prison': '监狱',
 };
 
 /** 只有这些模块需要一句额外的玩法提示；纯 core 的地图不该多出任何一句话。 */
 const MODULE_NOTES: Readonly<Record<string, string>> = {
   'world-tour': '落在机场格会进入世界巡游支线：下一回合不掷骰，先在待选动作里挑一座城市再继续。',
   'great-wall': '落在无主烽火台可以花钱占据；他人落到你已占据的烽火台，要向你支付通行费。',
+  'prison': '停在进牢格或被「进牢」卡送进监狱后，轮到自己时可以在待选动作里挑一种方式出狱：'
+    + '掷骰达标（出狱后按点数继续走）、用出狱许可证，或缴纳保释金立刻出狱。',
 };
 
 export interface MapRuleFact {
@@ -91,6 +94,7 @@ export function describeMapRules(pack: MapPack): MapRulesSummary {
   let stationCount = 0;
   let utilityCount = 0;
   let beaconCount = 0;
+  let jailCount = 0;
   let chanceCount = 0;
   let destinyCount = 0;
   let taxCount = 0;
@@ -105,8 +109,10 @@ export function describeMapRules(pack: MapPack): MapRulesSummary {
     } else if (cell.type === 'tax') {
       taxCount += 1;
     }
-    // 烽火台是 great-wall@1 的模块格，不在 property 里，故与上面的分支并列判断。
+    // 烽火台是 great-wall@1 的模块格、进牢格是 prison@1 的模块格：都不在 property 里，
+    // 故与上面的分支并列判断。
     if (cell.type === 'module' && cell.cellType === 'beacon') beaconCount += 1;
+    if (cell.type === 'module' && cell.cellType === 'goto-jail') jailCount += 1;
   }
 
   const [utilityFirst, utilitySecond] = config.utilityMultipliers;
@@ -135,6 +141,16 @@ export function describeMapRules(pack: MapPack): MapRulesSummary {
   }
   if (beaconCount > 0) {
     facts.push({ label: '烽火台', value: `${beaconCount} 座（可占据并向过客收通行费）` });
+  }
+  if (jailCount > 0) {
+    // 保释金是可选配置（只有启用监狱的地图才配），所以只在确实配了的时候才写进这一行。
+    const bailCost = config.jailBailCost;
+    facts.push({
+      label: '监狱',
+      value: bailCost === undefined
+        ? `${jailCount} 处进牢格`
+        : `${jailCount} 处进牢格（保释金 ¥${formatMoney(bailCost)}）`,
+    });
   }
   if (chanceCount > 0 || destinyCount > 0) {
     facts.push({ label: '机会 / 命运', value: `${chanceCount} / ${destinyCount} 格` });

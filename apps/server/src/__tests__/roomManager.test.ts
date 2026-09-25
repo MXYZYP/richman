@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { getActiveMapPack } from '@richman/board-data';
 import { createGame, type GameState } from '@richman/engine';
+import type { RoomRuleConfig } from '@richman/protocol';
 import { RoomManager } from '../rooms/roomManager';
 
 type RoomStatus = 'lobby' | 'playing' | 'ended';
@@ -13,7 +14,11 @@ type RoomErrorCode =
   | 'NOT_HOST'
   | 'INVALID_NICKNAME'
   | 'NOT_ENOUGH_PLAYERS'
-  | 'INVALID_ROOM_ACTION';
+  | 'INVALID_ROOM_ACTION'
+  // #23 ③：房间密码与观战开关两条独立错误码。
+  | 'WRONG_ROOM_PASSWORD'
+  | 'SPECTATING_DISABLED';
+
 
 interface PublicRoomPlayer {
   id: string;
@@ -98,7 +103,13 @@ interface RoomManagerDependencies {
 
 interface RoomManagerContract {
   createRoom(nickname: string, mapId: string, requestId?: string): RoomResult<CreateRoomValue>;
-  joinRoom(roomCode: string, nickname: string, requestId?: string, role?: "player" | "spectator"): RoomResult<JoinRoomValue>;
+  joinRoom(
+    roomCode: string,
+    nickname: string,
+    requestId?: string,
+    role?: "player" | "spectator",
+    password?: string,
+  ): RoomResult<JoinRoomValue>;
   addBot(roomCode: string, requesterId: string): RoomResult<PublicRoomState>;
   removeBot(roomCode: string, requesterId: string, playerId: string): RoomResult<PublicRoomState>;
   renameBot(roomCode: string, requesterId: string, playerId: string, nickname: string): RoomResult<PublicRoomState>;
@@ -107,14 +118,34 @@ interface RoomManagerContract {
   updateRoomSettings(
     roomCode: string,
     requesterId: string,
-    patch: { isPublic?: boolean; turnTimeLimitSec?: number },
-  ): RoomResult<{ isPublic: boolean; turnTimeLimitSec: number }>;
+    patch: {
+      isPublic?: boolean;
+      turnTimeLimitSec?: number;
+      ruleConfig?: RoomRuleConfig | null;
+      cashGoal?: number | null;
+      password?: string | null;
+      allowSpectators?: boolean;
+    },
+  ): RoomResult<RoomSettings>;
+  /** 单播用投影（#23 ③）：密码只以布尔出现，绝不回带凭据。 */
+  getRoomSettings(roomCode: string): RoomSettings | null;
+  getGameSnapshot(roomCode: string): GameState | null;
   listPublicRooms(): PublicRoomSummary[];
   getPublicRoom(roomCode: string): PublicRoomState | null;
   leaveRoom(roomCode: string, playerId: string): RoomResult<PublicRoomState | null>;
   markDisconnected(roomCode: string, playerId: string): RoomResult<PublicRoomState | null>;
   resumeRoom(roomCode: string, playerId: string, token: string): RoomResult<PublicRoomState>;
   dispose(): void;
+}
+
+/** 房间设置投影（#4 / #6 / #101 / #106 / #107 / #108 / #23 ③）。 */
+interface RoomSettings {
+  isPublic: boolean;
+  turnTimeLimitSec: number;
+  ruleConfig: RoomRuleConfig | null;
+  cashGoal: number | null;
+  passwordProtected: boolean;
+  allowSpectators: boolean;
 }
 
 /** 公开房间列表条目（#108）。刻意不含成员名单 / 观战者名单 / 托管状态 —— 见 `listPublicRooms`。 */
@@ -131,6 +162,10 @@ interface PublicRoomSummary {
   spectatable: boolean;
   turnTimeLimitSec: number;
   botDifficulty: string;
+  /** #23 ③：列表只提示「要不要密码」，不含密码本身。 */
+  hasPassword: boolean;
+  /** #23 ③：房主是否允许观战；`false` 时 `spectatable` 必然是 `false`。 */
+  allowSpectators: boolean;
 }
 
 function createChinaRoom(
@@ -1619,6 +1654,10 @@ describe('RoomManager public room list (#108)', () => {
         spectatable: true,
         turnTimeLimitSec: 0,
         botDifficulty: 'normal',
+        // #23 ③：这两间房都没设密码、也没关观战 —— 新字段必须出现在全等断言里，
+        // 否则「摘要悄悄多带了一个字段」这种回归会溜过这一整条测试。
+        hasPassword: false,
+        allowSpectators: true,
       },
       expect.objectContaining({ roomCode: '000008', status: 'playing', playerCount: 2, joinable: false, spectatable: true }),
       expect.objectContaining({ roomCode: '000009', status: 'lobby', playerCount: 6, joinable: false, spectatable: true }),
@@ -1918,5 +1957,150 @@ describe('RoomManager room entry idempotency', () => {
     expectRoomFailure(createChinaRoom(manager, '', hostRequestId), 'INVALID_ROOM_ACTION');
     expectRoomFailure(createChinaRoom(manager, '另一位房主', hostRequestId), 'INVALID_ROOM_ACTION');
     expectRoomFailure(createChinaRoom(manager, '', '11223344556677889900aabbccddeeff'), 'INVALID_NICKNAME');
+  });
+});
+
+/**
+ * 房间设置扩项（#23 ③ / 待-5 剩余）：现金目标 / 房间密码 / 观战开关。
+ *
+ * 三项的共同点是「都只挂 Room、不进 GameConfig」——那条约束的理由见 protocol 里各字段的注释。
+ * 这组用例盯的是三件事：**入口校验**（不该存的组合存不进去）、**开局透传**（设置真的生效了）、
+ * **不泄露**（密码只以布尔出现在任何投影与事件里）。
+ */
+describe('RoomManager room access & win-goal rules (#23 ③)', () => {
+  test('a password-protected room rejects missing or wrong passwords and never leaks the credential', () => {
+    const manager = createManager({ roomNumbers: [7] });
+    const created = createChinaRoom(manager, '房主');
+    expectRoomSuccess(created);
+    const code = created.value.roomCode;
+
+    // 明文带着首尾空格进来，服务端须自己 trim 后再哈希。
+    const updated = manager.updateRoomSettings(code, created.value.playerId, { password: '  密室密码  ' });
+    expectRoomSuccess(updated);
+    // 广播事件里绝不含密码原文——它会被发给房间里的每一个人，包括只是来看的。
+    expect(JSON.stringify(updated.events)).not.toContain('密室密码');
+
+    const settings = manager.getRoomSettings(code);
+    expect(settings?.passwordProtected).toBe(true);
+    // 投影形状里根本没有承载密码的字段，序列化后也不该出现原文。
+    expect(settings === null ? [] : Object.keys(settings)).not.toContain('password');
+    expect(JSON.stringify(settings)).not.toContain('密室密码');
+
+    expectRoomFailure(manager.joinRoom(code, '没带密码'), 'WRONG_ROOM_PASSWORD');
+    expectRoomFailure(manager.joinRoom(code, '密码错了', undefined, 'player', 'wrong'), 'WRONG_ROOM_PASSWORD');
+    // 密码保护的是整间房：观战同样要答对，否则设了密码的房间照样能把局势看光。
+    expectRoomFailure(manager.joinRoom(code, '想围观', undefined, 'spectator'), 'WRONG_ROOM_PASSWORD');
+
+    expectRoomSuccess(manager.joinRoom(code, '知道密码', undefined, 'player', '密室密码'));
+    expectRoomSuccess(manager.joinRoom(code, '围观成功', undefined, 'spectator', '密室密码'));
+  });
+
+  test('password length is enforced by code points at the setting entry, and only the host may set it', () => {
+    const manager = createManager({ roomNumbers: [7] });
+    const created = createChinaRoom(manager, '房主');
+    expectRoomSuccess(created);
+    const code = created.value.roomCode;
+    const guest = manager.joinRoom(code, '客人');
+    expectRoomSuccess(guest);
+
+    // 沿用本类既有的房主门禁：非房主不能设密码。
+    expectRoomFailure(manager.updateRoomSettings(code, guest.value.playerId, { password: 'abcd' }), 'NOT_HOST');
+
+    for (const bad of ['abc', 'x'.repeat(13), '', '     ']) {
+      expectRoomFailure(manager.updateRoomSettings(code, created.value.playerId, { password: bad }), 'INVALID_ROOM_ACTION');
+    }
+    expect(manager.getRoomSettings(code)?.passwordProtected).toBe(false);
+
+    // 按**码点**计数：4 个 emoji 是 4 个字符（UTF-16 长度会是 8，用 .length 判就会误判上限）。
+    expectRoomSuccess(manager.updateRoomSettings(code, created.value.playerId, { password: '🔒🔒🔒🔒' }));
+    expect(manager.getRoomSettings(code)?.passwordProtected).toBe(true);
+
+    // `null` = 取消密码；取消之后新成员无需密码即可进入。
+    expectRoomSuccess(manager.updateRoomSettings(code, created.value.playerId, { password: null }));
+    expect(manager.getRoomSettings(code)?.passwordProtected).toBe(false);
+    expectRoomSuccess(manager.joinRoom(code, '后来的人'));
+  });
+
+  test('disabling spectating blocks newcomers without kicking the people already watching', () => {
+    const manager = createManager({ roomNumbers: [7] });
+    const created = createChinaRoom(manager, '房主');
+    expectRoomSuccess(created);
+    const code = created.value.roomCode;
+
+    // 先让人坐进观战位，再关掉开关——顺序决定这条用例到底在测什么。
+    expectRoomSuccess(manager.joinRoom(code, '老观众', undefined, 'spectator'));
+    expectRoomSuccess(manager.updateRoomSettings(code, created.value.playerId, { allowSpectators: false }));
+
+    expect(manager.getRoomSettings(code)?.allowSpectators).toBe(false);
+    expectRoomFailure(manager.joinRoom(code, '新观众', undefined, 'spectator'), 'SPECTATING_DISABLED');
+    // 关开关不是踢人：已在场的观战者原样留着。
+    expect(manager.getPublicRoom(code)?.spectators.map((member) => member.nickname)).toEqual(['老观众']);
+    // 参赛席位不受这个开关影响。
+    expectRoomSuccess(manager.joinRoom(code, '参赛者'));
+
+    // 公开列表里的 `spectatable` 必须与真实准入判断一致：否则列表会给出一个点下去就报错的「旁观」。
+    expectRoomSuccess(manager.updateRoomSettings(code, created.value.playerId, { isPublic: true }));
+    expect(manager.listPublicRooms()[0]).toMatchObject({
+      allowSpectators: false,
+      spectatable: false,
+      joinable: true,
+      hasPassword: false,
+    });
+  });
+
+  test('the cash goal must beat the effective initial cash and reaches the started game state', () => {
+    const manager = createManager({ roomNumbers: [7] });
+    const created = createChinaRoom(manager, '房主');
+    expectRoomSuccess(created);
+    const code = created.value.roomCode;
+    const guest = manager.joinRoom(code, '客人');
+    expectRoomSuccess(guest);
+
+    // 默认不设目标（= 打到只剩最后一人）。
+    expect(manager.getRoomSettings(code)?.cashGoal).toBeNull();
+
+    // 地图初始资金是 15000：等于它、低于它、非整数一律拒（引擎硬要求 `cashGoal > initialCash`）。
+    for (const bad of [15000, 10000, -1, 1.5]) {
+      expectRoomFailure(manager.updateRoomSettings(code, created.value.playerId, { cashGoal: bad }), 'INVALID_ROOM_ACTION');
+    }
+
+    expectRoomSuccess(manager.updateRoomSettings(code, created.value.playerId, { cashGoal: 30000 }));
+    expect(manager.getRoomSettings(code)?.cashGoal).toBe(30000);
+    expectRoomSuccess(manager.startRoom(code, created.value.playerId));
+    // 设置真的透传进了对局状态；否则界面上写着「目标 30000」而引擎根本没这回事。
+    expect(manager.getGameSnapshot(code)?.cashGoal).toBe(30000);
+  });
+
+  test('raising the initial cash above an active cash goal is rejected instead of starting a doomed game', () => {
+    const manager = createManager({ roomNumbers: [7] });
+    const created = createChinaRoom(manager, '房主');
+    expectRoomSuccess(created);
+    const code = created.value.roomCode;
+    expectRoomSuccess(manager.updateRoomSettings(code, created.value.playerId, { cashGoal: 30000 }));
+
+    // 目标 30000 + 初始资金 30000 会被 createGame 拒；这个组合必须在**设置的那一刻**就顶回去。
+    expectRoomFailure(
+      manager.updateRoomSettings(code, created.value.playerId, {
+        ruleConfig: { initialCash: 30000, maxHouseLevel: 5, mortgageInterestRate: 0.1 },
+      }),
+      'INVALID_ROOM_ACTION',
+    );
+    expect(manager.getRoomSettings(code)).toMatchObject({ ruleConfig: null, cashGoal: 30000 });
+
+    // 先把目标抬到 50000，再抬初始资金就成立了。
+    expectRoomSuccess(manager.updateRoomSettings(code, created.value.playerId, { cashGoal: 50000 }));
+    expectRoomSuccess(manager.updateRoomSettings(code, created.value.playerId, {
+      ruleConfig: { initialCash: 30000, maxHouseLevel: 5, mortgageInterestRate: 0.1 },
+    }));
+    expect(manager.getRoomSettings(code)).toMatchObject({
+      cashGoal: 50000,
+      ruleConfig: { initialCash: 30000 },
+    });
+
+    // 反方向同样受约束：把目标降回到 30000（= 新的生效初始资金）会被拒。
+    expectRoomFailure(manager.updateRoomSettings(code, created.value.playerId, { cashGoal: 30000 }), 'INVALID_ROOM_ACTION');
+    // 清掉目标则永远成立。
+    expectRoomSuccess(manager.updateRoomSettings(code, created.value.playerId, { cashGoal: null }));
+    expect(manager.getRoomSettings(code)?.cashGoal).toBeNull();
   });
 });

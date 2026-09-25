@@ -6,6 +6,8 @@ import type { ClientToServerEvents, InterServerEvents, ServerToClientEvents, Soc
 import type { RateLimitRule } from './http/slidingWindowRateLimiter';
 import { createLeaderboardApi, type LeaderboardApiHandler } from './leaderboard/leaderboardRoutes';
 import { createLeaderboardStore, type LeaderboardStore } from './leaderboard/leaderboardStore';
+import { createPlayerAccountApi, type PlayerAccountApiHandler } from './player/playerAccountRoutes';
+import { createPlayerAccountStore, type PlayerAccountStore } from './player/playerAccountStore';
 import { RoomManager } from './rooms/roomManager';
 import type { RoomDomainEvent } from './rooms/roomTypes';
 import { createRoomSocketAdapter, type CreateRoomRateLimit, type RoomSocketAdapterLogger } from './socket/roomSocketAdapter';
@@ -28,6 +30,17 @@ export interface CreateRoomServerOptions<TTimerHandle = unknown> {
   leaderboardRateLimit?: RateLimitRule | false;
   /** 排行榜请求体上限（字节）；默认 2 KiB。 */
   leaderboardMaxBodyBytes?: number;
+  /**
+   * 战绩上云（#123）。省略 = 挂载默认的**落盘**账号存储
+   * （`.runtime/player-accounts.json`，可用环境变量 `RICHMAN_PLAYER_FILE` 覆盖）；
+   * `false` = 完全不挂这条路由；也可以注入现成的存储 —— 测试用临时目录，
+   * 避免读到开发机上留下的真账号。
+   */
+  playerAccounts?: PlayerAccountStore | false;
+  /** 账号接口限流（按客户端 IP 滑动窗口）；`false` 关闭（测试）。 */
+  playerRateLimit?: RateLimitRule | false;
+  /** 账号接口请求体上限（字节）；默认 8 KiB。 */
+  playerMaxBodyBytes?: number;
 }
 
 export interface RunningRoomServer<TTimerHandle = unknown> {
@@ -46,9 +59,13 @@ export function createRoomServer<TTimerHandle = unknown>({
   leaderboard,
   leaderboardRateLimit,
   leaderboardMaxBodyBytes,
+  playerAccounts,
+  playerRateLimit,
+  playerMaxBodyBytes,
 }: CreateRoomServerOptions<TTimerHandle>): RunningRoomServer<TTimerHandle> {
   const leaderboardApi = resolveLeaderboardApi({ leaderboard, leaderboardRateLimit, leaderboardMaxBodyBytes, logger });
-  const requestHandler = createRequestHandler(clientDistPath, leaderboardApi);
+  const playerAccountApi = resolvePlayerAccountApi({ playerAccounts, playerRateLimit, playerMaxBodyBytes, logger });
+  const requestHandler = createRequestHandler(clientDistPath, leaderboardApi, playerAccountApi);
   const httpServer = createServer(requestHandler);
   const io = new SocketIoServer<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(httpServer, {
     serveClient: false,
@@ -100,9 +117,33 @@ function resolveLeaderboardApi(options: ResolveLeaderboardApiOptions): Leaderboa
   });
 }
 
+/** 账号落盘位置：与榜单、房间快照同在 server 包的 `.runtime/`，可用环境变量覆盖。 */
+const DEFAULT_PLAYER_ACCOUNT_FILE = fileURLToPath(new URL('../.runtime/player-accounts.json', import.meta.url));
+
+interface ResolvePlayerAccountApiOptions {
+  playerAccounts?: PlayerAccountStore | false;
+  playerRateLimit?: RateLimitRule | false;
+  playerMaxBodyBytes?: number;
+  logger?: RoomSocketAdapterLogger;
+}
+
+/** `null` = 不挂载账号路由（`playerAccounts: false`）。 */
+function resolvePlayerAccountApi(options: ResolvePlayerAccountApiOptions): PlayerAccountApiHandler | null {
+  if (options.playerAccounts === false) return null;
+  const store = options.playerAccounts
+    ?? createPlayerAccountStore({ file: process.env.RICHMAN_PLAYER_FILE ?? DEFAULT_PLAYER_ACCOUNT_FILE });
+  return createPlayerAccountApi({
+    store,
+    rateLimit: options.playerRateLimit,
+    maxBodyBytes: options.playerMaxBodyBytes,
+    logger: options.logger,
+  });
+}
+
 function createRequestHandler(
   clientDistPath: string | undefined,
   leaderboardApi: LeaderboardApiHandler | null,
+  playerAccountApi: PlayerAccountApiHandler | null,
 ): (request: IncomingMessage, response: ServerResponse) => void {
   const staticHandler = resolveStaticHandler(clientDistPath);
 
@@ -118,6 +159,8 @@ function createRequestHandler(
     // 任何落到它手里的未知路径都会被当成「前端路由」返回 index.html（200 + HTML），
     // 客户端 `response.json()` 于是抛出一个与真实原因毫不相干的解析错误。
     if (leaderboardApi !== null && leaderboardApi(request, response)) return;
+    // 战绩上云 API（#123）同理，也必须排在静态托管之前。
+    if (playerAccountApi !== null && playerAccountApi(request, response)) return;
     staticHandler(request, response);
   };
 }

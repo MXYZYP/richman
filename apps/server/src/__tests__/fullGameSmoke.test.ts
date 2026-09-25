@@ -203,8 +203,10 @@ describe('服务端整局冒烟：真实网关 + 真实地图', () => {
   //   pearl-tour  → 48 格三角洲三角形环（纯 core，首个「斜边收拢」的三角形环路几何）
   //   xinjiang-tour→ 46 格环形 + 「独库公路」6 格支线（纯 core，首个 core 版机场等待 + 支线掷骰，且渡口只有 3 座）
   //   shanxi-tour → 48 格 6×8 横向蛇形网格（纯 core，无机场无支线的大盘，渡口 3 座）
-  // 十张正式地图在此清单里各跑一局：新增地图时务必加进来，否则它会「能选但从没被整局跑过」。
-  for (const mapId of ['china-tour', 'world-tour', 'classic-tour', 'great-wall', 'silk-road', 'yellow-river', 'yangtze-tour', 'pearl-tour', 'xinjiang-tour', 'shanxi-tour'] as const) {
+  //   northeast-tour → 48 格 6×8 蛇形网格 + prison@1（首个监狱图：进牢格 / 唯一监狱角格 /
+  //                   掷骰出狱 / 出狱许可证 / 保释金，托管玩家必须能自己走出监狱）
+  // 十一张正式地图在此清单里各跑一局：新增地图时务必加进来，否则它会「能选但从没被整局跑过」。
+  for (const mapId of ['china-tour', 'world-tour', 'classic-tour', 'great-wall', 'silk-road', 'yellow-river', 'yangtze-tour', 'pearl-tour', 'xinjiang-tour', 'shanxi-tour', 'northeast-tour'] as const) {
     test(
       `${mapId}：自动化托管把一整局推进到 game_over，且服务端零错误、全程不卡死`,
       () => {

@@ -35,7 +35,7 @@ describe('MapWorkshopDialog', () => {
 
     expect(html).toContain('地图工坊');
     expect(html).toContain('工坊里的地图只能单机游玩');
-    expect(html).toContain('联机房间仍只用内置的那十张图');
+    expect(html).toContain('联机房间仍只用内置的那十一张图');
     // 必须给出「怎么造图」的入口，否则这一页只是个收件箱，玩家不知道该往里放什么。
     expect(html).toContain('tools/map-editor.html');
     expect(html).toContain('导出 bundle.json');

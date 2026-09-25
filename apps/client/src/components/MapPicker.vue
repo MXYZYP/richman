@@ -27,7 +27,7 @@ const emit = defineEmits<{
 //
 // #7：菜单从「单列大行」改成「多列小卡」网格。地图到 8 张以后，单列每项 78px 高、
 // 一屏只放得下 5 行，找地图得一路下滑；换成三到四列的缩略图卡片后整屏铺开，
-// 十张图也能在两三行内看完，滚动量基本归零。
+// 十一张图也能在两三行内看完，滚动量基本归零。
 const open = ref(false);
 const rootRef = ref<HTMLElement | null>(null);
 const triggerRef = ref<HTMLButtonElement | null>(null);

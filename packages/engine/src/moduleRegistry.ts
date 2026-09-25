@@ -12,6 +12,7 @@ import type {
 import type { ApplyResult, CoreIntent, GameEvent, GameState, Intent } from './types';
 import { worldTourRuleModuleDefinition } from './worldTourModule';
 import { greatWallRuleModuleDefinition } from './greatWallModule';
+import { prisonRuleModuleDefinition } from './prisonModule';
 
 type ReadonlyCell = DeepReadonly<Cell>;
 
@@ -513,4 +514,5 @@ export const defaultRuleModuleRegistry = createRuleModuleRegistry([
   coreRuleModuleDefinition,
   worldTourRuleModuleDefinition,
   greatWallRuleModuleDefinition,
+  prisonRuleModuleDefinition,
 ]);

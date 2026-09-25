@@ -155,6 +155,10 @@ function toMutableConfig(config: GameState['config']): GameConfig {
     utilityMultipliers: [config.utilityMultipliers[0], config.utilityMultipliers[1]],
     jailExitMinRoll: config.jailExitMinRoll,
     jailMaxAttempts: config.jailMaxAttempts,
+    // 保释金是可选字段（只有带监狱的地图才有）。**不能无条件写这个键**：值为 undefined 时
+    // JSON.stringify 会丢掉它，看似无害；但这里保留条件展开，好让「没有该字段的图」
+    // 展平出来的对象与地图 config 逐键一致 —— 复盘重建时会拿它与地图档做深比较。
+    ...(config.jailBailCost === undefined ? {} : { jailBailCost: config.jailBailCost }),
     cashGoalPresets: [...config.cashGoalPresets],
     diceMode: 'two_dice',
     airportBranchDice: config.airportBranchDice,

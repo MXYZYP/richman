@@ -19,7 +19,7 @@ export type {
 
 export { listActiveMaps, getActiveMapPack, getMapPack } from './registry';
 // 地图工坊（#117）需要自己造一个**独立的**注册表来装载玩家导入的自定义地图：
-// 生产注册表是模块私有单例（在模块加载期就注册好十张正式地图），运行时无法往里注入；
+// 生产注册表是模块私有单例（在模块加载期就注册好十一张正式地图），运行时无法往里注入；
 // 因此把工厂与选项类型导出，让客户端另建一个互不干扰的实例。
 export { createMapRegistry, PRODUCTION_RULE_MODULES } from './registry';
 export type { MapRegistry, MapRegistryOptions } from './registry';
@@ -38,3 +38,4 @@ export { yangtzeTourMap } from './yangtzeTourMap';
 export { pearlTourMap } from './pearlTourMap';
 export { xinjiangTourMap } from './xinjiangTourMap';
 export { shanxiTourMap } from './shanxiTourMap';
+export { northeastTourMap } from './northeastTourMap';

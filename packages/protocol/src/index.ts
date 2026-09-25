@@ -153,7 +153,38 @@ export interface RoomSettings {
    * 必须是房主在大厅显式打开的选项。
    */
   isPublic: boolean;
+  /**
+   * 现金目标房规（待-5 剩余 / #23 ③）：先攒到这么多现金者直接获胜；`null` = 关闭（默认）。
+   *
+   * 刻意**不**进 `GameConfig`：那份 config 受地图 `contentHash` 硬约束（校验器逐字段比对），
+   * 塞进去等于给每张地图加一个字段。`cashGoal` 在引擎里本就是**对局级**字段
+   * （`GameState.cashGoal`，与 `auctionOnDecline` 同类），因此同样只挂 `Room` 上、
+   * 开局时透传给 `createGame`。
+   *
+   * 唯一硬约束来自引擎：目标必须**严格大于本局生效的初始资金**（生效值可能被
+   * `ruleConfig.initialCash` 覆盖，故服务端校验必须按生效值判断，否则开局才炸）。
+   */
+  cashGoal: number | null;
+  /**
+   * 房间是否设了进入密码（待-5 剩余 / #23 ③）。
+   *
+   * 只暴露「有没有」，**绝不广播密码本身或它的哈希**——广播形状一旦带上凭据，
+   * 任何一次 `room:settings` 都会顺手把密码发给全场，包括只是想观战的人。
+   * 明文只在 `room:join` 时提交一次，由服务端校验。
+   */
+  passwordProtected: boolean;
+  /**
+   * 是否允许观战（待-5 剩余 / #23 ③）：默认 `true`（与既有行为一致）。
+   *
+   * 关掉只影响**新加入**的观战者，不踢已在场的人——把已在看的人凭空踢出去，
+   * 是房主没要求过的破坏性副作用。
+   */
+  allowSpectators: boolean;
 }
+
+/** 房间密码长度区间（按 Unicode 码点计）。太短没有意义，太长在大厅里手输就是折磨。 */
+export const ROOM_PASSWORD_MIN_LENGTH = 4;
+export const ROOM_PASSWORD_MAX_LENGTH = 12;
 
 /** 增量更新房间设置；`ruleConfig: null` 明确表示「回到地图默认」。 */
 export interface RoomSettingsPatch {
@@ -163,6 +194,16 @@ export interface RoomSettingsPatch {
   auctionOnDecline?: boolean;
   turnTimeLimitSec?: number;
   isPublic?: boolean;
+  /** `null` = 关闭现金目标房规。 */
+  cashGoal?: number | null;
+  /**
+   * 明文进、服务端加盐哈希后落盘；`null` = 取消密码。
+   *
+   * 之所以让明文走一次线上：房间里没有 HTTPS 之外的额外保护手段，且密码本身短、
+   * 一次性提交；服务端**绝不回存明文**，也不在任何事件里回带。
+   */
+  password?: string | null;
+  allowSpectators?: boolean;
 }
 
 /**
@@ -188,6 +229,10 @@ export interface PublicRoomSummary {
   spectatable: boolean;
   turnTimeLimitSec: number;
   botDifficulty: BotDifficulty;
+  /** 这间房设了密码（列表只提示「需要密码」，不泄露密码内容）。 */
+  hasPassword: boolean;
+  /** 房主是否允许观战；`false` 时列表里的观战入口应显示「房主关闭了观战」而不是「观战位已满」。 */
+  allowSpectators: boolean;
 }
 
 /** 「公开房间列表」应答（#108）。 */
@@ -242,6 +287,13 @@ export interface JoinRoomPayload {
   nickname: string;
   requestId: string;
   role: RoomRole;
+  /**
+   * 房间密码（#23 ③）：房间设了密码时必填，明文一次性提交。没设密码的房间忽略本字段。
+   *
+   * 明确**不放进** `PublicRoomState` / `RoomSettings` / `PublicRoomSummary`：
+   * 那些形状是广播（或给未加入者看）的，凭据一旦进去就等于公开。
+   */
+  password?: string;
 }
 
 export interface CreateRoomAck {

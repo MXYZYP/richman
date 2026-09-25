@@ -32,6 +32,15 @@ export interface JoinRoomRequest {
   nickname: string;
   /** 加入身份：参赛者或观战者。必填——旧格式（无该字段）在读取时按无效记录清理，不默认成参赛。 */
   role: RoomRole;
+  /**
+   * 房间密码（#23 ③）：房间设了密码时随请求一起持久化。
+   *
+   * 会写进 localStorage —— 这是**刻意**的：待恢复请求存在的意义就是「断线后不用重新输入」，
+   * 若把密码剔出去，设了密码的房间一旦断线就变成「恢复得了房间、恢复不了身份」。
+   * 代价是明文落本地存储，可接受：它本来就要由用户手输，且与同处一个存储的玩家 token
+   * 相比权限小得多（token 能直接冒充身份，密码只是进门）。
+   */
+  password?: string;
 }
 
 export type PendingRoomRequest = CreateRoomRequest | JoinRoomRequest;
@@ -84,10 +93,17 @@ function isPendingRoomRequest(value: unknown): value is PendingRoomRequest {
       && isNonEmptyString(value.mapId)
       && isBotDifficulty(value.botDifficulty);
   }
-  return value.operation === 'join'
-    && hasExactKeys(value, ['operation', 'requestId', 'roomCode', 'nickname', 'role'])
-    && isRoomCode(value.roomCode)
-    && (value.role === 'player' || value.role === 'spectator');
+  if (value.operation !== 'join') return false;
+  if (!isRoomCode(value.roomCode)) return false;
+  if (value.role !== 'player' && value.role !== 'spectator') return false;
+  // password 为可选扩展字段（#23 ③）：旧版记录仅 5 键即合法；携带时须恰好 6 键且是非空串。
+  // 空串按无效处理——「有密码但这个字段是空的」是一种谁也验不过的中间态，
+  // 与其带着它去请求、再被服务端以「密码错误」驳回，不如当它没写。
+  if (hasExactKeys(value, ['operation', 'requestId', 'roomCode', 'nickname', 'role'])) {
+    return true;
+  }
+  return hasExactKeys(value, ['operation', 'requestId', 'roomCode', 'nickname', 'role', 'password'])
+    && isNonEmptyString(value.password);
 }
 
 function readRecord(storage: StorageLike, key: string, validate: (value: unknown) => boolean): unknown | null {

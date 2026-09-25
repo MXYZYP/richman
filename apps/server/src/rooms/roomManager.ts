@@ -1,3 +1,4 @@
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { getActiveMapPack, getMapPack } from '@richman/board-data';
 import type { MapPack, MapRef } from '@richman/board-data';
 import { hydrateGameState } from '@richman/engine';
@@ -6,7 +7,7 @@ import type { BotDifficulty, GameState } from '@richman/engine';
 import { applyGameIntent as applyRuntimeGameIntent, chooseTakeoverIntent, createInitialGame, defaultGameGateway, skipOfflineTakeoverTurn } from '../game/gameRuntime';
 import type { GameRuntimeGateway } from '../game/gameRuntime';
 import type { PublicRoomState, PublicRoomSummary, RoomRole, RoomRuleConfig, RoomSettings, RoomSettingsPatch, TurnDeadlineInfo, UndoOutcome, UndoRequestInfo } from '@richman/protocol';
-import { TURN_TIME_LIMIT_MAX_SEC } from '@richman/protocol';
+import { ROOM_PASSWORD_MAX_LENGTH, ROOM_PASSWORD_MIN_LENGTH, TURN_TIME_LIMIT_MAX_SEC } from '@richman/protocol';
 import { gameFailure, roomFailure } from './roomErrors';
 import type { RoomFailure, WireFailure } from './roomErrors';
 import { ROOM_SNAPSHOT_SCHEMA_VERSION } from './roomSnapshotStore';
@@ -27,6 +28,20 @@ const MAX_AUTOMATION_SELF_HEAL_RETRIES = 3;
  * 有它才不会出现「一个对手不表态 → 请求永远挂着」的僵局。
  */
 const UNDO_REQUEST_TTL_MS = 20_000;
+/**
+ * 房间密码哈希参数（#23 ③）。
+ *
+ * 用 `scryptSync` 而非裸 HMAC：房规密码是**低熵**的人造短串（4-12 位），
+ * 一旦快照文件外泄，快速哈希等于把密码白送。scrypt 的内存硬性开销让离线爆破代价高得多。
+ *
+ * 哈希定长 32 字节是刻意的：`timingSafeEqual` 要求两个 Buffer 等长，定长输出让比对
+ * 永远走常量时间，不会因为长度不同而抛错或提前返回。
+ *
+ * 代价是单次约 50ms 且是同步的。房间密码只在「房主设置/取消」与「玩家加入」时各算一次，
+ * 频次极低（远低于每步棋的意图提交），因此不值得为它引入异步化改造整个同步 API。
+ */
+const PASSWORD_HASH_BYTES = 32;
+const PASSWORD_SALT_BYTES = 16;
 const DEFAULT_MAP_RESOLVER: RoomMapResolver = { getActiveMapPack, getMapPack };
 
 /**
@@ -116,12 +131,17 @@ export class RoomManager<TTimerHandle = unknown> {
   readonly #mapResolver: RoomMapResolver;
   /** 房间落盘快照（C-③）：为 null 时纯内存运行，行为与引入前完全一致。 */
   readonly #snapshotStore: RoomSnapshotStore | null;
+  /** 房间密码的哈希与盐生成（#23 ③）；默认实现见文件末尾的 default* 函数。 */
+  readonly #hashRoomPassword: (password: string, salt: string) => string;
+  readonly #generateRoomPasswordSalt: () => string;
 
   constructor(dependencies: RoomManagerDependencies<TTimerHandle>) {
     this.#dependencies = dependencies;
     this.#gateway = dependencies.gameGateway ?? defaultGameGateway;
     this.#mapResolver = dependencies.mapResolver ?? DEFAULT_MAP_RESOLVER;
     this.#snapshotStore = dependencies.snapshotStore ?? null;
+    this.#hashRoomPassword = dependencies.hashRoomPassword ?? defaultHashRoomPassword;
+    this.#generateRoomPasswordSalt = dependencies.generateRoomPasswordSalt ?? defaultGenerateRoomPasswordSalt;
     this.#restoreRoomsFromSnapshots();
   }
 
@@ -170,6 +190,15 @@ export class RoomManager<TTimerHandle = unknown> {
       turnTimeLimitSec: 0,
       // 公开房间列表默认关闭（#108）：房间码本就是准入凭据，可被全网列举必须是房主显式打开的。
       isPublic: false,
+      // 现金目标默认关闭（#23 ③）：不限目标 = 打到只剩一人，这是既有的默认胜负判定，
+      // 房主显式选择才开启（与 auctionOnDecline 同理，属于对局级房规）。
+      cashGoal: null,
+      // 房间密码默认不设（#23 ③）：房间码本身就是一层准入凭据，
+      // 再加密码必须是房主显式做的决定，不能凭空给所有人加一道门。
+      password: null,
+      // 观战默认允许（#23 ③）：这是引入本开关之前的既有行为——
+      // 升级不能让本来就开放的房间突然拒绝旁观者。关掉必须由房主显式点。
+      allowSpectators: true,
       players: [
         {
           id: playerId,
@@ -209,7 +238,13 @@ export class RoomManager<TTimerHandle = unknown> {
     return result;
   }
 
-  joinRoom(roomCode: string, nickname: string, requestId?: string, role: RoomRole = 'player'): RoomResult<JoinRoomValue> {
+  joinRoom(
+    roomCode: string,
+    nickname: string,
+    requestId?: string,
+    role: RoomRole = 'player',
+    password?: string,
+  ): RoomResult<JoinRoomValue> {
     if (role !== 'player' && role !== 'spectator') {
       return roomFailure('INVALID_ROOM_ACTION', 'Invalid room role.');
     }
@@ -219,8 +254,19 @@ export class RoomManager<TTimerHandle = unknown> {
     }
     const room = this.#rooms.get(roomCode);
     if (room === undefined) return roomFailure('ROOM_NOT_FOUND', 'Room was not found.');
+    // 房间密码（#23 ③）排在所有其它判定之前：密码是准入凭据，先答对了才谈得上
+    // 「有没有位置」「昵称重不重」。也**不区分**玩家与观战——密码守的是整间房，
+    // 若观战可以绕过密码，那设了密码的房间照样能把局势看光。
+    if (room.password !== null && !this.#roomPasswordMatches(room, password)) {
+      return roomFailure('WRONG_ROOM_PASSWORD', 'A correct room password is required to join this room.');
+    }
     if (role === 'player' && room.status !== 'lobby') {
       return roomFailure('GAME_ALREADY_STARTED', 'Game has already started.');
+    }
+    // 观战开关（#23 ③）：只拦**新加入**的观战者，不踢已在场的人。
+    // 刻意排在容量判定之前：房主关了观战时，「观战位满了」是句误导人的话。
+    if (role === 'spectator' && !room.allowSpectators) {
+      return roomFailure('SPECTATING_DISABLED', 'The host has disabled spectating for this room.');
     }
     if (role === 'player' ? room.players.length >= MAX_PLAYERS : room.spectators.length >= MAX_SPECTATORS) {
       return roomFailure('ROOM_FULL', role === 'player' ? 'Player seats are full.' : 'Spectator seats are full.');
@@ -376,6 +422,16 @@ export class RoomManager<TTimerHandle = unknown> {
             `Rule config must use a positive initialCash, an integer maxHouseLevel within 1-${mapMaxHouseLevel}, and a mortgageInterestRate within 0-1.`,
           );
         }
+        // 与现金目标的交叉约束（#23 ③）：引擎要求 `cashGoal > config.initialCash`，而
+        // `initialCash` 正是这里刚被改的那个值。放任「目标 30000 + 初始资金 40000」组合存下去，
+        // 结果是房主点了开始、`createGame` 抛错、客户端只看到一句「无法开始游戏」——
+        // 把错误在**设置的那一刻**就顶回去，房主才知道要改的是哪一项。
+        if (room.cashGoal !== null && room.cashGoal <= cleaned.initialCash) {
+          return roomFailure(
+            'INVALID_ROOM_ACTION',
+            `The cash goal (${room.cashGoal}) must stay above the new initial cash (${cleaned.initialCash}): clear or raise the goal first.`,
+          );
+        }
         room.ruleConfig = cleaned;
       }
     }
@@ -423,6 +479,57 @@ export class RoomManager<TTimerHandle = unknown> {
         return roomFailure('INVALID_ROOM_ACTION', 'isPublic must be a boolean.');
       }
       room.isPublic = patch.isPublic;
+    }
+
+    // 现金目标房规（#23 ③）：只认「正整数」或 `null`（关闭）。
+    // 上界刻意不设：引擎侧也没有上界，目标设得再高也只是「这局打不到头」，不是非法状态；
+    // 真正会炸的是「目标 ≤ 初始资金」，那是引擎的硬约束，必须在这里按**生效**初始资金拦下。
+    if (patch.cashGoal !== undefined) {
+      if (patch.cashGoal === null) {
+        room.cashGoal = null;
+      } else {
+        const effectiveInitialCash = this.#effectiveInitialCash(room);
+        if (effectiveInitialCash === null) {
+          return roomFailure('INVALID_ROOM_ACTION', 'Requested map is unavailable.');
+        }
+        const cleaned = normalizeCashGoal(patch.cashGoal, effectiveInitialCash);
+        if (cleaned === null) {
+          return roomFailure(
+            'INVALID_ROOM_ACTION',
+            `cashGoal must be a positive integer greater than the effective initial cash (${effectiveInitialCash}).`,
+          );
+        }
+        room.cashGoal = cleaned;
+      }
+    }
+
+    // 房间密码（#23 ③）：`null` = 取消；字符串 = 设置。
+    // 明文只在这里进一次、当场加盐哈希，此后房间内部只留哈希——`projectRoomSettings`
+    // 与所有广播事件都只带 `passwordProtected` 布尔，凭据绝不出房间。
+    if (patch.password !== undefined) {
+      if (patch.password === null) {
+        room.password = null;
+      } else {
+        const trimmed = typeof patch.password === 'string' ? patch.password.trim() : null;
+        if (trimmed === null || !isRoomPasswordLengthValid(trimmed)) {
+          return roomFailure(
+            'INVALID_ROOM_ACTION',
+            `Room password must be ${ROOM_PASSWORD_MIN_LENGTH}-${ROOM_PASSWORD_MAX_LENGTH} characters after trimming.`,
+          );
+        }
+        const salt = this.#generateRoomPasswordSalt();
+        room.password = { hash: this.#hashRoomPassword(trimmed, salt), salt };
+      }
+    }
+
+    // 观战开关（#23 ③）：只认布尔值。沿用本方法的既有门禁（仅房主、仅大厅）——
+    // 与悔棋 / 拍卖 / 限时保持同一套语义：房间级设置一律在开局前定下来，
+    // 开局后再改会让「大厅里看到的」和「对局里生效的」两套认知分叉。
+    if (patch.allowSpectators !== undefined) {
+      if (typeof patch.allowSpectators !== 'boolean') {
+        return roomFailure('INVALID_ROOM_ACTION', 'allowSpectators must be a boolean.');
+      }
+      room.allowSpectators = patch.allowSpectators;
     }
 
     // 先把设置本身落盘，再产出广播事件：这样即便广播失败，重启后读到的也是最新设置。
@@ -475,9 +582,16 @@ export class RoomManager<TTimerHandle = unknown> {
         playerLimit: MAX_PLAYERS,
         spectatorLimit: MAX_SPECTATORS,
         joinable: room.status === 'lobby' && playerCount < MAX_PLAYERS,
-        spectatable: spectatorCount < MAX_SPECTATORS,
+        // 观战开关（#23 ③）是「能不能旁观」的**第一层**判据：房主关掉观战时，
+        // 即便观战位空着也不能旁观。客户端据此把入口文案从「观战位已满」改成
+        // 「房主关闭了观战」——两句话对应的是完全不同的下一步（等人退出 vs 没辙）。
+        spectatable: room.allowSpectators && spectatorCount < MAX_SPECTATORS,
         turnTimeLimitSec: room.turnTimeLimitSec,
         botDifficulty: room.botDifficulty,
+        // 只提示「要不要密码」，绝不带密码本身或它的哈希（#23 ③）：
+        // 列表是给未加入的人看的，凭据一旦进摘要就等于公开。
+        hasPassword: room.password !== null,
+        allowSpectators: room.allowSpectators,
       });
     }
     return summaries.sort(compareRoomSummaries);
@@ -870,6 +984,21 @@ export class RoomManager<TTimerHandle = unknown> {
     // `room.ruleConfig` 进入本类时已被 normalizeRoomRuleConfig 清洗过，此处可安全展开。
     const effectiveConfig = applyRoomRuleConfig(mapPack.game.config, room.ruleConfig);
 
+    // 现金目标的兜底校验（#23 ③）：`updateRoomSettings` 已经做过交叉约束，正常路径走不到这里。
+    // 但快照恢复出来的是外部文件（可能被人改过、也可能是旧版本写下的），
+    // 与其让 `createGame` 抛错、在客户端显示一句没头没尾的「无法开始游戏」，
+    // 不如在这里就失败，并如实报出两个相冲的值。
+    if (room.cashGoal !== null && room.cashGoal <= effectiveConfig.initialCash) {
+      this.#dependencies.onServerError?.(
+        'startRoom cash goal is not above the effective initial cash',
+        new Error(`cashGoal ${room.cashGoal} <= initialCash ${effectiveConfig.initialCash}`),
+      );
+      return roomFailure(
+        'INVALID_ROOM_ACTION',
+        `The cash goal (${room.cashGoal}) must be greater than the initial cash (${effectiveConfig.initialCash}).`,
+      );
+    }
+
     const created = createInitialGame(
       this.#gateway,
       room.players.map((player) => ({ id: player.id, nickname: player.nickname, isBot: player.isBot })),
@@ -881,7 +1010,8 @@ export class RoomManager<TTimerHandle = unknown> {
       mapPack.game.requiredRuleModules,
       // 房规「放弃购买即拍卖」（#106）：写进 createGame，此后由状态里的 auctionOnDecline 驱动，
       // 中途改房间设置也不会影响这一局（避免「同一局两套规则」）。
-      { auctionOnDecline: room.auctionOnDecline },
+      // 房规「现金目标」（#23 ③）同理：写进 GameState.cashGoal，此后由引擎的胜负判定消费。
+      { auctionOnDecline: room.auctionOnDecline, cashGoal: room.cashGoal },
     );
     if (!created.ok) {
       this.#dependencies.onServerError?.('startRoom createGame failed', created.error);
@@ -1385,6 +1515,19 @@ export class RoomManager<TTimerHandle = unknown> {
       // 同上（#108）：缺省按「不公开」处理。用 `=== true` 而不是裸取值，
       // 于是任何非 true 的畸形值都退化成最保守的「不公开」。
       isPublic: record.isPublic === true,
+      // 现金目标（#23 ③）：按**生效**初始资金重新规整一遍。快照文件在磁盘上、可被外部改动，
+      // 而一个「≤ 生效初始资金」的目标会让 `createGame` 在开局那一刻抛错、整间房报废；
+      // 两相权衡，宁可把这种值当作「没设目标」——丢一个房规设置，远好过丢掉整局。
+      cashGoal: normalizeCashGoal(
+        record.cashGoal ?? null,
+        ruleConfig?.initialCash ?? pack.game.config.initialCash,
+      ),
+      // 密码（#23 ③）：只接受结构完整的「哈希 + 盐」，其余（缺失、半截、类型不对）一律当作没设密码。
+      // 不在这里校验密码强度：强度是设置那一刻的事，恢复时能做的只有「能不能用这组值验密码」。
+      password: normalizeStoredPasswordHash(record.passwordHash),
+      // 观战开关（#23 ③）：缺省按「允许」处理（= 引入本开关之前的既有行为）。
+      // `isRoomSnapshotRecord` 已把非布尔值挡在门外，所以这里只需区分「显式 false」与「其余」。
+      allowSpectators: record.allowSpectators !== false,
       players,
       spectators,
       gameState: gameState === null
@@ -1439,6 +1582,39 @@ export class RoomManager<TTimerHandle = unknown> {
   }
 
   /** 把房间当前状态同步写盘；失败只记录，不影响对局继续。 */
+  /**
+   * 本局**生效**的初始资金（#23 ③）：房主自定义的 `initialCash` 优先，否则取地图默认值。
+   *
+   * 现金目标必须与它比较而不是与地图默认值比较——`createGame` / `hydrateGameState` 校验的
+   * 都是「叠加 ruleConfig 之后」的那份 config。拿地图默认值去判，就会出现
+   * 「房间里过了、开局时引擎抛错」的窗口。地图不可用时返回 null（调用方转成房间错误）。
+   */
+  #effectiveInitialCash(room: Room): number | null {
+    try {
+      const mapInitialCash = this.#mapResolver.getActiveMapPack(room.mapRef.id).game.config.initialCash;
+      return room.ruleConfig?.initialCash ?? mapInitialCash;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 校验加入者提交的密码（#23 ③）。
+   *
+   * 走 `timingSafeEqual` 而不是 `===`：前者是常量时间比较，不会因为「前几个字符对上了」
+   * 而在耗时上泄露线索。哈希定长 32 字节，两侧 Buffer 必然等长，不会触发它的长度前置检查抛错。
+   * 盐取自房间自身——同一密码在不同房间会得到不同哈希，快照外泄也无法靠「彩虹表/撞库」复用。
+   */
+  #roomPasswordMatches(room: Room, supplied: string | undefined): boolean {
+    const stored = room.password;
+    if (stored === null) return true;
+    if (typeof supplied !== 'string' || supplied.length === 0) return false;
+    const candidate = Buffer.from(this.#hashRoomPassword(supplied.trim(), stored.salt), 'hex');
+    const expected = Buffer.from(stored.hash, 'hex');
+    if (candidate.length !== expected.length || candidate.length === 0) return false;
+    return timingSafeEqual(candidate, expected);
+  }
+
   #persistRoom(room: Room): void {
     const store = this.#snapshotStore;
     if (store === null) {
@@ -1489,6 +1665,15 @@ export class RoomManager<TTimerHandle = unknown> {
       // 可被发现与否也落盘（#108）：不写它，重启后房主公开过的房间会从列表里消失，
       // 而对局本身仍在继续——「房间在跑但列表里找不到」是最难排查的一类不一致。
       isPublic: room.isPublic,
+      // 现金目标也落盘（#23 ③）：不写它，重启后房主设的目标会悄悄变回「不设目标」，
+      // 而 gameState 里那一局的胜负判据其实还挂着目标，两边立刻分叉。
+      cashGoal: room.cashGoal,
+      // 密码**只落哈希 + 盐**（#23 ③）：明文从不落盘、也从不进任何事件。
+      // 不写它的话，重启后设了密码的房间会变成谁都能进——安全性上的静默降级，
+      // 比丢一个房规设置严重得多。
+      passwordHash: room.password === null ? null : { ...room.password },
+      // 观战开关也落盘（#23 ③）：不写它，重启后房主关掉的观战会被悄悄打开。
+      allowSpectators: room.allowSpectators,
       players: room.players.map((player) => ({ ...player })),
       spectators: room.spectators.map((spectator) => ({ ...spectator })),
       createRequestId: room.createRequestId,
@@ -2111,6 +2296,48 @@ function normalizeTurnTimeLimit(value: unknown): number {
   return value >= 0 && value <= TURN_TIME_LIMIT_MAX_SEC ? value : 0;
 }
 
+/**
+ * 规整现金目标（#23 ③）：必须是**正整数**且**严格大于生效初始资金**；否则返回 `null`。
+ *
+ * 判据与引擎 `createGame` / `hydrateGameState` 完全一致（`cashGoal > config.initialCash`）——
+ * 两处必须同时成立，否则就会出现「房间里存得下、开局却抛错」的窗口。
+ * `null` 在这里同时表示两种情形（本来就没设 / 值不可用），调用方按需区分：
+ * `updateRoomSettings` 先用 `patch.cashGoal === null` 分流，只有非法数值才会落到 `null` 分支。
+ */
+function normalizeCashGoal(value: unknown, effectiveInitialCash: number): number | null {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) return null;
+  return value > effectiveInitialCash ? value : null;
+}
+
+/**
+ * 房间密码的长度判据（#23 ③）：按 **Unicode 码点**计数，且先 trim。
+ *
+ * 与昵称同样按码点而非 UTF-16 长度：`"🔒🔒🔒🔒"` 的 `.length` 是 8 但只有 4 个字符，
+ * 用 `.length` 会让「看起来 4 位」的密码被算成 8 位，上限判断跟着失真。
+ */
+function isRoomPasswordLengthValid(trimmedPassword: string): boolean {
+  const codePoints = [...trimmedPassword].length;
+  return codePoints >= ROOM_PASSWORD_MIN_LENGTH && codePoints <= ROOM_PASSWORD_MAX_LENGTH;
+}
+
+/** 恢复用的密码哈希规整：结构不完整一律当作「没设密码」，绝不半信半疑地装进房间。 */
+function normalizeStoredPasswordHash(value: unknown): { hash: string; salt: string } | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const { hash, salt } = record;
+  if (typeof hash !== 'string' || hash.length === 0) return null;
+  if (typeof salt !== 'string' || salt.length === 0) return null;
+  return { hash, salt };
+}
+
+function defaultGenerateRoomPasswordSalt(): string {
+  return randomBytes(PASSWORD_SALT_BYTES).toString('hex');
+}
+
+function defaultHashRoomPassword(password: string, salt: string): string {
+  return scryptSync(password, salt, PASSWORD_HASH_BYTES).toString('hex');
+}
+
 /** 房间设置投影：拷一份出去，避免外部拿到内部可变引用（ruleConfig 是唯一可变嵌套对象）。 */function projectRoomSettings(room: Room): RoomSettings {
   return {
     botDifficulty: room.botDifficulty,
@@ -2119,6 +2346,12 @@ function normalizeTurnTimeLimit(value: unknown): number {
     auctionOnDecline: room.auctionOnDecline,
     turnTimeLimitSec: room.turnTimeLimitSec,
     isPublic: room.isPublic,
+    // 现金目标照直投影（#23 ③）：它本来就是公开的房规，房主设了什么大家都该看得见。
+    cashGoal: room.cashGoal,
+    // 密码**只投影成布尔**（#23 ③）：投影结果会被塞进 `room_settings` 广播给全场，
+    // 带上哈希就等于把「可离线爆破的目标」发给每一个观战者。
+    passwordProtected: room.password !== null,
+    allowSpectators: room.allowSpectators,
   };
 }
 

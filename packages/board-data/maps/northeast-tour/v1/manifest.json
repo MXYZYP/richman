@@ -1,0 +1,679 @@
+{
+  "ref": {
+    "id": "northeast-tour",
+    "version": 1,
+    "contentHash": "5a001524cbe4c9e42597b978500bb6157ad6e08f59b37e76fa6522ba0fb63f9a"
+  },
+  "metadata": {
+    "title": "东北之旅",
+    "description": "蛇形网格：48 格 6×8 自沈阳北上漠河再折回大连；踩中哨卡、越界、偷渡会被关进旅顺监狱，需掷骰或耗用出狱许可证脱身。"
+  },
+  "requiredRuleModules": [
+    {
+      "id": "core",
+      "version": 1
+    },
+    {
+      "id": "prison",
+      "version": 1
+    }
+  ],
+  "presentation": {
+    "canvas": {
+      "size": 100
+    },
+    "cells": {
+      "0": {
+        "x": 4.75,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "起点"
+      },
+      "1": {
+        "x": 20.25,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "沈阳",
+        "propertyBand": "band:liaoning"
+      },
+      "2": {
+        "x": 35.75,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "抚顺",
+        "propertyBand": "band:liaoning"
+      },
+      "3": {
+        "x": 51.25,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "4": {
+        "x": 66.75,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "鞍山",
+        "propertyBand": "band:liaoning"
+      },
+      "5": {
+        "x": 82.25,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "哨卡",
+        "propertyBand": "band:jail"
+      },
+      "6": {
+        "x": 82.25,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "本溪",
+        "propertyBand": "band:liaoning"
+      },
+      "7": {
+        "x": 66.75,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "丰满",
+        "propertyBand": "band:utility"
+      },
+      "8": {
+        "x": 51.25,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "丹东",
+        "propertyBand": "band:liaoning"
+      },
+      "9": {
+        "x": 35.75,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "10": {
+        "x": 20.25,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "通化",
+        "propertyBand": "band:jilin"
+      },
+      "11": {
+        "x": 4.75,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "沈北",
+        "compactLabel": "沈北",
+        "propertyBand": "band:station"
+      },
+      "12": {
+        "x": 4.75,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "边境通行税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "13": {
+        "x": 20.25,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "延吉",
+        "propertyBand": "band:jilin"
+      },
+      "14": {
+        "x": 35.75,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "图们",
+        "propertyBand": "band:jilin"
+      },
+      "15": {
+        "x": 51.25,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "吉林",
+        "propertyBand": "band:jilin"
+      },
+      "16": {
+        "x": 66.75,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "雾凇",
+        "compactLabel": "雾凇",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-moon"
+        }
+      },
+      "17": {
+        "x": 82.25,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "越界",
+        "propertyBand": "band:jail"
+      },
+      "18": {
+        "x": 82.25,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "长春",
+        "propertyBand": "band:jilin"
+      },
+      "19": {
+        "x": 66.75,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "四平",
+        "propertyBand": "band:jilin"
+      },
+      "20": {
+        "x": 51.25,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "21": {
+        "x": 35.75,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "辽源",
+        "propertyBand": "band:jilin"
+      },
+      "22": {
+        "x": 20.25,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "航运",
+        "propertyBand": "band:utility"
+      },
+      "23": {
+        "x": 4.75,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "白城",
+        "propertyBand": "band:jilin"
+      },
+      "24": {
+        "x": 4.75,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "齐齐哈尔",
+        "compactLabel": "齐市",
+        "propertyBand": "band:heilongjiang"
+      },
+      "25": {
+        "x": 20.25,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "26": {
+        "x": 35.75,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "大庆",
+        "propertyBand": "band:heilongjiang"
+      },
+      "27": {
+        "x": 51.25,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "长春站",
+        "compactLabel": "长春站",
+        "propertyBand": "band:station"
+      },
+      "28": {
+        "x": 66.75,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "牡丹江",
+        "propertyBand": "band:heilongjiang"
+      },
+      "29": {
+        "x": 82.25,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "30": {
+        "x": 82.25,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "边贸关税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "31": {
+        "x": 66.75,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "佳木斯",
+        "propertyBand": "band:heilongjiang"
+      },
+      "32": {
+        "x": 51.25,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "绥芬河",
+        "propertyBand": "band:heilongjiang"
+      },
+      "33": {
+        "x": 35.75,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "偷渡",
+        "propertyBand": "band:jail"
+      },
+      "34": {
+        "x": 20.25,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "黑河",
+        "propertyBand": "band:heilongjiang"
+      },
+      "35": {
+        "x": 4.75,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "大兴安岭",
+        "propertyBand": "band:heilongjiang"
+      },
+      "36": {
+        "x": 4.75,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "漠河",
+        "propertyBand": "band:heilongjiang"
+      },
+      "37": {
+        "x": 20.25,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "呼伦贝尔",
+        "propertyBand": "band:inner-mongolia"
+      },
+      "38": {
+        "x": 35.75,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "极寒",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        }
+      },
+      "39": {
+        "x": 51.25,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "40": {
+        "x": 66.75,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "满洲里",
+        "propertyBand": "band:inner-mongolia"
+      },
+      "41": {
+        "x": 82.25,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "海拉尔",
+        "propertyBand": "band:inner-mongolia"
+      },
+      "42": {
+        "x": 82.25,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "监狱",
+        "propertyBand": "band:jail"
+      },
+      "43": {
+        "x": 66.75,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "大连",
+        "propertyBand": "band:liaoning"
+      },
+      "44": {
+        "x": 51.25,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "哈站",
+        "compactLabel": "哈站",
+        "propertyBand": "band:station"
+      },
+      "45": {
+        "x": 35.75,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "46": {
+        "x": 20.25,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "太阳岛",
+        "propertyBand": "band:heilongjiang"
+      },
+      "47": {
+        "x": 4.75,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "中央大街",
+        "compactLabel": "中央街",
+        "propertyBand": "band:heilongjiang"
+      }
+    },
+    "routes": [
+      {
+        "type": "polyline",
+        "role": "route",
+        "strokeWidth": 1,
+        "dashPattern": [
+          2,
+          1.4
+        ],
+        "lineCap": "round",
+        "opacity": 0.9,
+        "zIndex": 0,
+        "points": [
+          {
+            "x": 11.25,
+            "y": 6.25
+          },
+          {
+            "x": 26.75,
+            "y": 6.25
+          },
+          {
+            "x": 42.25,
+            "y": 6.25
+          },
+          {
+            "x": 57.75,
+            "y": 6.25
+          },
+          {
+            "x": 73.25,
+            "y": 6.25
+          },
+          {
+            "x": 88.75,
+            "y": 6.25
+          },
+          {
+            "x": 88.75,
+            "y": 18.75
+          },
+          {
+            "x": 73.25,
+            "y": 18.75
+          },
+          {
+            "x": 57.75,
+            "y": 18.75
+          },
+          {
+            "x": 42.25,
+            "y": 18.75
+          },
+          {
+            "x": 26.75,
+            "y": 18.75
+          },
+          {
+            "x": 11.25,
+            "y": 18.75
+          },
+          {
+            "x": 11.25,
+            "y": 31.25
+          },
+          {
+            "x": 26.75,
+            "y": 31.25
+          },
+          {
+            "x": 42.25,
+            "y": 31.25
+          },
+          {
+            "x": 57.75,
+            "y": 31.25
+          },
+          {
+            "x": 73.25,
+            "y": 31.25
+          },
+          {
+            "x": 88.75,
+            "y": 31.25
+          },
+          {
+            "x": 88.75,
+            "y": 43.75
+          },
+          {
+            "x": 73.25,
+            "y": 43.75
+          },
+          {
+            "x": 57.75,
+            "y": 43.75
+          },
+          {
+            "x": 42.25,
+            "y": 43.75
+          },
+          {
+            "x": 26.75,
+            "y": 43.75
+          },
+          {
+            "x": 11.25,
+            "y": 43.75
+          },
+          {
+            "x": 11.25,
+            "y": 56.25
+          },
+          {
+            "x": 26.75,
+            "y": 56.25
+          },
+          {
+            "x": 42.25,
+            "y": 56.25
+          },
+          {
+            "x": 57.75,
+            "y": 56.25
+          },
+          {
+            "x": 73.25,
+            "y": 56.25
+          },
+          {
+            "x": 88.75,
+            "y": 56.25
+          },
+          {
+            "x": 88.75,
+            "y": 68.75
+          },
+          {
+            "x": 73.25,
+            "y": 68.75
+          },
+          {
+            "x": 57.75,
+            "y": 68.75
+          },
+          {
+            "x": 42.25,
+            "y": 68.75
+          },
+          {
+            "x": 26.75,
+            "y": 68.75
+          },
+          {
+            "x": 11.25,
+            "y": 68.75
+          },
+          {
+            "x": 11.25,
+            "y": 81.25
+          },
+          {
+            "x": 26.75,
+            "y": 81.25
+          },
+          {
+            "x": 42.25,
+            "y": 81.25
+          },
+          {
+            "x": 57.75,
+            "y": 81.25
+          },
+          {
+            "x": 73.25,
+            "y": 81.25
+          },
+          {
+            "x": 88.75,
+            "y": 81.25
+          },
+          {
+            "x": 88.75,
+            "y": 93.75
+          },
+          {
+            "x": 73.25,
+            "y": 93.75
+          },
+          {
+            "x": 57.75,
+            "y": 93.75
+          },
+          {
+            "x": 42.25,
+            "y": 93.75
+          },
+          {
+            "x": 26.75,
+            "y": 93.75
+          },
+          {
+            "x": 11.25,
+            "y": 93.75
+          }
+        ]
+      }
+    ],
+    "center": [],
+    "theme": {
+      "colors": {
+        "board": "#E7EDF2",
+        "cell": "#FBFDFF",
+        "border": "#4A5A68",
+        "route": "#3E6E8E",
+        "title": "#2A3742",
+        "decoration": "#B8CBD8",
+        "center": "#EEF4F8"
+      },
+      "propertyBands": {
+        "band:liaoning": "#4E7B9B",
+        "band:jilin": "#5C8A6E",
+        "band:heilongjiang": "#7A6BA8",
+        "band:inner-mongolia": "#B08A4A",
+        "band:station": "#6B5A4A",
+        "band:utility": "#7E57C2",
+        "band:jail": "#8A3B3B"
+      }
+    }
+  }
+}

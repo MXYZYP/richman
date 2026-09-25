@@ -248,6 +248,56 @@ export function mergePlayerStats(base: PlayerStats, incoming: PlayerStats): Play
   };
 }
 
+/** 空战绩。每次返回**新对象** —— `EMPTY_STATS` 是共享常量，交给外部改动会污染所有人。 */
+export function emptyPlayerStats(): PlayerStats {
+  return { ...EMPTY_STATS, favoriteMaps: {} };
+}
+
+/**
+ * 直接覆盖写回一份战绩（路线图 #123：从云端恢复时用）。
+ *
+ * 刻意与 `recordGameResult` 分开：那个是「再加一局」，这个是「这份就是最新的事实」。
+ * 云端恢复时本机战绩已经被算好（见 `applyCloudToLocal`），再走「加一局」那条路会写成另一回事。
+ * 存储不可用时返回 `false` —— 调用方必须如实提示，而不是假装同步成功。
+ */
+export function savePlayerStats(storage: StorageLike, stats: PlayerStats): boolean {
+  try {
+    storage.setItem(PLAYER_STATS_KEY, JSON.stringify(stats));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 求「本机战绩相对某个基线多出来的部分」，也就是**增量**（路线图 #123）。
+ *
+ * 为什么需要它：云端是**累加**语义，如果把整份本机战绩反复上传，每同步一次局数就翻一倍。
+ * 因此客户端必须记住「已经上传到哪一份」，之后只送差值 —— 这样重复点同步是幂等的。
+ *
+ * 两类字段处理刻意不同，与云端 `accumulateStats` 一一对应：
+ *  - **计数器**（局数 / 胜负 / 地图次数）取差值，并钳到非负。基线比当前还大时（例如本机清过
+ *    缓存又重新导入了一份旧战绩码）应视为 0，而不是送出一个负数把云端的数字冲掉；
+ *  - **峰值 / 时间点**（`bestAsset` / `lastPlayedAt`）**原样带上当前值**：它们在云端取 max，
+ *    传当前值天然幂等；做成差值反而会算错（max 不可减）。
+ */
+export function subtractPlayerStats(current: PlayerStats, baseline: PlayerStats): PlayerStats {
+  const favoriteMaps: Record<string, number> = {};
+  for (const [mapId, count] of Object.entries(current.favoriteMaps)) {
+    const delta = Math.max(0, Math.floor(count) - Math.floor(baseline.favoriteMaps[mapId] ?? 0));
+    if (delta > 0) favoriteMaps[mapId] = delta;
+  }
+  return {
+    schemaVersion: 1,
+    gamesPlayed: Math.max(0, current.gamesPlayed - baseline.gamesPlayed),
+    wins: Math.max(0, current.wins - baseline.wins),
+    losses: Math.max(0, current.losses - baseline.losses),
+    bestAsset: Math.max(0, current.bestAsset),
+    favoriteMaps,
+    lastPlayedAt: Math.max(0, current.lastPlayedAt),
+  };
+}
+
 function loadAppliedImports(storage: StorageLike): string[] {
   let raw: string | null;
   try {

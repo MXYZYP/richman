@@ -8,6 +8,10 @@ import {
   validateGreatWallPublicModuleState,
   GREAT_WALL_MODULE_KEY,
 } from './greatWallModule';
+import {
+  validatePrisonPublicModuleState,
+  PRISON_MODULE_KEY,
+} from './prisonModule';
 
 export type HydrateGameStateResult =
   | { ok: true; state: GameState }
@@ -367,6 +371,15 @@ function validatePublicRuleState(
     // 烽火台占据关系必须指向棋盘上真实存在的烽火台格，且占据者是本局存活玩家。
     if (key === GREAT_WALL_MODULE_KEY
       && !validateGreatWallPublicModuleState(moduleState, pack.game.board, state.players)) return false;
+    // 监狱：在押者必须是存活玩家、棋子确实停在监狱角格上，出狱许可证必须指向真实卡面。
+    if (key === PRISON_MODULE_KEY
+      && !validatePrisonPublicModuleState(
+        moduleState,
+        pack.game.board,
+        state.players,
+        pack.game.cards,
+        pack.game.config.jailMaxAttempts,
+      )) return false;
   }
 
   const optionIds = new Set<string>();
@@ -453,6 +466,29 @@ function validatePublicRuleState(
     }
   }
   if (decisionKinds.size > 1) return false;
+
+  // 监狱在押状态与阶段必须彼此对应：轮到在押玩家、且还有出狱机会时，必须摆着出狱选项。
+  // 否则恢复出来的是一个「没人能动」的残局 —— 客户端只剩一个必然被拒的「掷骰子」，
+  // 服务端托管也会退化成按阶段查表的兜底意图（引擎的全局闸门只放行匹配的模块意图）。
+  // 与上面 world-tour 的两条同理。判据与引擎一致：选项存在当且仅当 attempts < jailMaxAttempts。
+  const prisonState = value.modules[PRISON_MODULE_KEY];
+  if (isRecord(prisonState) && isRecord(prisonState.jailedByPlayerId)) {
+    const detention = prisonState.jailedByPlayerId[state.currentPlayerId];
+    const attempts = isRecord(detention) ? detention.attempts : undefined;
+    if (typeof attempts === 'number'
+      && attempts < pack.game.config.jailMaxAttempts
+      && state.turnPhase === 'awaiting_roll') {
+      const hasChoiceAction = (value.pendingActions as PendingModuleAction[]).some((action) => (
+        action.module.id === 'prison'
+        && action.module.version === 1
+        && action.playerId === state.currentPlayerId
+        && action.action === 'jail-choice'
+        && isRecord(action.payload)
+        && action.payload.optionId === action.optionId
+      ));
+      if (!hasChoiceAction) return false;
+    }
+  }
 
   const worldState = value.modules[WORLD_TOUR_MODULE_KEY];
   if (isRecord(worldState) && isRecord(worldState.pendingAirportByPlayerId)) {

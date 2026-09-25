@@ -48,7 +48,7 @@ describe('map thumbnail model', () => {
     expect(model.cells[plainId]!.fill).toBe(pack.presentation.theme.colors.cell);
   });
 
-  it('几何拓扑按「中央是否被棋格占据 / 是否由外向内盘绕 / 是否逐行铺开」区分：丝路之旅回字双环、黄河之旅螺旋盘绕、长城之旅与长江之旅与山西之旅蛇形网格、新疆之旅与其余环形棋路', () => {
+  it('几何拓扑按「中央是否被棋格占据 / 是否由外向内盘绕 / 是否逐行铺开」区分：丝路之旅回字双环、黄河之旅螺旋盘绕、长城之旅与长江之旅与山西之旅与东北之旅蛇形网格、新疆之旅与其余环形棋路', () => {
     const layouts = Object.fromEntries(
       listActiveMaps().map((entry) => {
         const model = getMapThumbnailModel(getActiveMapPack(entry.ref.id));
@@ -67,6 +67,7 @@ describe('map thumbnail model', () => {
       'pearl-tour': 'ring',
       'xinjiang-tour': 'ring',
       'shanxi-tour': 'grid',
+      'northeast-tour': 'grid',
     });
   });
 
@@ -93,6 +94,7 @@ describe('map thumbnail model', () => {
       'pearl-tour': '环形棋路',
       'xinjiang-tour': '环形棋路',
       'shanxi-tour': '蛇形网格',
+      'northeast-tour': '蛇形网格',
     });
   });
 

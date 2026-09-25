@@ -92,6 +92,14 @@ export interface RoomManagerDependencies<TTimerHandle = unknown> {
    * 不传 = 纯内存模式（单测与既有行为完全不变）。
    */
   snapshotStore?: RoomSnapshotStore;
+  /**
+   * 房间密码的哈希与盐（#23 ③）。不传 = 用默认实现（scrypt + 16 字节随机盐）。
+   *
+   * 之所以做成可注入：`scryptSync` 用默认参数单次约 50ms，而 `RoomManager` 的方法全是同步的，
+   * 单测里每建一次带密码的房间就要付这个代价。生产一律用默认实现。
+   */
+  hashRoomPassword?(password: string, salt: string): string;
+  generateRoomPasswordSalt?(): string;
   mapResolver?: RoomMapResolver;
   gameGateway?: GameRuntimeGateway;
   onServerError?(message: string, error: unknown): void;
@@ -145,6 +153,35 @@ export interface Room {
    * （那份 config 受地图 contentHash 约束），也不需要进对局状态。
    */
   isPublic: boolean;
+  /**
+   * 现金目标房规（#23 ③ / 待-5 剩余）：先攒到这么多现金者直接获胜；`null` = 关闭（默认）。
+   *
+   * 与 `auctionOnDecline` 完全同类：它是**对局级**选项（引擎里的 `GameState.cashGoal`），
+   * 不进 `GameConfig`（那份 config 受地图 contentHash 硬约束），房间层只负责暂存，
+   * 开局时透传给 `createInitialGame`，此后由状态里的 `cashGoal` 驱动——
+   * 因此开局后改它既无意义也无入口（本方法同 `updateRoomSettings` 的门禁：仅大厅）。
+   *
+   * 唯一硬约束来自引擎：必须**严格大于本局生效的初始资金**（生效值可能被
+   * `ruleConfig.initialCash` 覆盖，故校验按生效值算）。
+   */
+  cashGoal: number | null;
+  /**
+   * 房间进入密码（#23 ③ / 待-5 剩余）：`null` = 没设密码。
+   *
+   * **只存哈希 + 盐，绝不存明文**，也绝不通过任何事件回带（`RoomSettings` 只广播
+   * `passwordProtected: boolean`）。明文只在 `room:join` 里提交一次、当场校验。
+   *
+   * 哈希与盐打包成一个对象而不是两个可空字段：两者必须同生共死，
+   * 拆成两个字段就可能出现「有哈希没盐」这种谁都验不过的中间态。
+   */
+  password: { hash: string; salt: string } | null;
+  /**
+   * 是否允许观战（#23 ③ / 待-5 剩余）：默认 `true`（= 引入本开关之前的既有行为）。
+   *
+   * 只拦**新加入**的观战者，不踢已在场的人——把已在看的人凭空踢出去是房主没要求过的副作用。
+   * 也因此它可以在对局中被改：对局中关掉，既不影响局内的人，也不影响已经坐进来的观战者。
+   */
+  allowSpectators: boolean;
   players: RoomPlayer[];
   spectators: RoomSpectator[];
   gameState: GameState | null;

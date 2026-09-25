@@ -52,3 +52,25 @@ export {
   isGreatWallBeacon,
   greatWallBeaconCells,
 } from './greatWallModule';
+export {
+  PRISON_MODULE_KEY,
+  PRISON_MODULE_REF,
+  PRISON_CHOICE_ACTION,
+  PRISON_DECISION_PHASE,
+  PRISON_GOTO_JAIL_CELL_TYPE,
+  PRISON_JAIL_CELL_TYPE,
+  PRISON_CONFINE_EFFECT_TYPE,
+  PRISON_CARD_EFFECT_TYPE,
+  prisonRuleModuleDefinition,
+  isPrisonGotoJail,
+  isPrisonJail,
+  prisonJailCellId,
+  prisonGotoJailCellIds,
+  prisonIsDetained,
+  prisonAttemptsOf,
+  prisonHeldCardsOf,
+  prisonDetainedPlayerIds,
+  prisonAwaitsDecision,
+  validatePrisonPublicModuleState,
+} from './prisonModule';
+export type { PrisonChoice, PrisonDetention, PrisonHeldCard, PrisonPublicModuleState } from './prisonModule';

@@ -41,6 +41,7 @@ const ACTIVE_MAP_IDS = [
   'pearl-tour',
   'xinjiang-tour',
   'shanxi-tour',
+  'northeast-tour',
 ] as const;
 
 describe('apply-map-pack: camelCase', () => {
@@ -56,6 +57,7 @@ describe('apply-map-pack: camelCase', () => {
       'pearlTour',
       'xinjiangTour',
       'shanxiTour',
+      'northeastTour',
     ]);
   });
 
@@ -76,13 +78,14 @@ describe('apply-map-pack: readKnownModules', () => {
       { id: 'core', version: 1 },
       { id: 'world-tour', version: 1 },
       { id: 'great-wall', version: 1 },
+      { id: 'prison', version: 1 },
     ]);
     expect(registrySource).toContain('PRODUCTION_RULE_MODULES: readonly RuleModuleRef[] = [');
   });
 });
 
 describe('apply-map-pack: 已落地地图必须完全幂等', () => {
-  it('index.ts 对十张已注册地图补导出都是空操作', () => {
+  it('index.ts 对十一张已注册地图补导出都是空操作', () => {
     for (const mapId of ACTIVE_MAP_IDS) {
       const patch = patchIndexTs(indexSource, camelCase(mapId));
       expect(patch.changed, `${mapId} 的 index.ts 导出行缺失或锚点漂移`).toBe(false);
@@ -90,7 +93,7 @@ describe('apply-map-pack: 已落地地图必须完全幂等', () => {
     }
   });
 
-  it('registry.ts 对十张已注册地图补注册都是空操作', () => {
+  it('registry.ts 对十一张已注册地图补注册都是空操作', () => {
     const modules = readKnownModules(registrySource);
     for (const mapId of ACTIVE_MAP_IDS) {
       const patch = patchRegistryTs(registrySource, camelCase(mapId), modules);
@@ -99,7 +102,7 @@ describe('apply-map-pack: 已落地地图必须完全幂等', () => {
     }
   });
 
-  it('deploy-manual.ps1 对十张已注册地图补清单都是空操作（含各自的 *.test.ts）', () => {
+  it('deploy-manual.ps1 对十一张已注册地图补清单都是空操作（含各自的 *.test.ts）', () => {
     for (const mapId of ACTIVE_MAP_IDS) {
       const camel = camelCase(mapId);
       const hasTest = existsSync(join(boardDataSrc, '__tests__', `${camel}Map.test.ts`));

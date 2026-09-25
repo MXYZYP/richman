@@ -1294,6 +1294,8 @@ describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
     // 每回合限时（#107）默认 0 = 不限时；公开房间列表（#108）默认不公开。
     // 这两项都是房间级设置（挂在 Room 上、不进 GameConfig），但同样必须随
     // `room:settings` 一起到达客户端，否则大厅面板会渲染成「已限时/已公开」的错误状态。
+    // 现金目标 / 房间密码 / 观战开关（#23 ③）同样是房间级设置，也必须随广播到达。
+    // 密码只到「有没有」这一层：哈希与盐永不出服务端。
     expect(await settingsPromise).toEqual({
       botDifficulty: 'normal',
       ruleConfig: null,
@@ -1301,6 +1303,9 @@ describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
       auctionOnDecline: false,
       turnTimeLimitSec: 0,
       isPublic: false,
+      cashGoal: null,
+      passwordProtected: false,
+      allowSpectators: true,
     });
     // 顺序是硬要求：ack 之后才发，才不会被客户端 ack 处理里的 resetSession() 清掉。
     expect(order).toEqual(['ack', 'settings']);
@@ -1325,6 +1330,9 @@ describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
       auctionOnDecline: false,
       turnTimeLimitSec: 0,
       isPublic: false,
+      cashGoal: null,
+      passwordProtected: false,
+      allowSpectators: true,
     });
   });
 
@@ -1357,6 +1365,9 @@ describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
       auctionOnDecline: false,
       turnTimeLimitSec: 0,
       isPublic: false,
+      cashGoal: null,
+      passwordProtected: false,
+      allowSpectators: true,
     });
     expect(order).toEqual(['ack', 'settings']);
   });
@@ -1389,6 +1400,9 @@ describe('Socket.IO room settings unicast on room entry (#4 / #6)', () => {
       auctionOnDecline: false,
       turnTimeLimitSec: 0,
       isPublic: false,
+      cashGoal: null,
+      passwordProtected: false,
+      allowSpectators: true,
     });
   });
 
@@ -1513,6 +1527,10 @@ describe('Socket.IO public room list (#108)', () => {
         spectatable: true,
         turnTimeLimitSec: 0,
         botDifficulty: 'normal',
+        // 列表只提示「需要密码」，绝不含密码内容；观战开关要与真实准入判断一致，
+        // 否则会出现「按钮可点、点下去必报 SPECTATING_DISABLED」的假入口（#23 ③）。
+        hasPassword: false,
+        allowSpectators: true,
       },
     ]);
 

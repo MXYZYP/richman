@@ -66,7 +66,7 @@ const CORE_HIGH_RATIO = 0.7;
 /**
  * 中央自成一圈的判定门槛。
  *
- * 实测十张图：china-tour / classic-tour / world-tour / xinjiang-tour 都是「外环 + 一条支路」，
+ * 实测十一张图：china-tour / classic-tour / world-tour / xinjiang-tour 都是「外环 + 一条支路」，
  * 支路整体落进中央窗口的只有 3 / 3 / 4 / 5 格（其余格子只是擦到窗口边缘）；silk-road 的内环
  * 20 格全部落在里面（33.3%）。所以按「整格落在窗口内」的比例判定才对——只看"是否擦到"
  * 会把它们全判成嵌套。yellow-river 虽然是螺旋、末尾 4 格也落在窗口中央，但先撞上 spiral
@@ -80,7 +80,7 @@ const NESTED_MIN_SHARE = 0.2;
  * 蛇形网格的判定门槛：把棋格按 y 中心聚成「行」，长行（≥ GRID_MIN_ROW_CELLS 格）数量达到
  * GRID_MIN_LONG_ROWS 就认为棋盘是逐行铺开的网格。
  *
- * 实测十张图：china-tour / world-tour / classic-tour / xinjiang-tour 的长行都只有 2 条
+ * 实测十一张图：china-tour / world-tour / classic-tour / xinjiang-tour 的长行都只有 2 条
  * （上下两条横边）；
  * silk-road 有 7 条长行，但它内环 20 格整格落在中央窗口，会先被判成 nested；
  * great-wall 的 8×6 横向蛇形是 6 条长行、中央只有 4 整格（8.3% < 20%）；
@@ -100,7 +100,7 @@ const ROW_CLUSTER_TOLERANCE_RATIO = 0.5;
  * 螺旋棋路的判定：沿棋盘顺序（id 递增）算每格到画布中心的棋盘距离（切比雪夫半径），
  * 螺旋的签名是「半径全程不回头地单调收束」。
  *
- * 实测十张图（画布 100 归一化后的 shrink = 前 20% 半径均值 − 后 20% 半径均值）：
+ * 实测十一张图（画布 100 归一化后的 shrink = 前 20% 半径均值 − 后 20% 半径均值）：
  * - china-tour / classic-tour shrink 18.63、world-tour 16.67、xinjiang-tour 18.60，
  *   单调率 0.933 / 0.933 / 0.949 / 0.933
  *   —— 外环半径恒定，最后才沿斜向支路收几步，所以既能掉进「单调」也绝不到收缩门槛；

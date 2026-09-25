@@ -63,6 +63,7 @@ try {
     { id: 'core', version: 1 },
     { id: 'world-tour', version: 1 },
     { id: 'great-wall', version: 1 },
+    { id: 'prison', version: 1 },
   ];
   for (const pack of formalPacks) assertValidMapPack(pack, knownModules, []);
   const registeredChinaPack = formalPacks[0];

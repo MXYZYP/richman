@@ -24,6 +24,15 @@ export const ROOM_ERROR_CODES = [
   'UNDO_UNAVAILABLE',
   /** 房间里已有一个悬而未决的悔棋请求。 */
   'UNDO_PENDING',
+  // 房间密码（#23 ③ / 待-5 剩余）。刻意**独立于 ROOM_NOT_FOUND**：房间码本来就是
+  // 6 位数字、靠「知道码」进门，密码是房主额外加的一层，答错了必须让人知道
+  // 「码是对的、密码不对」才能重试——否则用户会以为房间没了，转头去重新建房。
+  /** 房间设了密码，但本次 room:join 没带或带错了。 */
+  'WRONG_ROOM_PASSWORD',
+  // 观战开关（#23 ③ / 待-5 剩余）。独立于 ROOM_FULL：「房主不想让人看」和
+  // 「观战位满了」是两件完全不同的事——前者等多久都没用，后者等人退出来就行。
+  /** 房主关闭了观战。 */
+  'SPECTATING_DISABLED',
 ] as const;
 
 export type RoomErrorCode = (typeof ROOM_ERROR_CODES)[number];

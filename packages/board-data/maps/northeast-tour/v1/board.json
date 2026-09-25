@@ -1,0 +1,635 @@
+{
+  "boardName": "大富翁·东北之旅",
+  "direction": "clockwise",
+  "cells": [
+    {
+      "id": 0,
+      "type": "start",
+      "name": "起点"
+    },
+    {
+      "id": 1,
+      "type": "property",
+      "name": "沈阳",
+      "subtype": "normal",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5000,
+        6600,
+        8200
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 2,
+      "type": "property",
+      "name": "抚顺",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        130,
+        600,
+        1800,
+        4500,
+        6000,
+        7500
+      ],
+      "mortgageValue": 800
+    },
+    {
+      "id": 3,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 4,
+      "type": "property",
+      "name": "鞍山",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        130,
+        600,
+        1800,
+        4500,
+        6000,
+        7500
+      ],
+      "mortgageValue": 800
+    },
+    {
+      "id": 5,
+      "type": "module",
+      "module": {
+        "id": "prison",
+        "version": 1
+      },
+      "cellType": "goto-jail",
+      "name": "哨卡盘查",
+      "payload": {}
+    },
+    {
+      "id": 6,
+      "type": "property",
+      "name": "本溪",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 800,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 7,
+      "type": "property",
+      "name": "丰满水电站",
+      "subtype": "utility",
+      "price": 1500,
+      "mortgageValue": 750
+    },
+    {
+      "id": 8,
+      "type": "property",
+      "name": "丹东",
+      "subtype": "normal",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5000,
+        6600,
+        8200
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 9,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 10,
+      "type": "property",
+      "name": "通化",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 800,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 11,
+      "type": "property",
+      "name": "沈阳北站",
+      "subtype": "station",
+      "price": 2000,
+      "mortgageValue": 1000,
+      "rents": [
+        200,
+        700,
+        1600
+      ]
+    },
+    {
+      "id": 12,
+      "type": "tax",
+      "name": "边境通行税",
+      "amount": 1200
+    },
+    {
+      "id": 13,
+      "type": "property",
+      "name": "延吉",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 800,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 14,
+      "type": "property",
+      "name": "图们",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 800,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 15,
+      "type": "property",
+      "name": "吉林",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        130,
+        600,
+        1800,
+        4500,
+        6000,
+        7500
+      ],
+      "mortgageValue": 800
+    },
+    {
+      "id": 16,
+      "type": "special",
+      "name": "松花江雾凇",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": 17,
+      "type": "module",
+      "module": {
+        "id": "prison",
+        "version": 1
+      },
+      "cellType": "goto-jail",
+      "name": "越界被扣",
+      "payload": {}
+    },
+    {
+      "id": 18,
+      "type": "property",
+      "name": "长春",
+      "subtype": "normal",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        2800,
+        6500,
+        8800,
+        11000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 19,
+      "type": "property",
+      "name": "四平",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        130,
+        600,
+        1800,
+        4500,
+        6000,
+        7500
+      ],
+      "mortgageValue": 800
+    },
+    {
+      "id": 20,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 21,
+      "type": "property",
+      "name": "辽源",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 800,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 22,
+      "type": "property",
+      "name": "松花江航运",
+      "subtype": "utility",
+      "price": 1500,
+      "mortgageValue": 750
+    },
+    {
+      "id": 23,
+      "type": "property",
+      "name": "白城",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 800,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 24,
+      "type": "property",
+      "name": "齐齐哈尔",
+      "subtype": "normal",
+      "price": 2000,
+      "houseCost": 1000,
+      "rents": [
+        160,
+        800,
+        2200,
+        5500,
+        7200,
+        9000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 25,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 26,
+      "type": "property",
+      "name": "大庆",
+      "subtype": "normal",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        2800,
+        6500,
+        8800,
+        11000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 27,
+      "type": "property",
+      "name": "长春站",
+      "subtype": "station",
+      "price": 2000,
+      "mortgageValue": 1000,
+      "rents": [
+        200,
+        700,
+        1600
+      ]
+    },
+    {
+      "id": 28,
+      "type": "property",
+      "name": "牡丹江",
+      "subtype": "normal",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5000,
+        6600,
+        8200
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 29,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 30,
+      "type": "tax",
+      "name": "边贸关税",
+      "amount": 1000
+    },
+    {
+      "id": 31,
+      "type": "property",
+      "name": "佳木斯",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        130,
+        600,
+        1800,
+        4500,
+        6000,
+        7500
+      ],
+      "mortgageValue": 800
+    },
+    {
+      "id": 32,
+      "type": "property",
+      "name": "绥芬河",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 800,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 33,
+      "type": "module",
+      "module": {
+        "id": "prison",
+        "version": 1
+      },
+      "cellType": "goto-jail",
+      "name": "偷渡查获",
+      "payload": {}
+    },
+    {
+      "id": 34,
+      "type": "property",
+      "name": "黑河",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 800,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 35,
+      "type": "property",
+      "name": "大兴安岭",
+      "subtype": "normal",
+      "price": 2200,
+      "houseCost": 1200,
+      "rents": [
+        180,
+        900,
+        2500,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 36,
+      "type": "property",
+      "name": "漠河",
+      "subtype": "normal",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3000,
+        7200,
+        9600,
+        12000
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 37,
+      "type": "property",
+      "name": "呼伦贝尔",
+      "subtype": "normal",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        2800,
+        6500,
+        8800,
+        11000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 38,
+      "type": "special",
+      "name": "极寒冻伤",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 800
+      }
+    },
+    {
+      "id": 39,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 40,
+      "type": "property",
+      "name": "满洲里",
+      "subtype": "normal",
+      "price": 2200,
+      "houseCost": 1200,
+      "rents": [
+        180,
+        900,
+        2500,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 41,
+      "type": "property",
+      "name": "海拉尔",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        130,
+        600,
+        1800,
+        4500,
+        6000,
+        7500
+      ],
+      "mortgageValue": 800
+    },
+    {
+      "id": 42,
+      "type": "module",
+      "module": {
+        "id": "prison",
+        "version": 1
+      },
+      "cellType": "jail",
+      "name": "旅顺监狱",
+      "payload": {}
+    },
+    {
+      "id": 43,
+      "type": "property",
+      "name": "大连",
+      "subtype": "normal",
+      "price": 2800,
+      "houseCost": 1500,
+      "rents": [
+        240,
+        1200,
+        3600,
+        8500,
+        10250,
+        12000
+      ],
+      "mortgageValue": 1400
+    },
+    {
+      "id": 44,
+      "type": "property",
+      "name": "哈尔滨站",
+      "subtype": "station",
+      "price": 2000,
+      "mortgageValue": 1000,
+      "rents": [
+        200,
+        700,
+        1600
+      ]
+    },
+    {
+      "id": 45,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 46,
+      "type": "property",
+      "name": "太阳岛",
+      "subtype": "normal",
+      "price": 2200,
+      "houseCost": 1200,
+      "rents": [
+        180,
+        900,
+        2500,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 47,
+      "type": "property",
+      "name": "中央大街",
+      "subtype": "normal",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3900,
+        9000,
+        11000,
+        12750
+      ],
+      "mortgageValue": 1500,
+      "nextId": 0
+    }
+  ]
+}

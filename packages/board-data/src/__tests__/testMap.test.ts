@@ -73,6 +73,7 @@ describe('permanent test-only map fixture', () => {
       'pearl-tour',
       'xinjiang-tour',
       'shanxi-tour',
+      'northeast-tour',
     ]);
     expect(listActiveMaps().some((entry) => entry.ref.id === testMap.ref.id)).toBe(false);
   });

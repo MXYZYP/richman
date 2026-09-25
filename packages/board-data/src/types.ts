@@ -87,6 +87,15 @@ export interface GameConfig {
   utilityMultipliers: [number, number];
   jailExitMinRoll: number;
   jailMaxAttempts: number;
+  /**
+   * 保释金（元）：在押玩家在自己回合缴费立刻出狱（引擎侧 `prison@1`）。
+   *
+   * **刻意是可选字段，且只在 `jailEnabled === true` 的地图里出现**：`game.config` 参与 contentHash，
+   * 若给其余已上线地图也补上这个键（哪怕是 undefined），它们的哈希会一起漂移，
+   * 本地存档与联机房间快照就会被 hydrate 判为「地图不匹配」。
+   * 校验规则见 mapValidation.ts 的 assertConfig。
+   */
+  jailBailCost?: number;
   cashGoalPresets: number[];
   diceMode: 'two_dice';
   airportBranchDice: number; // 机场支线掷骰颗数（本版 1 颗，01 §5.1 定案）

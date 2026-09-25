@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { clientKey, parseRequestUrl, readBody, respondJson } from '../http/httpJson';
 import { createSlidingWindowRateLimiter, type RateLimitRule } from '../http/slidingWindowRateLimiter';
 import { parseLeaderboardSubmission, type LeaderboardStore } from './leaderboardStore';
 
@@ -48,7 +49,7 @@ export function createLeaderboardApi(options: LeaderboardApiOptions): Leaderboar
     : createSlidingWindowRateLimiter(options.rateLimit ?? DEFAULT_LEADERBOARD_RATE_LIMIT, options.now);
 
   return (request, response) => {
-    const url = parseUrl(request.url);
+    const url = parseRequestUrl(request.url);
     if (url === null || url.pathname !== LEADERBOARD_PATH) return false;
 
     const method = (request.method ?? 'GET').toUpperCase();
@@ -145,83 +146,3 @@ async function handleSubmit(
   });
 }
 
-interface ParsedUrl {
-  pathname: string;
-  searchParams: URLSearchParams;
-}
-
-function parseUrl(rawUrl: string | undefined): ParsedUrl | null {
-  if (rawUrl === undefined) return null;
-  // `request.url` 是「路径 + 查询串」，没有 host，因此给一个固定 base 再解析。
-  try {
-    const parsed = new URL(rawUrl, 'http://localhost');
-    return { pathname: parsed.pathname, searchParams: parsed.searchParams };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * 限流用的客户端标识。
- *
- * 取 `x-forwarded-for` 的**最后一跳**，而不是第一跳：本服务固定部署在单层可信反代
- * （Caddy → `127.0.0.1:3000`）之后，Caddy 会把自己看到的对端**追加**在末尾，这一跳伪造不了；
- * 而第一跳完全是请求方自己写的，谁都能编一个来绕过限流。
- * 没有该头（直连 / 本机测试）时退回套接字对端地址。
- */
-function clientKey(request: IncomingMessage): string {
-  const forwarded = request.headers['x-forwarded-for'];
-  const raw = Array.isArray(forwarded) ? forwarded.join(',') : forwarded;
-  if (typeof raw === 'string' && raw.length > 0) {
-    const hops = raw.split(',').map((part) => part.trim()).filter((part) => part.length > 0);
-    const last = hops.at(-1);
-    if (last !== undefined) return last;
-  }
-  return request.socket.remoteAddress ?? 'unknown';
-}
-
-function readBody(
-  request: IncomingMessage,
-  maxBytes: number,
-): Promise<{ ok: true; text: string } | { ok: false }> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let size = 0;
-    let settled = false;
-
-    request.on('data', (chunk: Buffer) => {
-      if (settled) return;
-      size += chunk.length;
-      if (size > maxBytes) {
-        // 超限就停止累积（否则「上限」形同虚设）。这里**不**掐连接：
-        // 交给调用方回 413，再由它 `resume()` 把余下的字节丢弃。
-        settled = true;
-        resolve({ ok: false });
-        return;
-      }
-      chunks.push(chunk);
-    });
-
-    request.on('end', () => {
-      if (settled) return;
-      settled = true;
-      resolve({ ok: true, text: Buffer.concat(chunks).toString('utf8') });
-    });
-
-    request.on('error', (error) => {
-      if (settled) return;
-      settled = true;
-      reject(error);
-    });
-  });
-}
-
-function respondJson(response: ServerResponse, status: number, payload: unknown): void {
-  if (response.writableEnded) return;
-  const body = JSON.stringify(payload);
-  response.statusCode = status;
-  response.setHeader('Content-Type', 'application/json; charset=utf-8');
-  // 榜单每次提交都会变，任何中间层缓存都不该把它留住。
-  response.setHeader('Cache-Control', 'no-store');
-  response.end(body);
-}

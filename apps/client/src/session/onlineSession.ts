@@ -129,7 +129,11 @@ export interface OnlineGameSession extends GameSession {
    * error. Returns whether the abandon committed. Used by the failed-connection banner.
    */
   abandon(): boolean;
-  join(roomCode: string, nickname: string, role?: RoomRole): Promise<void>;
+  /**
+   * 加入房间（#23 ③）：`password` 仅在房间设了密码时需要，明文一次性提交给服务端。
+   * 密码会随待恢复请求一起落 localStorage，因此断线后 `retryPending` 无需再次索要密码。
+   */
+  join(roomCode: string, nickname: string, role?: RoomRole, password?: string): Promise<void>;
   /** True when the authenticated member id belongs to the room's spectator roster. */
   readonly isSpectator: ComputedRef<boolean>;
   /** True when the local player is the room host — the only role allowed to mutate the lobby. */
@@ -207,6 +211,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   UNDO_DISABLED: '当前房间没有开启悔棋',
   UNDO_UNAVAILABLE: '现在没有可悔的一步',
   UNDO_PENDING: '已经有一个悔棋请求在处理中',
+  // 房间密码与观战开关（#23 ③）。两条都不是「房间坏了/没了」，而是「这次进不去」——
+  // 必须给出可据以行动的下一步：改密码重试 / 换个房间。
+  // 尤其不能落到 ROOM_NOT_FOUND 的文案上：那会让人以为房间已解散，转头去重新建房。
+  WRONG_ROOM_PASSWORD: '房间密码不正确，请重新输入',
+  SPECTATING_DISABLED: '房主关闭了观战，无法旁观这局',
 };
 const INTENT_REJECTION_MESSAGES: Readonly<Record<string, string>> = {
   OPERATION_IN_PROGRESS: '操作过快，请稍候重试',
@@ -239,6 +248,18 @@ const BLOCKING_ERROR_CODES = new Set([
 function browserStorage(): StorageLike {
   if (browserGlobals.localStorage === undefined) throw new Error('Online session storage is required outside a browser');
   return browserGlobals.localStorage;
+}
+
+/**
+ * 现金目标（#23 ③）的客户端归一：只接受**正整数**，其余（含 `null`、`NaN`、小数、负数）一律 `null`。
+ *
+ * 与 `normalizeTurnTimeLimitSec` 同一套思路——服务端才是权威，客户端这一层的职责只是
+ * 「把拿到的值收成一个界面上能安全渲染的形态」，而不是替服务端做业务校验。
+ * 真正的硬约束（必须大于生效初始资金）只在服务端判定，客户端连本地预检都不做：
+ * 生效初始资金取决于房主的 ruleConfig，那是服务端才知道的事。
+ */
+function normalizeCashGoal(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
 function publicError(code: string): string {
@@ -1012,7 +1033,7 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     if (!Array.isArray(payload?.messages)) return;
     chatLog.value = payload.messages.slice(-200);
   };
-  // 房间设置的唯一收敛点（#4 / #6 / #101 / #106 / #107 / #108）：广播与 update 的 ack
+  // 房间设置的唯一收敛点（#4 / #6 / #101 / #106 / #107 / #108 / #23 ③）：广播与 update 的 ack
   // 两条路径都走它。少了这一层，每加一个设置项就要在兩处同步补字段，
   // 而「一边补了、另一边忘了」不会报错，只会让刷新前后看到不同的设置。
   const normalizeRoomSettings = (settings: RoomSettings): RoomSettings => ({
@@ -1022,6 +1043,14 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     auctionOnDecline: settings.auctionOnDecline === true,
     turnTimeLimitSec: normalizeTurnTimeLimitSec(settings.turnTimeLimitSec),
     isPublic: settings.isPublic === true,
+    // 现金目标（#23 ③）：`null` 与「值不合法」都归一成 `null`（= 不设目标），
+    // 因为 UI 只认「关了 / 开着」两态，一个 NaN 或负数在界面上没有任何可展示的语义。
+    cashGoal: normalizeCashGoal(settings.cashGoal),
+    // 密码**只有布尔**（#23 ③）：服务端从不广播凭据，客户端也就无从（也不该）缓存它。
+    passwordProtected: settings.passwordProtected === true,
+    // 观战开关（#23 ③）：服务端缺省即 `true`，所以这里用 `!== false`——
+    // 与 `isPublic` 的 `=== true` 方向相反，因为两者的默认值本来就相反。
+    allowSpectators: settings.allowSpectators !== false,
   });
   // 房间设置（#4 / #6）由服务端广播/单播，整间共用一份：直接整体覆盖即可（低频、幂等）。
   const onRoomSettings = (settings: RoomSettings): void => {
@@ -1144,6 +1173,9 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
           nickname: request.nickname,
           requestId: request.requestId,
           role: request.role,
+          // 没设密码的房间带上 undefined 会被适配器当作「未提供」（它只查类型），
+          // 但显式省略更诚实：载荷里就不该出现一个语义为空的字段。
+          ...(request.password === undefined ? {} : { password: request.password }),
         });
       if (!ack.ok || disposed || entryAttempt !== owner) {
         if (!disposed && entryAttempt === owner) {
@@ -1205,11 +1237,20 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     mapId,
     botDifficulty,
   });
-  const join = async (roomCode: string, nickname: string, role: RoomRole = 'player'): Promise<void> => submit({
+  const join = async (
+    roomCode: string,
+    nickname: string,
+    role: RoomRole = 'player',
+    password?: string,
+  ): Promise<void> => submit({
     operation: 'join',
     roomCode,
     nickname,
     role,
+    // 先 trim 再判空（#23 ③）：输入框里一个误敲的空格不该被当成「带了密码」，
+    // 否则服务端会把「 1234」当成与「1234」不同的凭据并驳回。
+    // 服务端同样 trim，两边口径一致，避免「这边当有效、那边当不同」。
+    ...(typeof password === 'string' && password.trim().length > 0 ? { password: password.trim() } : {}),
     requestId: requestId(crypto),
   });
   const abortEntry = (): boolean => {

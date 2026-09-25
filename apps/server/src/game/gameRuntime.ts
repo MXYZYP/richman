@@ -257,6 +257,15 @@ export type CreateInitialGameResult =
 export interface CreateInitialGameOptions {
   /** 房规「放弃购买即拍卖」（#106）；不传 = false = 沿用既有「放弃即流拍」。 */
   auctionOnDecline?: boolean;
+  /**
+   * 房规「现金目标」（#23 ③ / 待-5 剩余）；不传 = `null` = 关闭。
+   *
+   * 与 `auctionOnDecline` 一样属于**对局级**选项：写进 `GameState.cashGoal` 后由引擎驱动，
+   * 之后改房间设置不再影响这一局。引擎侧（`createGame`）已硬校验
+   * `cashGoal > config.initialCash`——这里不做二次校验，只负责原样透传，
+   * 房间层在 `RoomManager.updateRoomSettings` 已按**生效**初始资金拦过一次。
+   */
+  cashGoal?: number | null;
 }
 
 export function createInitialGame(
@@ -281,7 +290,7 @@ export function createInitialGame(
         ruleModules,
         players,
         seed,
-        cashGoal: null,
+        cashGoal: options.cashGoal ?? null,
         auctionOnDecline: options.auctionOnDecline ?? false,
       }),
     };

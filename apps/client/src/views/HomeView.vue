@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import type { PublicRoomSummary, RoomRole } from '@richman/protocol';
+import { ROOM_PASSWORD_MAX_LENGTH, ROOM_PASSWORD_MIN_LENGTH } from '@richman/protocol';
 import { listActiveMaps, type MapCatalogEntry } from '@richman/board-data';
 import MapPicker from '../components/MapPicker.vue';
 import PwaInstallRow from '../components/PwaInstallRow.vue';
@@ -17,7 +18,29 @@ import {
   publishLeaderboard,
   type LeaderboardEntry,
 } from '../session/leaderboard';
-import { browserStorage, encodeStatsCode, importStatsCode, loadPlayerStats, type PlayerStats } from '../session/playerStats';
+import {
+  browserStorage,
+  encodeStatsCode,
+  importStatsCode,
+  loadPlayerStats,
+  savePlayerStats,
+  type PlayerStats,
+} from '../session/playerStats';
+import {
+  clearCloudLink,
+  describeCloudFailure,
+  formatRecoveryCode,
+  linkAfterRotate,
+  linkAfterSync,
+  loadCloudLink,
+  normalizeRecoveryCode,
+  planCloudRestore,
+  restoreFromCloud,
+  rotateRecoveryCode,
+  saveCloudLink,
+  syncToCloud,
+  type CloudAccountLink,
+} from '../session/playerAccount';
 import { formatMoney } from '../ui/format';
 import { THEMES, getStoredTheme, setTheme, type ThemeId } from '../ui/themeManager';
 import {
@@ -63,7 +86,7 @@ const emit = defineEmits<{
   // 建房只带昵称与地图：电脑难度与规则自定义（初始资金等）都改成「房主在大厅里设」，
   // 因为联机建房那一刻房间里还没有电脑玩家，先问难度是问不出所以然的（#4 / #6）。
   create: [nickname: string, mapId: string];
-  join: [payload: { roomCode: string; nickname: string; role: RoomRole }];
+  join: [payload: { roomCode: string; nickname: string; role: RoomRole; password?: string }];
   /** 手动刷新公开房间列表（#108）；首屏那一次由 App 自己触发。 */
   refreshRooms: [];
   /** 打开「玩法说明」（#109）：首次进站会自动弹一次，这里是不想等/想重看时的入口。 */
@@ -87,6 +110,9 @@ const roomCode = ref(capRoomCode(props.initialRoomCode));
 // Join role is an explicit choice (players by default); spectators may enter full or
 // already-playing rooms read-only.
 const joinRole = ref<RoomRole>('player');
+// 房间密码（#23 ③）：只有房间设了密码时才需要填。**不预填、不回显**——
+// 服务端只广播「有没有设密码」这一位事实，客户端不可能知道密码内容。
+const roomPassword = ref('');
 const selectedMapId = ref(
   props.activeMaps.some((entry) => entry.ref.id === props.initialMapId)
     ? props.initialMapId
@@ -108,7 +134,19 @@ const canCreate = computed(() => (
   props.activeMaps.some((entry) => entry.ref.id === selectedMapId.value)
   && planCreateSubmission(nickname.value, props.submitting) !== null
 ));
-const canJoin = computed(() => planJoinSubmission(roomCode.value, nickname.value, props.submitting) !== null);
+// 房间密码（#23 ③）：房间码是 6 位数字、密码是另一件事，所以两者分开校验。
+// 密码**留空永远合法**（= 这间房没设密码，或用户不知道）；只有「填了但长度不对」
+// 才算输入错误——服务端也认这个区间，两处口径一致。
+const passwordLengthInvalid = computed(() => {
+  const value = roomPassword.value.trim();
+  if (value.length === 0) return false;
+  const codePoints = [...value].length;
+  return codePoints < ROOM_PASSWORD_MIN_LENGTH || codePoints > ROOM_PASSWORD_MAX_LENGTH;
+});
+const canJoin = computed(() => (
+  planJoinSubmission(roomCode.value, nickname.value, props.submitting, joinRole.value, roomPassword.value) !== null
+  && !passwordLengthInvalid.value
+));
 const showRoomError = computed(() => roomCode.value.length > 0 && !isValidRoomCode(roomCode.value));
 const confirmingLocalDelete = ref<LocalDeleteConfirmation | null>(null);
 
@@ -152,13 +190,19 @@ function submitCreate() {
 }
 
 function submitJoin() {
-  const payload = planJoinSubmission(roomCode.value, nickname.value, props.submitting, joinRole.value);
+  const payload = planJoinSubmission(
+    roomCode.value,
+    nickname.value,
+    props.submitting,
+    joinRole.value,
+    roomPassword.value,
+  );
   if (payload !== null) emit('join', payload);
 }
 
 // ---- 公开房间列表（#108） ----
 
-const roomListHint = ref<string | null>(null);
+const roomListHint = ref<{ kind: 'info' | 'error'; message: string } | null>(null);
 
 /**
  * 从公开房间列表里加入 / 旁观。
@@ -166,13 +210,35 @@ const roomListHint = ref<string | null>(null);
  * 复用与手动加入完全相同的 `planJoinSubmission`：昵称没填、或有人正在提交时一律不放行，
  * 因此列表入口不会绕开「必须填昵称」这条既有规则。被拦下时给出明确提示——
  * 静默什么都不做是最糟的表现（用户会以为按钮坏了）。
+ *
+ * 两类**不发出请求**的情形（#23 ③）：
+ *  - 这间房设了密码：列表里只有「需要密码」这一位信息，密码本身无从得知，
+ *    所以把它当作「把用户送到输入框」的快捷方式——回填房间码、切到对应身份、聚焦密码框；
+ *  - 房主关掉了观战：按钮本身应已禁用，这里再兜一次底，避免任何路径绕过。
  */
-function joinFromList(roomCode: string, role: RoomRole): void {
-  const payload = planJoinSubmission(roomCode, nickname.value, props.submitting, role);
+function joinFromList(entry: PublicRoomSummary, role: RoomRole): void {
+  if (role === 'spectator' && !entry.allowSpectators) {
+    roomListHint.value = { kind: 'error', message: '房主关闭了观战，无法旁观这局。' };
+    return;
+  }
+  if (entry.hasPassword) {
+    roomCode.value = entry.roomCode;
+    joinRole.value = role;
+    roomPassword.value = '';
+    roomListHint.value = {
+      kind: 'info',
+      message: `房间 ${entry.roomCode} 设了密码：请在上方「房间密码」里输入后点加入。`,
+    };
+    return;
+  }
+  const payload = planJoinSubmission(entry.roomCode, nickname.value, props.submitting, role, roomPassword.value);
   if (payload === null) {
-    roomListHint.value = nickname.value.trim().length === 0
-      ? '请先在左上角填好昵称，才能从列表加入。'
-      : '昵称需为 1 至 20 个字符。';
+    roomListHint.value = {
+      kind: 'error',
+      message: nickname.value.trim().length === 0
+        ? '请先在左上角填好昵称，才能从列表加入。'
+        : '昵称需为 1 至 20 个字符。',
+    };
     return;
   }
   roomListHint.value = null;
@@ -284,6 +350,166 @@ function importStats(): void {
   };
   // 成就与排行都是「战绩的读法」，战绩一变就得跟着重算/重取。
   void refreshLeaderboard();
+}
+
+// ───────────── 战绩上云：恢复码账号（路线图 #123） ─────────────
+// 与上面「战绩码」的分工，界面上必须能一眼分清：
+//   · 战绩码 = 离线搬运（自己保管一段字符串，不经服务器，没有账号）；
+//   · 恢复码 = 在线账号（战绩存在服务器上，凭码在别的设备取回，之后还能反复同步）。
+//
+// 「不点不联网」的规矩同样适用：这里没有任何自动提交，只有挂在按钮上的调用。
+// 上传内容在界面上写清楚：昵称 + 一整份战绩（局数 / 胜负 / 资产峰值 / 各地图次数 / 最后游玩时间），
+// 既没有对局内容，也没有设备信息。
+function readCloudLink(): CloudAccountLink | null {
+  const storage = browserStorage();
+  return storage === undefined ? null : loadCloudLink(storage);
+}
+
+const cloudLink = ref<CloudAccountLink | null>(readCloudLink());
+const cloudCodeInput = ref('');
+// 刚建号 / 换码时拿到的明文恢复码：只显示这一次，因此单独一份状态。
+const cloudNewCode = ref('');
+const cloudNotice = ref<{ kind: 'ok' | 'error'; message: string } | null>(null);
+const cloudBusy = ref(false);
+
+const cloudSummary = computed(() => {
+  const link = cloudLink.value;
+  if (link === null) return null;
+  return {
+    nickname: link.nickname,
+    wins: link.cloud.wins,
+    gamesPlayed: link.cloud.gamesPlayed,
+    bestAsset: link.cloud.bestAsset,
+    syncedAt: link.lastSyncedAt === 0 ? null : new Date(link.lastSyncedAt).toLocaleString(),
+  };
+});
+
+async function syncStatsToCloud(): Promise<void> {
+  if (cloudBusy.value) return;
+  const storage = browserStorage();
+  if (storage === undefined) {
+    cloudNotice.value = { kind: 'error', message: describeCloudFailure('storage') };
+    return;
+  }
+  const link = cloudLink.value;
+  cloudBusy.value = true;
+  // 刻意重新读一遍战绩（而不是用 `playerStats.value`）：刚打完一局回到首页时它可能还是旧值。
+  const local = loadPlayerStats(storage);
+  const result = await syncToCloud({
+    local,
+    // 已经绑定了就用账号上的昵称：改名是账号的属性，不该被首页那个「本局昵称」输入框悄悄覆盖。
+    nickname: link?.nickname ?? nickname.value,
+    link,
+  });
+  cloudBusy.value = false;
+  if (!result.ok) {
+    cloudNotice.value = { kind: 'error', message: describeCloudFailure(result.reason) };
+    return;
+  }
+  const next = linkAfterSync(link, result.outcome, local, Date.now());
+  if (!saveCloudLink(storage, next)) {
+    cloudNotice.value = { kind: 'error', message: describeCloudFailure('storage') };
+    return;
+  }
+  cloudLink.value = next;
+  cloudNewCode.value = result.outcome.created ? formatRecoveryCode(result.outcome.recoveryCode ?? '') : '';
+  cloudCodeInput.value = '';
+  cloudNotice.value = {
+    kind: 'ok',
+    message: result.outcome.created
+      ? `已创建云端账号。请把下面的恢复码抄下来 —— 它只显示这一次，换设备时要用它取回战绩。云端现在记着 ${result.outcome.cloud.wins} 胜 / ${result.outcome.cloud.gamesPlayed} 局。`
+      : `已同步。云端现在记着 ${result.outcome.cloud.wins} 胜 / ${result.outcome.cloud.gamesPlayed} 局。`,
+  };
+}
+
+async function restoreStatsFromCloud(): Promise<void> {
+  if (cloudBusy.value) return;
+  const storage = browserStorage();
+  if (storage === undefined) {
+    cloudNotice.value = { kind: 'error', message: describeCloudFailure('storage') };
+    return;
+  }
+  const raw = cloudCodeInput.value;
+  // 先在本地验一遍格式（含校验位）：抄错一位时当场指出来，而不是白跑一次必然失败的请求。
+  if (normalizeRecoveryCode(raw) === null) {
+    cloudNotice.value = {
+      kind: 'error',
+      message: '这段恢复码不完整或抄错了一位。它是 20 位字符、分成 5 组，请核对后重试。',
+    };
+    return;
+  }
+  cloudBusy.value = true;
+  const result = await restoreFromCloud(raw);
+  cloudBusy.value = false;
+  if (!result.ok) {
+    cloudNotice.value = { kind: 'error', message: describeCloudFailure(result.reason) };
+    return;
+  }
+  const plan = planCloudRestore(loadPlayerStats(storage), cloudLink.value, raw, result.outcome, Date.now());
+  if (!savePlayerStats(storage, plan.merged) || !saveCloudLink(storage, plan.link)) {
+    cloudNotice.value = { kind: 'error', message: describeCloudFailure('storage') };
+    return;
+  }
+  playerStats.value = plan.merged;
+  cloudLink.value = plan.link;
+  cloudCodeInput.value = '';
+  cloudNewCode.value = '';
+  cloudNotice.value = {
+    kind: 'ok',
+    message: `已取回「${result.outcome.nickname}」的云端战绩，并与本机战绩合并（本机原有战绩没有被覆盖）。`,
+  };
+  // 成就与排行都是「战绩的读法」，战绩一变就得跟着重算 / 重取。
+  void refreshLeaderboard();
+}
+
+async function rotateCloudCode(): Promise<void> {
+  const link = cloudLink.value;
+  const storage = browserStorage();
+  if (cloudBusy.value || link === null || storage === undefined) return;
+  cloudBusy.value = true;
+  const result = await rotateRecoveryCode(link.code);
+  cloudBusy.value = false;
+  if (!result.ok) {
+    cloudNotice.value = { kind: 'error', message: describeCloudFailure(result.reason) };
+    return;
+  }
+  const next = linkAfterRotate(link, result.outcome, Date.now());
+  if (!saveCloudLink(storage, next)) {
+    cloudNotice.value = { kind: 'error', message: describeCloudFailure('storage') };
+    return;
+  }
+  cloudLink.value = next;
+  const rotated = formatRecoveryCode(result.outcome.recoveryCode ?? '');
+  cloudNewCode.value = rotated;
+  cloudNotice.value = {
+    kind: 'ok',
+    message: rotated === ''
+      ? '已请求换码，但服务器没有回新的恢复码，请稍后再试。'
+      : '已换用新的恢复码，旧的那段立即失效。请把新的抄下来。',
+  };
+}
+
+function unlinkCloud(): void {
+  const storage = browserStorage();
+  if (storage !== undefined) clearCloudLink(storage);
+  cloudLink.value = null;
+  cloudNewCode.value = '';
+  cloudCodeInput.value = '';
+  cloudNotice.value = {
+    kind: 'ok',
+    message: '已在这台设备上退出云同步。云端那份战绩不会被删除，随时可以用恢复码再取回。',
+  };
+}
+
+async function copyCloudCode(): Promise<void> {
+  if (cloudNewCode.value === '') return;
+  try {
+    await navigator.clipboard.writeText(cloudNewCode.value);
+    cloudNotice.value = { kind: 'ok', message: '恢复码已复制到剪贴板，请粘贴到安全的地方保存。' };
+  } catch {
+    // 剪贴板权限被拒 / 非安全上下文：码就在下面的框里，手动选中抄写一样走通。
+    cloudNotice.value = { kind: 'error', message: '复制失败，请手动选中下面的恢复码抄写。' };
+  }
 }
 
 // ───────────── 成就（路线图 #116） ─────────────
@@ -561,6 +787,77 @@ onMounted(() => {
             role="status"
           >{{ statsNotice.message }}</p>
         </div>
+
+        <div class="cloud-sync">
+          <h3 class="cloud-sync-title">云同步（恢复码账号）</h3>
+          <p class="cloud-sync-hint">
+            把战绩存到服务器上，换设备时凭一段「恢复码」取回。不需要邮箱，也不需要密码；
+            上传的就是上面这份战绩（昵称、局数、胜负、资产峰值、各地图次数），
+            没有对局内容，也不会自动联网 —— 只有你按下按钮时才会发请求。
+            云端的账号一年没有同步过会被清理，重要战绩请同时用上面的「战绩码」留一份。
+          </p>
+
+          <p v-if="!cloudSummary" class="cloud-sync-state">这台设备还没有绑定云端账号。</p>
+          <p v-else class="cloud-sync-state">
+            已绑定 <strong>{{ cloudSummary.nickname }}</strong> 的云端账号：{{ cloudSummary.wins }} 胜 /
+            {{ cloudSummary.gamesPlayed }} 局，资产峰值 {{ formatMoney(cloudSummary.bestAsset) }}。
+            <span v-if="cloudSummary.syncedAt" class="cloud-sync-when">上次同步 {{ cloudSummary.syncedAt }}</span>
+          </p>
+
+          <div class="cloud-sync-actions">
+            <button type="button" class="cloud-sync-button" :disabled="cloudBusy" @click="syncStatsToCloud">
+              {{ cloudSummary ? '同步到云端' : '创建云端账号并同步' }}
+            </button>
+            <button
+              v-if="cloudSummary"
+              type="button"
+              class="cloud-sync-button cloud-sync-button-ghost"
+              :disabled="cloudBusy"
+              @click="rotateCloudCode"
+            >换一段恢复码</button>
+            <button
+              v-if="cloudSummary"
+              type="button"
+              class="cloud-sync-button cloud-sync-button-ghost"
+              :disabled="cloudBusy"
+              @click="unlinkCloud"
+            >退出云同步</button>
+          </div>
+
+          <template v-if="cloudNewCode !== ''">
+            <p class="cloud-sync-hint cloud-sync-hint-strong">
+              这是你的恢复码，只显示这一次。请抄到纸上或存进密码管理器：忘了它就只能换新码，而旧码会失效。
+            </p>
+            <div class="cloud-sync-actions">
+              <code class="cloud-sync-code">{{ cloudNewCode }}</code>
+              <button type="button" class="cloud-sync-button" @click="copyCloudCode">复制恢复码</button>
+            </div>
+          </template>
+
+          <label class="cloud-sync-field">
+            <span>用恢复码恢复</span>
+            <input
+              v-model="cloudCodeInput"
+              type="text"
+              class="cloud-sync-input"
+              placeholder="RM-XXXX-XXXX-XXXX-XXXX-XXXX"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+          <button
+            type="button"
+            class="cloud-sync-button"
+            :disabled="cloudBusy || cloudCodeInput.trim() === ''"
+            @click="restoreStatsFromCloud"
+          >从云端恢复</button>
+          <p
+            v-if="cloudNotice"
+            class="cloud-sync-notice"
+            :class="`cloud-sync-notice--${cloudNotice.kind}`"
+            role="status"
+          >{{ cloudNotice.message }}</p>
+        </div>
       </section>
 
       <!-- 排行榜（#116）。刻意不在这里写长注释：SSR 的开发构建会把模板注释原样输出，
@@ -649,21 +946,40 @@ onMounted(() => {
         </div>
 
         <div class="home-join">
-          <label class="home-field">
-            <span>房间码</span>
-            <input
-              :value="roomCode"
-              type="text"
-              inputmode="numeric"
-              autocomplete="off"
-              placeholder="6 位数字"
-              aria-describedby="home-room-hint"
-              :aria-invalid="showRoomError"
-              :disabled="submitting"
-              @keydown.enter.prevent="submitJoin"
-              @input="onRoomInput"
-            />
-          </label>
+          <!-- 房间码与房间密码同排（#23 ③）：它们是「进哪间房」的两个输入，天然属于一组；
+                身份选择与提交按钮留在同一行的右侧，保持原有的单行操作节奏。 -->
+          <div class="home-join__fields">
+            <label class="home-field">
+              <span>房间码</span>
+              <input
+                :value="roomCode"
+                type="text"
+                inputmode="numeric"
+                autocomplete="off"
+                placeholder="6 位数字"
+                aria-describedby="home-room-hint"
+                :aria-invalid="showRoomError"
+                :disabled="submitting"
+                @keydown.enter.prevent="submitJoin"
+                @input="onRoomInput"
+              />
+            </label>
+            <!-- 房间密码（#23 ③）：可选。只有知道密码的人才需要填；留空 = 直接尝试进入。
+                 用 `type="password"` 让屏幕外的旁观者看不到内容，`autocomplete="off"` 避免
+                 浏览器把「房间密码」错当成某个账号密码去自动填充。 -->
+            <label class="home-field home-field--password">
+              <span>房间密码</span>
+              <input
+                v-model="roomPassword"
+                type="password"
+                autocomplete="off"
+                :placeholder="`可选，${ROOM_PASSWORD_MIN_LENGTH}-${ROOM_PASSWORD_MAX_LENGTH} 位`"
+                :maxlength="ROOM_PASSWORD_MAX_LENGTH"
+                :disabled="submitting"
+                @keydown.enter.prevent="submitJoin"
+              />
+            </label>
+          </div>
           <div class="home-role-field" role="radiogroup" aria-label="加入身份">
             <button
               type="button"
@@ -686,10 +1002,19 @@ onMounted(() => {
             {{ joinRole === 'spectator' ? '以观战身份加入' : '加入房间' }}
           </button>
         </div>
-        <p id="home-room-hint" class="home-hint" :class="{ invalid: showRoomError }" role="status">
-          {{ showRoomError ? '房间码需为 6 位数字' : (joinRole === 'spectator'
-            ? '观战仅查看棋盘、资产与战报；满员或已开局的房间也可加入'
-            : '输入好友分享的 6 位房间码；开局前可加入，开局后仅可观战') }}
+        <p
+          id="home-room-hint"
+          class="home-hint"
+          :class="{ invalid: showRoomError || passwordLengthInvalid }"
+          role="status"
+        >
+          {{ showRoomError
+            ? '房间码需为 6 位数字'
+            : passwordLengthInvalid
+              ? `房间密码需为 ${ROOM_PASSWORD_MIN_LENGTH}-${ROOM_PASSWORD_MAX_LENGTH} 个字符（留空表示这间房没设密码）`
+              : (joinRole === 'spectator'
+                ? '观战仅查看棋盘、资产与战报；满员或已开局的房间也可加入'
+                : '输入好友分享的 6 位房间码；房间设了密码时一并填入密码') }}
         </p>
       </form>
 
@@ -721,6 +1046,10 @@ onMounted(() => {
               <p class="home-rooms__detail">
                 {{ entry.hostNickname }} · {{ entry.mapTitle }} · {{ roomSeatLabel(entry) }}
                 <template v-if="roomLimitLabel(entry)"> · {{ roomLimitLabel(entry) }}</template>
+                <!-- 需要密码（#23 ③）：只说「要密码」，不泄露密码内容。提前标出来，
+                     点进去才发现要密码比先说清楚更让人烦躁。 -->
+                <template v-if="entry.hasPassword"> · 需要密码</template>
+                <template v-if="!entry.allowSpectators"> · 禁止观战</template>
               </p>
             </div>
             <div class="home-rooms__actions">
@@ -729,21 +1058,26 @@ onMounted(() => {
                 class="home-rooms__button"
                 :disabled="submitting || !entry.joinable"
                 :title="entry.joinable ? '' : '这局已经开局或人数已满，只能旁观'"
-                @click="joinFromList(entry.roomCode, 'player')"
+                @click="joinFromList(entry, 'player')"
               >加入</button>
               <button
                 type="button"
                 class="home-rooms__button home-rooms__button--ghost"
                 :disabled="submitting || !entry.spectatable"
-                :title="entry.spectatable ? '' : '观战位已满'"
-                @click="joinFromList(entry.roomCode, 'spectator')"
+                :title="!entry.allowSpectators ? '房主关闭了观战' : (entry.spectatable ? '' : '观战位已满')"
+                @click="joinFromList(entry, 'spectator')"
               >旁观</button>
             </div>
           </li>
         </ul>
 
-        <p v-if="roomListHint" class="home-rooms__notice home-rooms__notice--error" role="status">
-          {{ roomListHint }}
+        <p
+          v-if="roomListHint"
+          class="home-rooms__notice"
+          :class="{ 'home-rooms__notice--error': roomListHint.kind === 'error' }"
+          role="status"
+        >
+          {{ roomListHint.message }}
         </p>
       </section>
 
@@ -897,6 +1231,122 @@ onMounted(() => {
 .stats-transfer-notice--error {
   color: var(--color-primary);
 }
+/* ---- 云同步（#123）：与「战绩码」同格，但它是在线账号，因此独立成块。 ---- */
+.cloud-sync {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.cloud-sync-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--color-text);
+}
+
+.cloud-sync-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+
+.cloud-sync-hint-strong {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.cloud-sync-state {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.cloud-sync-when {
+  color: var(--color-muted);
+}
+
+.cloud-sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.cloud-sync-button {
+  min-height: 36px;
+  padding-inline: 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--color-accent);
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cloud-sync-button:disabled {
+  background: var(--button-disabled-bg);
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+
+.cloud-sync-button-ghost {
+  background: transparent;
+  border: 1px solid var(--color-border);
+}
+
+.cloud-sync-code {
+  flex: 1 1 240px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 70%);
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  word-break: break-all;
+}
+
+.cloud-sync-field {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+.cloud-sync-input {
+  min-height: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 70%);
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+}
+
+.cloud-sync-notice {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.cloud-sync-notice--ok {
+  color: var(--player-green);
+}
+
+.cloud-sync-notice--error {
+  color: var(--color-primary);
+}
+
 
 /* ---- 成就（#116）：与战绩同格，视觉上也是「战绩的延伸」。 ---- */
 .achievements {
@@ -1302,6 +1752,20 @@ onMounted(() => {
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 12px;
   align-items: end;
+}
+
+/* 房间码 + 房间密码（#23 ③）同排：两者都是「进哪间房」的输入，横向并排比上下堆叠更好读。
+   窄屏退化成上下两行，避免两个输入框各挤到放不下 placeholder。 */
+.home-join__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .home-join__fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .home-role-field {

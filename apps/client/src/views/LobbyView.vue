@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { ChatMessage, PublicRoomState, RoomRuleConfig, RoomSettings, RoomSettingsPatch } from '@richman/protocol';
-import { TURN_TIME_LIMIT_OPTIONS } from '@richman/protocol';
+import { ROOM_PASSWORD_MAX_LENGTH, ROOM_PASSWORD_MIN_LENGTH, TURN_TIME_LIMIT_OPTIONS } from '@richman/protocol';
 import { getActiveMapPack } from '@richman/board-data';
 import type { BotDifficulty } from '@richman/engine';
 import { BOT_DIFFICULTY_OPTIONS } from '../game/gameSetup';
@@ -204,6 +204,13 @@ function applyRuleChange(partial: Partial<RoomRuleConfig>): void {
     ruleError.value = problem;
     return;
   }
+  // 与现金目标的交叉约束（#23 ③）：引擎要求 `现金目标 > 初始资金`，把初始资金抬到目标之上
+  // 会让这局根本开不起来。本地先拦一次，房主立刻看到该先处理哪一项；
+  // 服务端同样的规则仍然保留（它才是权威，且要防住被改过的快照与旧客户端）。
+  if (cashGoal.value !== null && cashGoal.value <= next.initialCash) {
+    ruleError.value = `现金目标 ¥${cashGoal.value} 必须高于初始资金，请先改为「不设目标」或降低初始资金`;
+    return;
+  }
   ruleError.value = null;
   if (next.initialCash === base.initialCash
     && next.maxHouseLevel === base.maxHouseLevel
@@ -284,6 +291,85 @@ function chooseDiscoverable(enabled: boolean): void {
   emit('updateSettings', { isPublic: enabled });
 }
 
+/**
+ * 现金目标房规（#23 ③）：先攒到这么多现金者直接获胜；默认**不设目标**。
+ *
+ * 档位直接取自当前地图的 `cashGoalPresets`，并滤掉「不大于生效初始资金」的那些——
+ * 引擎硬性要求 `cashGoal > config.initialCash`，把明知会被服务端驳回的档位摆在界面上，
+ * 只会让房主点一下、等一次往返、再收到一条错误。滤掉是更省事的做法。
+ */
+const cashGoal = computed(() => props.roomSettings?.cashGoal ?? null);
+const cashGoalPresets = computed<number[]>(() => {
+  try {
+    const floor = effectiveRule.value?.initialCash ?? 0;
+    const presets = getActiveMapPack(props.room.map.ref.id).game.config.cashGoalPresets;
+    const valid = presets.filter((goal) => goal > floor);
+    // 当前已选中的值一定要留在选项里：房主把初始资金调到接近目标之后，
+    // 那个目标可能不再「合法」，但它此刻确实是生效值，从界面上抹掉只会让人以为设置丢了。
+    const current = cashGoal.value;
+    if (current !== null && !valid.includes(current)) valid.push(current);
+    return valid.sort((a, b) => a - b);
+  } catch {
+    return [];
+  }
+});
+const cashGoalOptions = computed(() => [
+  { value: null as number | null, label: '不设目标' },
+  ...cashGoalPresets.value.map((value) => ({ value: value as number | null, label: `¥${value}` })),
+]);
+
+function chooseCashGoal(value: number | null): void {
+  if (rulesReadOnly.value) return;
+  if (cashGoal.value === value) return;
+  emit('updateSettings', { cashGoal: value });
+}
+
+/**
+ * 房间密码（#23 ③）：默认不设。
+ *
+ * 界面上**只拿得到布尔事实**（服务端从不广播凭据），所以这里是一个「输入 → 设置」的
+ * 单向控件，而不是双向绑定的表单：没有「把当前密码回显出来」这回事。
+ * 提交后立刻清空草稿，明文不在组件里多留一帧。
+ */
+const passwordProtected = computed(() => props.roomSettings?.passwordProtected === true);
+const passwordDraft = ref('');
+const passwordError = ref<string | null>(null);
+
+function submitPassword(): void {
+  if (rulesReadOnly.value) return;
+  const value = passwordDraft.value.trim();
+  const codePoints = [...value].length;
+  if (codePoints < ROOM_PASSWORD_MIN_LENGTH || codePoints > ROOM_PASSWORD_MAX_LENGTH) {
+    passwordError.value = `密码需为 ${ROOM_PASSWORD_MIN_LENGTH}-${ROOM_PASSWORD_MAX_LENGTH} 个字符`;
+    return;
+  }
+  passwordError.value = null;
+  passwordDraft.value = '';
+  emit('updateSettings', { password: value });
+}
+
+function clearPassword(): void {
+  if (rulesReadOnly.value) return;
+  passwordError.value = null;
+  passwordDraft.value = '';
+  emit('updateSettings', { password: null });
+}
+
+/**
+ * 观战开关（#23 ③）：默认**允许**（= 引入本开关之前的既有行为）。
+ *
+ * 关掉只影响之后想进来旁观的人，不会把已经在看的人踢出去——这也是它和
+ * 「踢人」这类破坏性操作的分界线。对局中同样可以改（服务端允许），
+ * 但这里沿用 `rulesReadOnly`（仅大厅可编辑），与其它房间设置保持同一套交互节奏。
+ */
+const allowSpectators = computed(() => props.roomSettings?.allowSpectators !== false);
+
+function chooseAllowSpectators(enabled: boolean): void {
+  if (rulesReadOnly.value) return;
+  if (allowSpectators.value === enabled) return;
+  emit('updateSettings', { allowSpectators: enabled });
+}
+
 const botDifficultyHint = computed(
   () => BOT_DIFFICULTY_OPTIONS.find((option) => option.value === props.roomSettings?.botDifficulty)?.hint ?? '',
 );
@@ -302,7 +388,14 @@ const ruleSummary = computed(() => {
   // 可被发现也进摘要（#108）：它决定「外面的人能不能搜到我们这间房」，是房间的公开性事实，
   // 不只在房主的开关里可见。
   const listed = discoverable.value ? ' · 已公开到房间列表' : '';
-  return `初始资金 ¥${rule.initialCash} · 最高房级 ${rule.maxHouseLevel} 级 · 抵押利率 ${percent}%${undo}${limit}${listed}`;
+  // 现金目标（#23 ③）进摘要：它是最容易改变这局时长的一项房规，
+  // 非房主必须能一眼看到「这局是打到只剩一人，还是攒到某个数就结束」。
+  const goal = cashGoal.value !== null ? ` · 现金目标 ¥${cashGoal.value}` : '';
+  // 密码与观战开关（#23 ③）也进摘要：前者解释「为什么别人进不来」，后者解释
+  // 「为什么点观战被拒」，都是非房主会遇到、却看不到开关本身的两件事。
+  const locked = passwordProtected.value ? ' · 已设房间密码' : '';
+  const spectate = allowSpectators.value ? '' : ' · 禁止观战';
+  return `初始资金 ¥${rule.initialCash} · 最高房级 ${rule.maxHouseLevel} 级 · 抵押利率 ${percent}%${undo}${limit}${listed}${goal}${locked}${spectate}`;
 });
 
 // Copy feedback is transient and self-describing so a clipboard rejection is never silent.
@@ -615,6 +708,99 @@ onBeforeUnmount(() => {
             {{ discoverable
               ? '别人能在首页的「公开房间」里看到这间房并一键进来；对局中则是一键旁观。'
               : '只有拿到房间码或邀请链接的人才能进来。' }}
+          </p>
+        </div>
+
+        <!-- 现金目标（#23 ③）：所有人可见（只读给非房主）。档位来自地图的 cashGoalPresets，
+             默认「不设目标」= 打到只剩最后一人。 -->
+        <div class="lobby-rules__difficulty">
+          <span class="lobby-rules__difficulty-label">现金目标</span>
+          <div class="lobby-rules__difficulty-options" role="radiogroup" aria-label="现金目标">
+            <button
+              v-for="option in cashGoalOptions"
+              :key="String(option.value)"
+              type="button"
+              class="lobby-rules__difficulty-option"
+              :class="{ active: cashGoal === option.value }"
+              :aria-pressed="cashGoal === option.value"
+              :disabled="rulesReadOnly"
+              @click="chooseCashGoal(option.value)"
+            >{{ option.label }}</button>
+          </div>
+          <p class="lobby-rules__hint">
+            {{ cashGoal === null
+              ? '不设目标：打到只剩最后一人为止。'
+              : `先攒到 ¥${cashGoal} 现金者立刻获胜（必须高于本局初始资金）。` }}
+          </p>
+        </div>
+
+        <!-- 房间密码（#23 ③）：房主可设置 / 更换 / 清除，其他人只知道「有没有设」。
+             服务端只广播布尔事实，因此这里永远不会回显当前密码。 -->
+        <div class="lobby-rules__difficulty">
+          <span class="lobby-rules__difficulty-label">房间密码</span>
+          <template v-if="isHost">
+            <div class="lobby-rules__difficulty-options">
+              <input
+                v-model="passwordDraft"
+                type="text"
+                class="lobby-rules__password-input"
+                :placeholder="`${ROOM_PASSWORD_MIN_LENGTH}-${ROOM_PASSWORD_MAX_LENGTH} 位`"
+                :maxlength="ROOM_PASSWORD_MAX_LENGTH"
+                :disabled="rulesReadOnly"
+                @keydown.enter.prevent="submitPassword"
+              />
+              <button
+                type="button"
+                class="lobby-rules__difficulty-option"
+                :disabled="rulesReadOnly || passwordDraft.trim().length === 0"
+                @click="submitPassword"
+              >{{ passwordProtected ? '更换密码' : '设置密码' }}</button>
+              <button
+                v-if="passwordProtected"
+                type="button"
+                class="lobby-rules__difficulty-option"
+                :disabled="rulesReadOnly"
+                @click="clearPassword"
+              >清除密码</button>
+            </div>
+            <p class="lobby-rules__hint">
+              {{ passwordProtected
+                ? '已设密码：之后加入的人（含观战）都要先输对密码。服务端只保存哈希，此处无法回显已设的密码。'
+                : '不设密码：拿到房间码或邀请链接的人都能直接进来。' }}
+            </p>
+          </template>
+          <p v-else class="lobby-rules__hint">
+            {{ passwordProtected ? '房主已为这间房设置了进入密码。' : '这间房没有设置进入密码。' }}
+          </p>
+          <p v-if="passwordError" class="lobby-rules__error" role="alert">{{ passwordError }}</p>
+        </div>
+
+        <!-- 观战（#23 ③）：所有人可见（只读给非房主）。默认允许；关掉只拦之后想进来的人，
+             不会把已经在看的人踢出去。 -->
+        <div class="lobby-rules__difficulty">
+          <span class="lobby-rules__difficulty-label">观战</span>
+          <div class="lobby-rules__difficulty-options" role="radiogroup" aria-label="是否允许观战">
+            <button
+              type="button"
+              class="lobby-rules__difficulty-option"
+              :class="{ active: allowSpectators }"
+              :aria-pressed="allowSpectators"
+              :disabled="rulesReadOnly"
+              @click="chooseAllowSpectators(true)"
+            >允许观战</button>
+            <button
+              type="button"
+              class="lobby-rules__difficulty-option"
+              :class="{ active: !allowSpectators }"
+              :aria-pressed="!allowSpectators"
+              :disabled="rulesReadOnly"
+              @click="chooseAllowSpectators(false)"
+            >禁止观战</button>
+          </div>
+          <p class="lobby-rules__hint">
+            {{ allowSpectators
+              ? '别人可以用房间码以「观战」身份进来旁观，不占参赛席位。'
+              : '新加入的观战会被拒；已经在场观战的人不受影响。' }}
           </p>
         </div>
       </section>
@@ -1247,6 +1433,21 @@ onBeforeUnmount(() => {
   background: var(--button-disabled-bg);
   color: var(--button-disabled-text);
   cursor: not-allowed;
+}
+
+/* 房间密码输入框（#23 ③）：与同排的按钮保持同一高度与圆角，视觉上属于同一组控件。
+   `min-width: 0` 是必需的——flex 子项默认 min-width:auto，输入框会被它的
+   placeholder 撑到把同排按钮挤出容器。 */
+.lobby-rules__password-input {
+  flex: 1 1 120px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--surface-input);
+  color: var(--color-text);
+  font: inherit;
 }
 
 .lobby-rules__difficulty-option:focus-visible {

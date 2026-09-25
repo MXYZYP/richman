@@ -55,6 +55,8 @@ export const THEME_BY_MAP: Readonly<Record<string, ResolvedThemeId>> = {
   'yellow-river': 'sand',
   'great-wall': 'forest',
   'shanxi-tour': 'forest',
+  // 东北之旅是林海雪原气质，与长城 / 山西同归「绿」。
+  'northeast-tour': 'forest',
 };
 
 /** 地图推荐皮肤；未知 / 空 id 回落 'classic'。纯函数，供 UI 说明文案与解析共用。 */

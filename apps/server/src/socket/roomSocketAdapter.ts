@@ -457,7 +457,7 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
     }
 
     try {
-      const result = roomManager.joinRoom(payload.roomCode, payload.nickname, payload.requestId, payload.role);
+      const result = roomManager.joinRoom(payload.roomCode, payload.nickname, payload.requestId, payload.role, payload.password);
       if (!result.ok) {
         ack(toAck(result));
         return;
@@ -1064,7 +1064,10 @@ function isJoinRoomPayload(payload: unknown): payload is JoinRoomPayload {
     typeof payload.nickname === 'string' &&
     (payload.role === 'player' || payload.role === 'spectator') &&
     typeof payload.requestId === 'string' &&
-    REQUEST_ID_RE.test(payload.requestId)
+    REQUEST_ID_RE.test(payload.requestId) &&
+    // 房间密码（#23 ③）：可选。这里只挡「类型不对」，
+    // 长度与正确性都交给 `RoomManager.joinRoom`——把长度规则抄成两份，早晚会漂移。
+    (payload.password === undefined || typeof payload.password === 'string')
   );
 }
 
@@ -1113,10 +1116,10 @@ function isRenameBotPayload(payload: unknown): payload is { playerId: string; ni
     && typeof payload.nickname === 'string';
 }
 
-/** 房间设置 patch（#4 / #6 / #101）：各字段均可省略；`ruleConfig: null` 表示「恢复地图默认」。 */
+/** 房间设置 patch（#4 / #6 / #101 / #23 ③）：各字段均可省略；`ruleConfig: null` 表示「恢复地图默认」。 */
 function isUpdateSettingsPayload(payload: unknown): payload is RoomSettingsPatch {
   if (!isRecord(payload)) return false;
-  const { botDifficulty, ruleConfig, minimalUndoEnabled, auctionOnDecline } = payload;
+  const { botDifficulty, ruleConfig, minimalUndoEnabled, auctionOnDecline, cashGoal, password, allowSpectators } = payload;
   if (botDifficulty !== undefined
     && botDifficulty !== 'easy'
     && botDifficulty !== 'normal'
@@ -1132,6 +1135,20 @@ function isUpdateSettingsPayload(payload: unknown): payload is RoomSettingsPatch
   // 拍卖房规（#106）与 minimalUndoEnabled 同类：布尔门禁在适配器层就拦掉，
   // 不让「字符串 true」这类载荷走到 RoomManager 再回一个语义更模糊的错误。
   if (auctionOnDecline !== undefined && typeof auctionOnDecline !== 'boolean') {
+    return false;
+  }
+  // 现金目标（#23 ③）：`null` = 关闭，否则必须是有限数。范围（> 生效初始资金）由
+  // RoomManager 结合地图配置与 ruleConfig 判定——适配器拿不到这两样东西。
+  if (cashGoal !== undefined && cashGoal !== null
+    && (typeof cashGoal !== 'number' || !Number.isFinite(cashGoal))) {
+    return false;
+  }
+  // 房间密码（#23 ③）：`null` = 取消，否则必须是字符串（明文，仅此一次）。
+  // 长度规则不在这里重复——见 `isJoinRoomPayload` 的说明。
+  if (password !== undefined && password !== null && typeof password !== 'string') {
+    return false;
+  }
+  if (allowSpectators !== undefined && typeof allowSpectators !== 'boolean') {
     return false;
   }
   return true;

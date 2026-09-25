@@ -118,6 +118,81 @@ describe('HomeView stats transfer', () => {
 });
 
 /**
+ * 战绩上云 / 恢复码账号（路线图 #123，第五批-3）。
+ *
+ * 认这块 UI 一律用**结构标记**（class / placeholder），不用中文文案 —— 理由与下面排行榜那条相同：
+ * 首页会内联渲染整份更新说明，而更新说明正文本来就会写到「云同步」「恢复码」。
+ * 拿文案当标记，区块真被删掉时「该出现」那条照样绿，两条方向相反的断言会同时失去判别力。
+ */
+describe('HomeView 云同步（#123）', () => {
+  async function withStorage<T>(run: () => Promise<T>): Promise<T> {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+    const values = new Map<string, string>();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => { values.set(key, value); },
+        removeItem: (key: string) => { values.delete(key); },
+      },
+    });
+    try {
+      return await run();
+    } finally {
+      if (previous === undefined) Reflect.deleteProperty(globalThis, 'localStorage');
+      else Object.defineProperty(globalThis, 'localStorage', previous);
+    }
+  }
+
+  it('给出恢复码账号的入口，并把「恢复码长什么样」写在输入框上', async () => {
+    const html = await withStorage(() => renderHome());
+
+    expect(html).toContain('class="cloud-sync"');
+    expect(html).toContain('class="cloud-sync-title"');
+    // placeholder 是玩家唯一能看到「恢复码格式」的地方：没有它，手抄来的码该不该带横线只能靠猜，
+    // 而猜错的代价是一次必然失败的往返。
+    expect(html).toContain('placeholder="RM-XXXX-XXXX-XXXX-XXXX-XXXX"');
+    expect(html).toContain('class="cloud-sync-input"');
+    // 未绑定时不该出现「换一段恢复码」「退出云同步」——它们只对已绑定的账号有意义。
+    expect(html).not.toContain('cloud-sync-button-ghost');
+  });
+
+  it('落在战绩 section 内部（跟着战绩一起出现 / 一起隐藏），未绑定时不渲染空的恢复码元素', async () => {
+    const html = await withStorage(() => renderHome());
+    const section = html.slice(
+      html.indexOf('class="player-stats"'),
+      html.indexOf('class="leaderboard"'),
+    );
+
+    // 必须落在战绩 section **内部**：没有本地存储时整段会隐藏，云同步要是漏在外面，
+    // 就变成「本机没有战绩可同步，却还在劝你绑定云端账号」。
+    expect(section).toContain('class="cloud-sync"');
+    expect(section).toContain('class="stats-transfer"');
+    expect(section.indexOf('class="cloud-sync"')).toBeGreaterThan(section.indexOf('class="stats-transfer"'));
+    // `cloudNewCode` 初值是空串：恢复码展示区与提示条必须整段不渲染，
+    // 否则页面上会挂一个空的 <code> 和一个空的提示条。
+    expect(html).not.toContain('class="cloud-sync-code"');
+    expect(html).not.toContain('class="cloud-sync-notice"');
+  });
+
+  it('把隐私取舍与保留期写在伸手可及的地方', async () => {
+    const html = await withStorage(() => renderHome());
+
+    // 这两句是玩家敢不敢按下去的根据：不自动联网、以及云端到底会留多久。
+    expect(html).toContain('只有你按下按钮时才会发请求');
+    expect(html).toContain('云端的账号一年没有同步过会被清理');
+  });
+
+  it('浏览器不给本地存储时随战绩区块一起隐藏，不留半截 UI', async () => {
+    Reflect.deleteProperty(globalThis, 'localStorage');
+    const html = await renderHome();
+
+    expect(html).not.toContain('class="cloud-sync"');
+    expect(html).not.toContain('placeholder="RM-XXXX-XXXX-XXXX-XXXX-XXXX"');
+  });
+});
+
+/**
  * 成就与成就排行榜（路线图 #116）。
  *
  * 两者是同一份战绩的两种读法：成就**只在本机算**，排行榜才把四个聚合数字发出去。
@@ -246,6 +321,8 @@ describe('HomeView public room list', () => {
     spectatable: true,
     turnTimeLimitSec: 60,
     botDifficulty: 'normal',
+    hasPassword: false,
+    allowSpectators: true,
   };
 
   async function renderWithProps(props: Record<string, unknown>): Promise<string> {

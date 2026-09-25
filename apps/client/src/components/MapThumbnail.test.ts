@@ -90,7 +90,7 @@ describe('MapPicker', () => {
     expect(html.match(/<svg/g)).toHaveLength(1);
     expect(html).toContain('aria-label="丝路之旅 地图缩略图"');
     expect(maps.map((entry) => entry.ref.id)).toEqual([
-      'china-tour', 'world-tour', 'classic-tour', 'silk-road', 'great-wall', 'yellow-river', 'yangtze-tour', 'pearl-tour', 'xinjiang-tour', 'shanxi-tour',
+      'china-tour', 'world-tour', 'classic-tour', 'silk-road', 'great-wall', 'yellow-river', 'yangtze-tour', 'pearl-tour', 'xinjiang-tour', 'shanxi-tour', 'northeast-tour',
     ]);
   });
 

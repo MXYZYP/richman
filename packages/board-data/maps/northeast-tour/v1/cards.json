@@ -1,0 +1,237 @@
+{
+  "chance": [
+    {
+      "id": "db-c01",
+      "text": "在沈阳老边饺子馆摆了一桌：花费 400 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 400
+      }
+    },
+    {
+      "id": "db-c02",
+      "text": "哈尔滨红肠卖了个好价钱：得 1500 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1500
+      }
+    },
+    {
+      "id": "db-c03",
+      "text": "搭上林区小火車一路北行：前进四步",
+      "effect": {
+        "type": "move_steps",
+        "steps": 4
+      }
+    },
+    {
+      "id": "db-c04",
+      "text": "人参收购季分红：得 1800 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1800
+      }
+    },
+    {
+      "id": "db-c05",
+      "text": "在镜泊湖拍下冰瀑：稿酬 900 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 900
+      }
+    },
+    {
+      "id": "db-c06",
+      "text": "暴雪封路，雇铲雪车开道：花费 1200 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1200
+      }
+    },
+    {
+      "id": "db-c07",
+      "text": "加固木屋与车站：房屋每栋付 300 元；车站每座付 950 元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 300,
+        "perHotel": 950
+      }
+    },
+    {
+      "id": "db-c08",
+      "text": "翻出老票号的关东账本，分到红利：得 2400 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2400
+      }
+    },
+    {
+      "id": "db-c09",
+      "text": "在林海雪原走散，向同行商队求援：每人接济你 450 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 450
+      }
+    },
+    {
+      "id": "db-c10",
+      "text": "江面封冻等破冰船放行：暂停一次",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 1
+      }
+    },
+    {
+      "id": "db-c11",
+      "text": "越境打猎被边警查获：直接押入旅顺监狱",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "prison",
+          "version": 1
+        },
+        "effectType": "prison-confine",
+        "payload": {}
+      }
+    },
+    {
+      "id": "db-c12",
+      "text": "狱中结识一位老账房，他塞给你一张出狱许可证",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "prison",
+          "version": 1
+        },
+        "effectType": "prison-card",
+        "payload": {
+          "deck": "chance"
+        }
+      }
+    }
+  ],
+  "destiny": [
+    {
+      "id": "db-d01",
+      "text": "顺着京哈线返程回沈阳：回到起点，并可领取起点奖金 2000 元",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": "db-d02",
+      "text": "在风雪里走岔了路，退回起点，且不可领取起点奖金",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": false
+      }
+    },
+    {
+      "id": "db-d03",
+      "text": "火车站急电：直接前往沈阳北站，可领起点奖金",
+      "effect": {
+        "type": "move_to",
+        "cellId": 11,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": "db-d04",
+      "text": "给长白山护林队当向导获赏：得 2200 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2200
+      }
+    },
+    {
+      "id": "db-d05",
+      "text": "入冬前修缮木屋与车站：房屋每栋付 250 元；车站每座付 1000 元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 250,
+        "perHotel": 1000
+      }
+    },
+    {
+      "id": "db-d06",
+      "text": "在雪乡的火炕上听了半宿二人转",
+      "effect": {
+        "type": "none"
+      }
+    },
+    {
+      "id": "db-d07",
+      "text": "押运木材到营口港交付验收：奖金 3000 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 3000
+      }
+    },
+    {
+      "id": "db-d08",
+      "text": "帮鄂伦春猎户收了半季皮货：得 1100 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1100
+      }
+    },
+    {
+      "id": "db-d09",
+      "text": "在松花江上凿冰捕到一网大鱼：得 1500 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1500
+      }
+    },
+    {
+      "id": "db-d10",
+      "text": "请同行在中央大街喝了壶热茶：每人送礼金 700 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 700
+      }
+    },
+    {
+      "id": "db-d11",
+      "text": "被关卡税吏刁难，货物被扣：损失 1000 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": "db-d12",
+      "text": "暴雪压塌货棚，乡邻赶来相助：每人各出 900 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 900
+      }
+    },
+    {
+      "id": "db-d13",
+      "text": "在哈尔滨站遇到老熟人：可以再翻一张机会",
+      "effect": {
+        "type": "draw_card",
+        "deck": "chance"
+      }
+    },
+    {
+      "id": "db-d14",
+      "text": "朝廷下令大赦，特赐一张出狱许可证",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "prison",
+          "version": 1
+        },
+        "effectType": "prison-card",
+        "payload": {
+          "deck": "destiny"
+        }
+      }
+    }
+  ]
+}

@@ -11,6 +11,7 @@ import { yangtzeTourMap } from './yangtzeTourMap';
 import { pearlTourMap } from './pearlTourMap';
 import { xinjiangTourMap } from './xinjiangTourMap';
 import { shanxiTourMap } from './shanxiTourMap';
+import { northeastTourMap } from './northeastTourMap';
 
 interface AssetAllowlistEntry {
   readonly ref: MapRef;
@@ -32,6 +33,7 @@ export const PRODUCTION_RULE_MODULES: readonly RuleModuleRef[] = [
   { id: 'core', version: 1 },
   { id: 'world-tour', version: 1 },
   { id: 'great-wall', version: 1 },
+  { id: 'prison', version: 1 },
 ];
 
 export interface MapRegistry {
@@ -163,6 +165,7 @@ const productionRegistry = createMapRegistry({
     pearlTourMap.ref,
     xinjiangTourMap.ref,
     shanxiTourMap.ref,
+    northeastTourMap.ref,
   ],
   knownRuleModules: PRODUCTION_RULE_MODULES,
   assetAllowlist: [
@@ -176,6 +179,7 @@ const productionRegistry = createMapRegistry({
     { ref: pearlTourMap.ref, paths: [] },
     { ref: xinjiangTourMap.ref, paths: [] },
     { ref: shanxiTourMap.ref, paths: [] },
+    { ref: northeastTourMap.ref, paths: [] },
   ],
 });
 
@@ -189,6 +193,7 @@ productionRegistry.registerMapPack(yangtzeTourMap);
 productionRegistry.registerMapPack(pearlTourMap);
 productionRegistry.registerMapPack(xinjiangTourMap);
 productionRegistry.registerMapPack(shanxiTourMap);
+productionRegistry.registerMapPack(northeastTourMap);
 
 export function listActiveMaps(): readonly MapCatalogEntry[] {
   return productionRegistry.listActiveMaps();

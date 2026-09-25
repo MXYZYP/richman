@@ -95,6 +95,29 @@ export interface RoomSnapshotRecord {
    * 「不公开」处理（隐私优先——升级不能让原本私密的房间突然出现在全网列表里）。
    */
   isPublic?: boolean;
+  /**
+   * 现金目标房规（#23 ③）；**缺省即 `null` = 关闭**。
+   *
+   * 与上四个字段同样的理由保持**可选**（`schemaVersion` 继续停在 1）：缺省语义明确
+   * （没设 = 关），而抬版本号会连带把「在本字段引入之前写下」的进行中对局整间丢掉。
+   * 「是否大于生效初始资金」的校验放在 `RoomManager.#restoreRoom`（那里才能拿到地图
+   * 默认 initialCash 并叠加 ruleConfig）。
+   */
+  cashGoal?: number | null;
+  /**
+   * 房间进入密码的哈希 + 盐（#23 ③）；缺省 / `null` 即「没设密码」。
+   *
+   * 快照里落的是**哈希**——明文从不落盘。注意本目录与 player token 同处一个信任边界
+   * （见文件头说明），所以快照目录必须保持服务端私有。
+   */
+  passwordHash?: { hash: string; salt: string } | null;
+  /**
+   * 是否允许观战（#23 ③）；**缺省即 `true` = 允许**（= 引入本开关之前的既有行为）。
+   *
+   * 同样保持**可选**（`schemaVersion` 继续停在 1）。缺省取 `true` 而不是 `false` 是刻意的：
+   * 老快照写下的那些房间，当时观战本来就是开着的，升级不能反过来把它们悄悄关掉。
+   */
+  allowSpectators?: boolean;
   players: RoomSnapshotPlayerRecord[];
   spectators: RoomSnapshotSpectatorRecord[];
   createRequestId: string | null;
@@ -295,6 +318,15 @@ function isRoomRuleConfig(value: unknown): value is RoomRuleConfig {
     && typeof value.mortgageInterestRate === 'number';
 }
 
+/** 房间密码的哈希记录（#23 ③）：结构可读即可——哈希算法与比对在 RoomManager 里。 */
+function isPasswordHashRecord(value: unknown): value is { hash: string; salt: string } {
+  return isRecord(value)
+    && typeof value.hash === 'string'
+    && value.hash.length > 0
+    && typeof value.salt === 'string'
+    && value.salt.length > 0;
+}
+
 function isSpectatorRecord(value: unknown): value is RoomSnapshotSpectatorRecord {
   return (
     isRecord(value)
@@ -326,6 +358,12 @@ export function isRoomSnapshotRecord(value: unknown): value is RoomSnapshotRecor
   if (value.turnTimeLimitSec !== undefined
     && (typeof value.turnTimeLimitSec !== 'number' || !Number.isFinite(value.turnTimeLimitSec))) return false;
   if (value.isPublic !== undefined && typeof value.isPublic !== 'boolean') return false;
+  // 现金目标（#23 ③）：只查形状；「必须大于生效初始资金」由 RoomManager 结合地图配置判。
+  if (value.cashGoal !== undefined && value.cashGoal !== null
+    && (typeof value.cashGoal !== 'number' || !Number.isFinite(value.cashGoal))) return false;
+  if (value.passwordHash !== undefined && value.passwordHash !== null
+    && !isPasswordHashRecord(value.passwordHash)) return false;
+  if (value.allowSpectators !== undefined && typeof value.allowSpectators !== 'boolean') return false;
   if (!Array.isArray(value.players) || value.players.length === 0) return false;
   if (!value.players.every(isPlayerRecord)) return false;
   if (!Array.isArray(value.spectators) || !value.spectators.every(isSpectatorRecord)) return false;

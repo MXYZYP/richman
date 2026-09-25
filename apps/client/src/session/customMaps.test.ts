@@ -275,10 +275,11 @@ describe('地图工坊：注册表与目录（#117）', () => {
     expect(registry.getActiveMapPack('workshop-demo').ref).toEqual(pack.ref);
     expect(registry.listActiveMaps().map((entry) => entry.ref.id)).toEqual(['workshop-demo']);
 
-    // 生产注册表照旧十张，一张不多。
+    // 生产注册表照旧十一张，一张不多。
     expect(listActiveMaps().map((entry) => entry.ref.id)).toEqual([
       'china-tour', 'world-tour', 'classic-tour', 'silk-road', 'great-wall',
       'yellow-river', 'yangtze-tour', 'pearl-tour', 'xinjiang-tour', 'shanxi-tour',
+      'northeast-tour',
     ]);
     expect(() => createCustomMapRegistry([recordOf(pack)]).getActiveMapPack('china-tour'))
       .toThrow(/Inactive map id/);

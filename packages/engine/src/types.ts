@@ -29,7 +29,9 @@ export type TurnPhase =
   // 拍卖（#106）：放弃购买且房规开启拍卖时进入。由 pendingAuction.bidderId 按座次轮流叫价 / 弃权。
   | 'awaiting_auction_bid'
   | 'managing';
-// 未来启用监狱时增加 'awaiting_jail_decision'
+// 监狱（prison@1）刻意**没有**独立阶段：狱中决策复用上面的 awaiting_roll，语义由
+// publicRuleState.pendingActions 表达（详见 prisonModule.ts 文件头的「为什么没有新增
+// awaiting_jail_decision」）。这行注释曾预告要加该阶段，实现时改为复用 —— 别再照旧注释去加。
 
 // === 玩家颜色（按座次分配，02 §4.2 色盲友好：色+形状）===
 export type PlayerColor = 'red' | 'blue' | 'yellow' | 'green' | 'purple' | 'orange';
@@ -202,7 +204,9 @@ export type CoreIntent =
   | { type: 'place_bid'; amount: number }
   | { type: 'pass_bid' };
 export type Intent = CoreIntent | ModuleIntent;
-// 未来模块保留（本版不实现）：use_jail_card / jail_roll（监狱）
+// 监狱（prison@1）**不使用** core 意图：狱中决策是模块待选动作 `jail-choice`
+// （分支在 payload.choice，见 prisonModule.ts）。这行原先是「未来模块保留 use_jail_card / jail_roll」，
+// 实现时改成了模块动作，别再照着它往 CoreIntent 里加意图。
 
 // === GameEvent（动画与日志驱动源，03 §4.3）===
 // 客户端按顺序播放动画，全部播完后界面应与快照一致

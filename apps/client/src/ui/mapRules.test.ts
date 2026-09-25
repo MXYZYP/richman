@@ -75,6 +75,21 @@ describe('describeMapRules：按地图数据生成规则事实', () => {
     expect(summary.moduleNotes[0]).toContain('通行费');
   });
 
+  it('东北之旅会带上进牢格数量、保释金与监狱规则提示', () => {
+    const summary = describeMapRulesById('northeast-tour')!;
+    const facts = factsOf(mutablePack('northeast-tour'));
+
+    expect(facts['规则模块']).toBe('监狱');
+    expect(facts['监狱']).toBe('3 处进牢格（保释金 ¥1,500）');
+    // 顺序稳定：该图没有烽火台，监狱这一行紧挨在「机会 / 命运」之前。
+    const labels = summary.facts.map((fact) => fact.label);
+    expect(labels.indexOf('机会 / 命运')).toBe(labels.indexOf('监狱') + 1);
+
+    expect(summary.moduleNotes).toHaveLength(1);
+    expect(summary.moduleNotes[0]).toContain('进牢格');
+    expect(summary.moduleNotes[0]).toContain('保释金');
+  });
+
   it('世界之旅的规则模块是「世界巡游」，提示说明机场支线', () => {
     const summary = describeMapRulesById('world-tour')!;
     expect(factsOf(mutablePack('world-tour'))['规则模块']).toBe('世界巡游');
@@ -140,11 +155,11 @@ describe('describeMapRules：按地图数据生成规则事实', () => {
 });
 
 describe('describeMapRulesById：按 id 解析并兜住未知名', () => {
-  it('十张正式地图都能解析出摘要', () => {
+  it('十一张正式地图都能解析出摘要', () => {
     for (const mapId of [
       'china-tour', 'world-tour', 'classic-tour', 'silk-road',
       'great-wall', 'yellow-river', 'yangtze-tour', 'pearl-tour',
-      'xinjiang-tour', 'shanxi-tour',
+      'xinjiang-tour', 'shanxi-tour', 'northeast-tour',
     ]) {
       const summary = describeMapRulesById(mapId);
       expect(summary, `${mapId} 应能解析`).not.toBeNull();

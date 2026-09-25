@@ -17,7 +17,7 @@ const FirstRunGuide = defineAsyncComponent(() => import('./components/FirstRunGu
 // 不该逼玩家先随便开一局才能粘进去。
 const ReplayDialogShell = defineAsyncComponent(() => import('./components/ReplayDialog.vue'));
 // 地图工坊（#117）同理：它同样只靠 MobileSheet 撑着。工坊的地图**只能单机玩**，
-// 所以它不进首页「创建房间」的地图表（那张表仍是生产注册表的十张图），只服务单机设置页。
+// 所以它不进首页「创建房间」的地图表（那张表仍是生产注册表的十一张图），只服务单机设置页。
 const MapWorkshopDialogShell = defineAsyncComponent(() => import('./components/MapWorkshopDialog.vue'));
 import {
   createInitialLocalGameState,
@@ -97,8 +97,8 @@ let storage: StorageLike | undefined = browserStorage();
 let localSaveMutationLock = createBrowserLocalSaveMutationLock();
 
 // ---- 地图工坊（#117）：本机自定义地图 ----
-// 自定义地图**只服务单机**：联机建房走服务端，而服务端只认内置的那十张图，本机装的图会被直接拒。
-// 所以首页「创建房间」的地图表仍是 `activeMaps`（生产注册表的十张），只有单机设置页吃下面这份
+// 自定义地图**只服务单机**：联机建房走服务端，而服务端只认内置的那十一张图，本机装的图会被直接拒。
+// 所以首页「创建房间」的地图表仍是 `activeMaps`（生产注册表的十一张），只有单机设置页吃下面这份
 // 「生产 + 本机」的合并目录。读回一律容错（坏条目丢弃、坏 JSON 回退空表），此处不需要 try/catch。
 const customMapRecords = shallowRef<CustomMapRecord[]>(
   storage === undefined ? [] : loadCustomMaps(storage),
@@ -388,11 +388,13 @@ async function handleCreate(nickname: string, mapId: string) {
   }
 }
 
-async function handleJoin(payload: { roomCode: string; nickname: string; role: RoomRole }) {
+async function handleJoin(payload: { roomCode: string; nickname: string; role: RoomRole; password?: string }) {
   if (submitting.value) return;
   submitting.value = true;
   try {
-    await onlineSession.join(payload.roomCode, payload.nickname, payload.role);
+    // 房间密码（#23 ③）原样透传给会话层：它会在请求成功后随待恢复请求一起持久化，
+    // 于是断线重连不必再向用户索要一次密码。
+    await onlineSession.join(payload.roomCode, payload.nickname, payload.role, payload.password);
   } finally {
     submitting.value = false;
     syncStorage();

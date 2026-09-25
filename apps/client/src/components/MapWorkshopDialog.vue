@@ -127,7 +127,7 @@ const title = '地图工坊';
     <section class="workshop-panel" aria-label="地图工坊">
       <p class="workshop-scope" role="note">
         <strong>工坊里的地图只能单机游玩。</strong>
-        联机房间仍只用内置的那十张图——服务端不认识你自己装的图，建房会被拒。
+        联机房间仍只用内置的那十一张图——服务端不认识你自己装的图，建房会被拒。
         想和朋友玩自定义地图，只能由主机先按仓库里的说明把它正式接入。
       </p>
       <p class="workshop-hint">
