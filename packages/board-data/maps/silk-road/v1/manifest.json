@@ -2,7 +2,7 @@
   "ref": {
     "id": "silk-road",
     "version": 1,
-    "contentHash": "57236b4eec8b761fa7b66f7ba6cd2a7ea3e830d5910ba7eacb657de2c07249eb"
+    "contentHash": "38565b719b1d40d3cdb6ec95b721f9073c1839b6321fb26a2ccae7cbd4678b2a"
   },
   "metadata": {
     "title": "丝路之旅",
@@ -11,6 +11,10 @@
   "requiredRuleModules": [
     {
       "id": "core",
+      "version": 1
+    },
+    {
+      "id": "caravan-market",
       "version": 1
     }
   ],

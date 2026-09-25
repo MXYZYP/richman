@@ -2,7 +2,7 @@
   "ref": {
     "id": "shanxi-tour",
     "version": 1,
-    "contentHash": "64ab61de86d5dd795c5e419e72226e2c45d8c504a7692839a47a2d06ef36b94b"
+    "contentHash": "26da09b32511753648af002149f02b254a1e3b79f041dd610a3a1fda2cdd424e"
   },
   "metadata": {
     "title": "山西之旅",
@@ -11,6 +11,10 @@
   "requiredRuleModules": [
     {
       "id": "core",
+      "version": 1
+    },
+    {
+      "id": "piaohao",
       "version": 1
     }
   ],

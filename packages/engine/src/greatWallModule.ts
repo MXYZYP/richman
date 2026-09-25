@@ -329,6 +329,9 @@ function handleBeaconChoice(state: GameState, playerId: string, intent: ModuleIn
 
   const events: GameEvent[] = [
     moduleEvent('beacon_claimed', { playerId, cellId, cost: payload.claimCost }),
+    // 认领费离开牌桌：按仓库既有约定（world-tour 付费换乘、river-tide 修堤）补一条 bank_paid，
+    // 否则现金守恒不变量会在此处开始持续失配（simulate.ts）。
+    { type: 'bank_paid', playerId, amount: payload.claimCost },
   ];
   const claimed = withGreatWallState(
     {

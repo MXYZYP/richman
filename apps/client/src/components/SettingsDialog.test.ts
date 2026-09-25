@@ -132,7 +132,11 @@ describe('SettingsDialog：规则说明按当前地图渲染（#13）', () => {
     expect(html).toContain('每回合 10%');
     expect(html).toContain('13 档（¥1,600 ~ ¥4,500）');
     expect(html).toContain('4 处（租金随持有数递增）');
-    expect(html).toContain('仅核心规则');
+    // #23 起珠江之旅挂上了 port-trade：规则模块行不再是「仅核心规则」，而是模块中文名 + 玩法提示。
+    expect(html).toContain('湾区口岸');
+    expect(html).toContain('【湾区口岸】');
+    expect(html).toContain('押注掷骰');
+    expect(html).not.toContain('仅核心规则');
     expect(html).toContain('¥30,000 或 ¥50,000');
     // 有地图上下文时不再提示「选好地图进入对局后…」。
     expect(html).not.toContain('选好地图进入对局后');

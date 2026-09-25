@@ -2,7 +2,7 @@
   "ref": {
     "id": "xinjiang-tour",
     "version": 1,
-    "contentHash": "08a39b81e3534d6c24664b4a2d218de732c2e2577e5442fcb26384c09759a169"
+    "contentHash": "4068b428fa4852dd1f8555f900572d3666a31e69516c811ca9bd26d4ea73f32f"
   },
   "metadata": {
     "title": "新疆之旅",
@@ -11,6 +11,10 @@
   "requiredRuleModules": [
     {
       "id": "core",
+      "version": 1
+    },
+    {
+      "id": "oasis-camp",
       "version": 1
     }
   ],

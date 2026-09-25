@@ -40,7 +40,7 @@ describe('describeMapRules：按地图数据生成规则事实', () => {
 
     expect(summary!.facts).toEqual([
       { label: '地图', value: '珠江之旅 · 48 格' },
-      { label: '规则模块', value: '仅核心规则' },
+      { label: '规则模块', value: '湾区口岸' },
       { label: '初始资金', value: '¥15,000' },
       { label: '过起点收入', value: '¥2,000' },
       { label: '房屋上限', value: '每块地产最多 5 级' },
@@ -48,15 +48,56 @@ describe('describeMapRules：按地图数据生成规则事实', () => {
       { label: '地产地价', value: '13 档（¥1,600 ~ ¥4,500）' },
       { label: '车站 / 渡口', value: '4 处（租金随持有数递增）' },
       { label: '水电 / 水利', value: '2 处（租金 = 点数 × 10 / × 100）' },
+      { label: '口岸', value: '2 处（押注掷骰，点数达标即可连本带利拿回）' },
       { label: '机会 / 命运', value: '3 / 4 格' },
       { label: '税费格', value: '2 处' },
       { label: '可选胜利目标', value: '¥30,000 或 ¥50,000' },
     ]);
   });
 
-  it('纯核心规则的地图不产出任何模块提示（不是漏写，是这张图确实没有特化规则）', () => {
-    expect(describeMapRulesById('pearl-tour')!.moduleNotes).toEqual([]);
-    expect(describeMapRulesById('china-tour')!.moduleNotes).toEqual([]);
+  it('只声明核心规则的包不产出任何模块提示（不是漏写，是这张图确实没有特化规则）', () => {
+    // #23 之后十一张正式地图都各自带了一个模块，唯一还能走通「仅核心规则」的是合成包 ——
+    // 比如旧存档里的自定义地图，或未来下线的模块被摘掉之后。
+    const pack = mutablePack('pearl-tour');
+    pack.game.requiredRuleModules = [{ id: 'core', version: 1 }];
+    const summary = describeMapRules(pack as unknown as MapPack);
+    expect(summary.facts.find((fact) => fact.label === '规则模块')?.value).toBe('仅核心规则');
+    expect(summary.moduleNotes).toEqual([]);
+  });
+
+  it('#23：十一张正式地图全都声明了至少一个特化模块，没有一张还停在「仅核心规则」', () => {
+    for (const mapId of [
+      'china-tour', 'world-tour', 'classic-tour', 'silk-road',
+      'great-wall', 'yellow-river', 'yangtze-tour', 'pearl-tour',
+      'xinjiang-tour', 'shanxi-tour', 'northeast-tour',
+    ]) {
+      const summary = describeMapRulesById(mapId)!;
+      const named = summary.facts.find((fact) => fact.label === '规则模块')?.value;
+      expect(named, `${mapId} 应声明特化模块`).not.toBe('仅核心规则');
+      // 模块提示必须真的有内容：只有登记了 MODULE_NOTES 的模块才会产出一句，空数组说明漏登记。
+      expect(summary.moduleNotes.length, `${mapId} 应有模块提示`).toBeGreaterThan(0);
+    }
+  });
+
+  it('每张地图的模块提示都带模块中文名，且新模块的格子行按格数出现', () => {
+    // 八张新模块图各取一张代表作，检查「文案确实接上了引擎里的那套玩法」。
+    const cases = [
+      { mapId: 'china-tour', note: '高铁枢纽', cellLabel: '高铁枢纽', cellCount: 2 },
+      { mapId: 'classic-tour', note: '地标护照', cellLabel: '地标', cellCount: 2 },
+      { mapId: 'pearl-tour', note: '湾区口岸', cellLabel: '口岸', cellCount: 2 },
+      { mapId: 'shanxi-tour', note: '晋商票号', cellLabel: '票号', cellCount: 2 },
+      { mapId: 'silk-road', note: '丝路商队', cellLabel: '集市', cellCount: 4 },
+      { mapId: 'xinjiang-tour', note: '绿洲营地', cellLabel: '绿洲营地', cellCount: 2 },
+      { mapId: 'yangtze-tour', note: '长江渡轮', cellLabel: '渡轮停靠点', cellCount: 3 },
+      { mapId: 'yellow-river', note: '黄河汛期', cellLabel: '河工段', cellCount: 4 },
+    ] as const;
+
+    for (const { mapId, note, cellLabel, cellCount } of cases) {
+      const summary = describeMapRulesById(mapId)!;
+      expect(summary.moduleNotes.some((entry) => entry.includes(note)), `${mapId} 的提示应含「${note}」`).toBe(true);
+      const cellFact = summary.facts.find((fact) => fact.label === cellLabel);
+      expect(cellFact?.value, `${mapId} 应有「${cellLabel}」格行`).toContain(`${cellCount} 处`);
+    }
   });
 
   it('长城之旅会带上烽火台数量与规则模块提示', () => {

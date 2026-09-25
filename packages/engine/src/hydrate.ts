@@ -12,6 +12,39 @@ import {
   validatePrisonPublicModuleState,
   PRISON_MODULE_KEY,
 } from './prisonModule';
+import {
+  validatePiaohaoPublicModuleState,
+  PIAOHAO_MODULE_KEY,
+} from './piaohaoModule';
+import {
+  validateCaravanMarketPublicModuleState,
+  CARAVAN_MARKET_MODULE_KEY,
+} from './caravanMarketModule';
+import {
+  validateLandmarkPassportPublicModuleState,
+  LANDMARK_PASSPORT_MODULE_KEY,
+} from './landmarkPassportModule';
+import {
+  validateOasisCampPublicModuleState,
+  OASIS_CAMP_MODULE_KEY,
+} from './oasisCampModule';
+import {
+  validateRiverTidePublicModuleState,
+  RIVER_TIDE_MODULE_KEY,
+} from './riverTideModule';
+
+/**
+ * 「无公共状态」的新模块（#23）：它们从不往 publicRuleState.modules 写键，
+ * 因此出现键一定意味着存档被手改过或版本错配 —— 直接判损坏，比宽容接受更安全。
+ *
+ * 为什么值得单列一份名单：这些模块的键一旦被接受，hydrate 会把它原样恢复进状态，
+ * 而模块自己并不读它 —— 表面上无害，实际会让「状态漂移」这类问题彻底无法从数据上察觉。
+ */
+const STATELESS_MODULE_KEYS: ReadonlySet<string> = new Set([
+  'yangtze-ferry@1',
+  'port-trade@1',
+  'rail-hub@1',
+]);
 
 export type HydrateGameStateResult =
   | { ok: true; state: GameState }
@@ -380,6 +413,24 @@ function validatePublicRuleState(
         pack.game.cards,
         pack.game.config.jailMaxAttempts,
       )) return false;
+    // === #23 新模块 ===
+    // 无公共状态的三个模块：出现键即判损坏（见 STATELESS_MODULE_KEYS 的说明）。
+    if (STATELESS_MODULE_KEYS.has(key)) return false;
+    // 晋商票号：账目键必须是存活玩家、金额必须是正安全整数且不超过上限（防空天文余额派发巨额利息）。
+    if (key === PIAOHAO_MODULE_KEY
+      && !validatePiaohaoPublicModuleState(moduleState, state.players)) return false;
+    // 丝路市价：市价必须是合法档位；库存键必须是存活玩家且件数不超过上限（防一次套现巨额现金）。
+    if (key === CARAVAN_MARKET_MODULE_KEY
+      && !validateCaravanMarketPublicModuleState(moduleState, state.players)) return false;
+    // 地标护照：章必须指向该地图真实的地标格、严格递增去重（同时挡住重复盖章刷奖励）。
+    if (key === LANDMARK_PASSPORT_MODULE_KEY
+      && !validateLandmarkPassportPublicModuleState(moduleState, state.players, pack.game.board)) return false;
+    // 绿洲营地：营地必须指向该地图真实的绿洲格（防指向普通地产导致每次路过白拿补给）。
+    if (key === OASIS_CAMP_MODULE_KEY
+      && !validateOasisCampPublicModuleState(moduleState, state.players, pack.game.board)) return false;
+    // 黄河水位：必须是 [0, 10] 内的整数（倍率表按这两个阈值分档，越界会让租金倍率失控）。
+    if (key === RIVER_TIDE_MODULE_KEY
+      && !validateRiverTidePublicModuleState(moduleState, state.players)) return false;
   }
 
   const optionIds = new Set<string>();

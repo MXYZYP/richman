@@ -2,118 +2,846 @@
   "boardName": "大富翁·中国之旅",
   "direction": "clockwise",
   "cells": [
-    { "id": 0, "type": "start", "name": "起点" },
-    { "id": 1, "type": "property", "subtype": "normal", "name": "台湾省", "subtitle": "台北市",
-      "price": 2200, "houseCost": 1500, "rents": [180, 900, 2500, 7000, 8750, 10500], "mortgageValue": 1100 },
-    { "id": 2, "type": "property", "subtype": "normal", "name": "福建省", "subtitle": "福州市",
-      "price": 2400, "houseCost": 1500, "rents": [200, 1000, 3000, 7500, 9250, 11000], "mortgageValue": 1200 },
-    { "id": 3, "type": "chance", "name": "机会" },
-    { "id": 4, "type": "property", "subtype": "normal", "name": "广东省", "subtitle": "广州市",
-      "price": 2600, "houseCost": 1500, "rents": [220, 1100, 3300, 8000, 9750, 11500], "mortgageValue": 1300 },
-    { "id": 5, "type": "property", "subtype": "normal", "name": "广西壮族自治区", "subtitle": "南宁市",
-      "price": 2600, "houseCost": 1500, "rents": [220, 1100, 3300, 8000, 9750, 11500], "mortgageValue": 1300 },
-    { "id": 6, "type": "property", "subtype": "station", "name": "广州站",
-      "price": 2000, "rents": [250, 500, 1000, 2000], "mortgageValue": 1000 },
-    { "id": 7, "type": "property", "subtype": "normal", "name": "贵州省", "subtitle": "贵阳市",
-      "price": 2800, "houseCost": 1500, "rents": [240, 1200, 3600, 8500, 10250, 12000], "mortgageValue": 1400 },
-    { "id": 8, "type": "property", "subtype": "normal", "name": "云南省", "subtitle": "昆明市",
-      "price": 1600, "houseCost": 1000, "rents": [120, 600, 1800, 5000, 7000, 9000], "mortgageValue": 800 },
-    { "id": 9, "type": "property", "subtype": "normal", "name": "江苏省", "subtitle": "南京市",
-      "price": 1400, "houseCost": 1000, "rents": [100, 500, 1500, 4500, 6250, 7500], "mortgageValue": 700 },
-    { "id": 10, "type": "property", "subtype": "utility", "name": "中国大运河",
-      "price": 1500, "mortgageValue": 750 },
-    { "id": 11, "type": "property", "subtype": "normal", "name": "浙江省", "subtitle": "杭州市",
-      "price": 2000, "houseCost": 1000, "rents": [160, 800, 2200, 6000, 8000, 10000], "mortgageValue": 1000 },
-    { "id": 12, "type": "property", "subtype": "normal", "name": "安徽省", "subtitle": "合肥市",
-      "price": 1800, "houseCost": 1000, "rents": [140, 700, 2000, 5500, 7500, 9500], "mortgageValue": 900 },
-    { "id": 13, "type": "airport", "name": "北京首都国际机场", "branchEntryId": 52 },
-    { "id": 14, "type": "property", "subtype": "normal", "name": "江西省", "subtitle": "南昌市",
-      "price": 1800, "houseCost": 1000, "rents": [140, 700, 2000, 5500, 7500, 9500], "mortgageValue": 900 },
-    { "id": 15, "type": "destiny", "name": "命运" },
-    { "id": 16, "type": "property", "subtype": "normal", "name": "湖南省", "subtitle": "长沙市",
-      "price": 600, "houseCost": 500, "rents": [20, 100, 300, 900, 1600, 2500], "mortgageValue": 300 },
-    { "id": 17, "type": "property", "subtype": "normal", "name": "湖北省", "subtitle": "武汉市",
-      "price": 1000, "houseCost": 500, "rents": [60, 300, 900, 2700, 4000, 5500], "mortgageValue": 500 },
-    { "id": 18, "type": "property", "subtype": "normal", "name": "四川省", "subtitle": "成都市",
-      "price": 1200, "houseCost": 500, "rents": [80, 400, 1000, 3000, 4500, 6000], "mortgageValue": 600 },
-    { "id": 19, "type": "property", "subtype": "station", "name": "上海站",
-      "price": 2000, "rents": [250, 500, 1000, 2000], "mortgageValue": 1000 },
-    { "id": 20, "type": "property", "subtype": "normal", "name": "山东省", "subtitle": "济南市",
-      "price": 3000, "houseCost": 2000, "rents": [260, 1300, 3900, 9000, 11000, 12750], "mortgageValue": 1500 },
-    { "id": 21, "type": "property", "subtype": "normal", "name": "河北省", "subtitle": "石家庄市",
-      "price": 2200, "houseCost": 1500, "rents": [180, 900, 2500, 7000, 8750, 10500], "mortgageValue": 1100 },
-    { "id": 22, "type": "property", "subtype": "normal", "name": "河南省", "subtitle": "郑州市",
-      "price": 3000, "houseCost": 2000, "rents": [260, 1300, 3900, 9000, 11000, 12750], "mortgageValue": 1500 },
-    { "id": 23, "type": "tax", "name": "所得税", "amount": 1000 },
-    { "id": 24, "type": "chance", "name": "机会" },
-    { "id": 25, "type": "property", "subtype": "normal", "name": "山西省", "subtitle": "太原市",
-      "price": 2400, "houseCost": 1500, "rents": [200, 1000, 3000, 7500, 9250, 11000], "mortgageValue": 1200 },
-    { "id": 26, "type": "special", "name": "品尝兰州牛肉面",
-      "effect": { "type": "skip_turn", "turns": 1 } },
-    { "id": 27, "type": "property", "subtype": "normal", "name": "陕西省", "subtitle": "西安市",
-      "price": 2600, "houseCost": 1500, "rents": [220, 1100, 3300, 8000, 9750, 11500], "mortgageValue": 1300 },
-    { "id": 28, "type": "property", "subtype": "normal", "name": "甘肃省", "subtitle": "兰州市",
-      "price": 2600, "houseCost": 1500, "rents": [220, 1100, 3300, 8000, 9750, 11500], "mortgageValue": 1300 },
-    { "id": 29, "type": "property", "subtype": "normal", "name": "辽宁省", "subtitle": "沈阳市",
-      "price": 2200, "houseCost": 1500, "rents": [180, 900, 2500, 7000, 8750, 10500], "mortgageValue": 1100 },
-    { "id": 30, "type": "destiny", "name": "命运" },
-    { "id": 31, "type": "property", "subtype": "normal", "name": "内蒙古自治区", "subtitle": "呼和浩特市",
-      "price": 1600, "houseCost": 1000, "rents": [120, 600, 1800, 5000, 7000, 9000], "mortgageValue": 800 },
-    { "id": 32, "type": "property", "subtype": "normal", "name": "宁夏回族自治区", "subtitle": "银川市",
-      "price": 1400, "houseCost": 1000, "rents": [100, 500, 1500, 4500, 6250, 7500], "mortgageValue": 700 },
-    { "id": 33, "type": "property", "subtype": "station", "name": "南京站",
-      "price": 2000, "rents": [250, 500, 1000, 2000], "mortgageValue": 1000 },
-    { "id": 34, "type": "property", "subtype": "normal", "name": "吉林省", "subtitle": "长春市",
-      "price": 1400, "houseCost": 1000, "rents": [100, 500, 1500, 4500, 6250, 7500], "mortgageValue": 700 },
-    { "id": 35, "type": "property", "subtype": "normal", "name": "西藏自治区", "subtitle": "拉萨市",
-      "price": 2000, "houseCost": 1000, "rents": [140, 700, 2000, 5500, 7500, 9500], "mortgageValue": 1000 },
-    { "id": 36, "type": "chance", "name": "机会" },
-    { "id": 37, "type": "property", "subtype": "normal", "name": "海南省", "subtitle": "海口市",
-      "price": 1800, "houseCost": 1000, "rents": [160, 800, 2200, 6000, 8000, 10000], "mortgageValue": 900 },
-    { "id": 38, "type": "property", "subtype": "normal", "name": "武夷山",
-      "price": 1200, "houseCost": 500, "rents": [80, 400, 1000, 3000, 4500, 6000], "mortgageValue": 600 },
-    { "id": 39, "type": "special", "name": "到香港维多利亚港欣赏夜景",
-      "effect": { "type": "skip_turn", "turns": 1 } },
-    { "id": 40, "type": "property", "subtype": "normal", "name": "黑龙江省", "subtitle": "哈尔滨市",
-      "price": 1000, "houseCost": 500, "rents": [60, 300, 900, 2700, 4000, 5500], "mortgageValue": 500 },
-    { "id": 41, "type": "property", "subtype": "normal", "name": "北京故宫博物院",
-      "price": 2600, "houseCost": 2000, "rents": [280, 1100, 3300, 8000, 9750, 11500], "mortgageValue": 1300 },
-    { "id": 42, "type": "property", "subtype": "normal", "name": "万里长城",
-      "price": 3500, "houseCost": 2000, "rents": [350, 1750, 5000, 11000, 13000, 15000], "mortgageValue": 1750 },
-    { "id": 43, "type": "property", "subtype": "station", "name": "北京站",
-      "price": 2000, "rents": [250, 500, 1000, 2000], "mortgageValue": 1000 },
-    { "id": 44, "type": "property", "subtype": "normal", "name": "澳门大三巴牌坊",
-      "price": 3000, "houseCost": 2000, "rents": [260, 1300, 3900, 9000, 11000, 12750], "mortgageValue": 1500 },
-    { "id": 45, "type": "property", "subtype": "normal", "name": "敦煌莫高窟",
-      "price": 3200, "houseCost": 2000, "rents": [280, 1500, 4500, 10000, 12000, 14000], "mortgageValue": 1600 },
-    { "id": 46, "type": "property", "subtype": "normal", "name": "丽江古城",
-      "price": 1000, "houseCost": 500, "rents": [60, 300, 900, 2700, 4000, 5500], "mortgageValue": 500 },
-    { "id": 47, "type": "property", "subtype": "utility", "name": "大唐托克托发电厂",
-      "price": 1500, "mortgageValue": 750 },
-    { "id": 48, "type": "destiny", "name": "命运" },
-    { "id": 49, "type": "property", "subtype": "normal", "name": "青海省", "subtitle": "西宁市",
-      "price": 2200, "houseCost": 1500, "rents": [180, 900, 2500, 7000, 8750, 10500], "mortgageValue": 1100 },
-    { "id": 50, "type": "property", "subtype": "normal", "name": "高昌故城",
-      "price": 3200, "houseCost": 2000, "rents": [280, 1500, 4500, 10000, 12000, 14000], "mortgageValue": 1600 },
-    { "id": 51, "type": "property", "subtype": "normal", "name": "新疆维吾尔自治区", "subtitle": "乌鲁木齐市",
-      "price": 4000, "houseCost": 2000, "rents": [500, 2000, 6000, 14000, 17000, 20000], "mortgageValue": 2000,
-      "nextId": 0 },
-
-    { "id": 52, "type": "world", "name": "韩国首尔",
-      "effect": { "type": "move_to", "cellId": 0, "collectSalary": false } },
-    { "id": 53, "type": "world", "name": "日本东京",
-      "effect": { "type": "move_steps", "steps": 5 } },
-    { "id": 54, "type": "chance", "name": "机会" },
-    { "id": 55, "type": "world", "name": "美国纽约",
-      "effect": { "type": "pay_bank", "amount": 1000 } },
-    { "id": 56, "type": "world", "name": "英国伦敦",
-      "effect": { "type": "move_to", "cellId": 19, "collectSalary": true } },
-    { "id": 57, "type": "world", "name": "法国巴黎",
-      "effect": { "type": "move_steps", "steps": 1 } },
-    { "id": 58, "type": "destiny", "name": "命运" },
-    { "id": 59, "type": "world", "name": "泰国曼谷",
-      "effect": { "type": "receive_bank", "amount": 1000 } },
-    { "id": 60, "type": "world", "name": "越南河内",
-      "effect": { "type": "skip_turn", "turns": 2 }, "nextId": 40 }
+    {
+      "id": 0,
+      "type": "start",
+      "name": "起点"
+    },
+    {
+      "id": 1,
+      "type": "property",
+      "subtype": "normal",
+      "name": "台湾省",
+      "subtitle": "台北市",
+      "price": 2200,
+      "houseCost": 1500,
+      "rents": [
+        180,
+        900,
+        2500,
+        7000,
+        8750,
+        10500
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 2,
+      "type": "property",
+      "subtype": "normal",
+      "name": "福建省",
+      "subtitle": "福州市",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        3000,
+        7500,
+        9250,
+        11000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 3,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 4,
+      "type": "property",
+      "subtype": "normal",
+      "name": "广东省",
+      "subtitle": "广州市",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3300,
+        8000,
+        9750,
+        11500
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 5,
+      "type": "property",
+      "subtype": "normal",
+      "name": "广西壮族自治区",
+      "subtitle": "南宁市",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3300,
+        8000,
+        9750,
+        11500
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 6,
+      "type": "property",
+      "subtype": "station",
+      "name": "广州站",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 7,
+      "type": "property",
+      "subtype": "normal",
+      "name": "贵州省",
+      "subtitle": "贵阳市",
+      "price": 2800,
+      "houseCost": 1500,
+      "rents": [
+        240,
+        1200,
+        3600,
+        8500,
+        10250,
+        12000
+      ],
+      "mortgageValue": 1400
+    },
+    {
+      "id": 8,
+      "type": "property",
+      "subtype": "normal",
+      "name": "云南省",
+      "subtitle": "昆明市",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        120,
+        600,
+        1800,
+        5000,
+        7000,
+        9000
+      ],
+      "mortgageValue": 800
+    },
+    {
+      "id": 9,
+      "type": "property",
+      "subtype": "normal",
+      "name": "江苏省",
+      "subtitle": "南京市",
+      "price": 1400,
+      "houseCost": 1000,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 10,
+      "type": "property",
+      "subtype": "utility",
+      "name": "中国大运河",
+      "price": 1500,
+      "mortgageValue": 750
+    },
+    {
+      "id": 11,
+      "type": "property",
+      "subtype": "normal",
+      "name": "浙江省",
+      "subtitle": "杭州市",
+      "price": 2000,
+      "houseCost": 1000,
+      "rents": [
+        160,
+        800,
+        2200,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 12,
+      "type": "property",
+      "subtype": "normal",
+      "name": "安徽省",
+      "subtitle": "合肥市",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5500,
+        7500,
+        9500
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 13,
+      "type": "airport",
+      "name": "北京首都国际机场",
+      "branchEntryId": 52
+    },
+    {
+      "id": 14,
+      "type": "property",
+      "subtype": "normal",
+      "name": "江西省",
+      "subtitle": "南昌市",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5500,
+        7500,
+        9500
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 15,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 16,
+      "type": "property",
+      "subtype": "normal",
+      "name": "湖南省",
+      "subtitle": "长沙市",
+      "price": 600,
+      "houseCost": 500,
+      "rents": [
+        20,
+        100,
+        300,
+        900,
+        1600,
+        2500
+      ],
+      "mortgageValue": 300
+    },
+    {
+      "id": 17,
+      "type": "property",
+      "subtype": "normal",
+      "name": "湖北省",
+      "subtitle": "武汉市",
+      "price": 1000,
+      "houseCost": 500,
+      "rents": [
+        60,
+        300,
+        900,
+        2700,
+        4000,
+        5500
+      ],
+      "mortgageValue": 500
+    },
+    {
+      "id": 18,
+      "type": "property",
+      "subtype": "normal",
+      "name": "四川省",
+      "subtitle": "成都市",
+      "price": 1200,
+      "houseCost": 500,
+      "rents": [
+        80,
+        400,
+        1000,
+        3000,
+        4500,
+        6000
+      ],
+      "mortgageValue": 600
+    },
+    {
+      "id": 19,
+      "type": "property",
+      "subtype": "station",
+      "name": "上海站",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 20,
+      "type": "property",
+      "subtype": "normal",
+      "name": "山东省",
+      "subtitle": "济南市",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3900,
+        9000,
+        11000,
+        12750
+      ],
+      "mortgageValue": 1500
+    },
+    {
+      "id": 21,
+      "type": "property",
+      "subtype": "normal",
+      "name": "河北省",
+      "subtitle": "石家庄市",
+      "price": 2200,
+      "houseCost": 1500,
+      "rents": [
+        180,
+        900,
+        2500,
+        7000,
+        8750,
+        10500
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 22,
+      "type": "property",
+      "subtype": "normal",
+      "name": "河南省",
+      "subtitle": "郑州市",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3900,
+        9000,
+        11000,
+        12750
+      ],
+      "mortgageValue": 1500
+    },
+    {
+      "id": 23,
+      "type": "tax",
+      "name": "所得税",
+      "amount": 1000
+    },
+    {
+      "id": 24,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 25,
+      "type": "property",
+      "subtype": "normal",
+      "name": "山西省",
+      "subtitle": "太原市",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        1000,
+        3000,
+        7500,
+        9250,
+        11000
+      ],
+      "mortgageValue": 1200
+    },
+    {
+      "id": 26,
+      "type": "module",
+      "module": {
+        "id": "rail-hub",
+        "version": 1
+      },
+      "cellType": "rail-hub",
+      "name": "品尝兰州牛肉面",
+      "payload": {}
+    },
+    {
+      "id": 27,
+      "type": "property",
+      "subtype": "normal",
+      "name": "陕西省",
+      "subtitle": "西安市",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3300,
+        8000,
+        9750,
+        11500
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 28,
+      "type": "property",
+      "subtype": "normal",
+      "name": "甘肃省",
+      "subtitle": "兰州市",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3300,
+        8000,
+        9750,
+        11500
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 29,
+      "type": "property",
+      "subtype": "normal",
+      "name": "辽宁省",
+      "subtitle": "沈阳市",
+      "price": 2200,
+      "houseCost": 1500,
+      "rents": [
+        180,
+        900,
+        2500,
+        7000,
+        8750,
+        10500
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 30,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 31,
+      "type": "property",
+      "subtype": "normal",
+      "name": "内蒙古自治区",
+      "subtitle": "呼和浩特市",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        120,
+        600,
+        1800,
+        5000,
+        7000,
+        9000
+      ],
+      "mortgageValue": 800
+    },
+    {
+      "id": 32,
+      "type": "property",
+      "subtype": "normal",
+      "name": "宁夏回族自治区",
+      "subtitle": "银川市",
+      "price": 1400,
+      "houseCost": 1000,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 33,
+      "type": "property",
+      "subtype": "station",
+      "name": "南京站",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 34,
+      "type": "property",
+      "subtype": "normal",
+      "name": "吉林省",
+      "subtitle": "长春市",
+      "price": 1400,
+      "houseCost": 1000,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700
+    },
+    {
+      "id": 35,
+      "type": "property",
+      "subtype": "normal",
+      "name": "西藏自治区",
+      "subtitle": "拉萨市",
+      "price": 2000,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5500,
+        7500,
+        9500
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 36,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 37,
+      "type": "property",
+      "subtype": "normal",
+      "name": "海南省",
+      "subtitle": "海口市",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        160,
+        800,
+        2200,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 900
+    },
+    {
+      "id": 38,
+      "type": "property",
+      "subtype": "normal",
+      "name": "武夷山",
+      "price": 1200,
+      "houseCost": 500,
+      "rents": [
+        80,
+        400,
+        1000,
+        3000,
+        4500,
+        6000
+      ],
+      "mortgageValue": 600
+    },
+    {
+      "id": 39,
+      "type": "module",
+      "module": {
+        "id": "rail-hub",
+        "version": 1
+      },
+      "cellType": "rail-hub",
+      "name": "到香港维多利亚港欣赏夜景",
+      "payload": {}
+    },
+    {
+      "id": 40,
+      "type": "property",
+      "subtype": "normal",
+      "name": "黑龙江省",
+      "subtitle": "哈尔滨市",
+      "price": 1000,
+      "houseCost": 500,
+      "rents": [
+        60,
+        300,
+        900,
+        2700,
+        4000,
+        5500
+      ],
+      "mortgageValue": 500
+    },
+    {
+      "id": 41,
+      "type": "property",
+      "subtype": "normal",
+      "name": "北京故宫博物院",
+      "price": 2600,
+      "houseCost": 2000,
+      "rents": [
+        280,
+        1100,
+        3300,
+        8000,
+        9750,
+        11500
+      ],
+      "mortgageValue": 1300
+    },
+    {
+      "id": 42,
+      "type": "property",
+      "subtype": "normal",
+      "name": "万里长城",
+      "price": 3500,
+      "houseCost": 2000,
+      "rents": [
+        350,
+        1750,
+        5000,
+        11000,
+        13000,
+        15000
+      ],
+      "mortgageValue": 1750
+    },
+    {
+      "id": 43,
+      "type": "property",
+      "subtype": "station",
+      "name": "北京站",
+      "price": 2000,
+      "rents": [
+        250,
+        500,
+        1000,
+        2000
+      ],
+      "mortgageValue": 1000
+    },
+    {
+      "id": 44,
+      "type": "property",
+      "subtype": "normal",
+      "name": "澳门大三巴牌坊",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        260,
+        1300,
+        3900,
+        9000,
+        11000,
+        12750
+      ],
+      "mortgageValue": 1500
+    },
+    {
+      "id": 45,
+      "type": "property",
+      "subtype": "normal",
+      "name": "敦煌莫高窟",
+      "price": 3200,
+      "houseCost": 2000,
+      "rents": [
+        280,
+        1500,
+        4500,
+        10000,
+        12000,
+        14000
+      ],
+      "mortgageValue": 1600
+    },
+    {
+      "id": 46,
+      "type": "property",
+      "subtype": "normal",
+      "name": "丽江古城",
+      "price": 1000,
+      "houseCost": 500,
+      "rents": [
+        60,
+        300,
+        900,
+        2700,
+        4000,
+        5500
+      ],
+      "mortgageValue": 500
+    },
+    {
+      "id": 47,
+      "type": "property",
+      "subtype": "utility",
+      "name": "大唐托克托发电厂",
+      "price": 1500,
+      "mortgageValue": 750
+    },
+    {
+      "id": 48,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 49,
+      "type": "property",
+      "subtype": "normal",
+      "name": "青海省",
+      "subtitle": "西宁市",
+      "price": 2200,
+      "houseCost": 1500,
+      "rents": [
+        180,
+        900,
+        2500,
+        7000,
+        8750,
+        10500
+      ],
+      "mortgageValue": 1100
+    },
+    {
+      "id": 50,
+      "type": "property",
+      "subtype": "normal",
+      "name": "高昌故城",
+      "price": 3200,
+      "houseCost": 2000,
+      "rents": [
+        280,
+        1500,
+        4500,
+        10000,
+        12000,
+        14000
+      ],
+      "mortgageValue": 1600
+    },
+    {
+      "id": 51,
+      "type": "property",
+      "subtype": "normal",
+      "name": "新疆维吾尔自治区",
+      "subtitle": "乌鲁木齐市",
+      "price": 4000,
+      "houseCost": 2000,
+      "rents": [
+        500,
+        2000,
+        6000,
+        14000,
+        17000,
+        20000
+      ],
+      "mortgageValue": 2000,
+      "nextId": 0
+    },
+    {
+      "id": 52,
+      "type": "world",
+      "name": "韩国首尔",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": false
+      }
+    },
+    {
+      "id": 53,
+      "type": "world",
+      "name": "日本东京",
+      "effect": {
+        "type": "move_steps",
+        "steps": 5
+      }
+    },
+    {
+      "id": 54,
+      "type": "chance",
+      "name": "机会"
+    },
+    {
+      "id": 55,
+      "type": "world",
+      "name": "美国纽约",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": 56,
+      "type": "world",
+      "name": "英国伦敦",
+      "effect": {
+        "type": "move_to",
+        "cellId": 19,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": 57,
+      "type": "world",
+      "name": "法国巴黎",
+      "effect": {
+        "type": "move_steps",
+        "steps": 1
+      }
+    },
+    {
+      "id": 58,
+      "type": "destiny",
+      "name": "命运"
+    },
+    {
+      "id": 59,
+      "type": "world",
+      "name": "泰国曼谷",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": 60,
+      "type": "world",
+      "name": "越南河内",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 2
+      },
+      "nextId": 40
+    }
   ]
 }

@@ -2,7 +2,7 @@
   "ref": {
     "id": "china-tour",
     "version": 1,
-    "contentHash": "f3910d3ea6fea31cc6e230e0c2019fd0baab2ad9d6928cd57288db3e99a12123"
+    "contentHash": "26a6f9529d6a4374fb64ef43113fe60e06fd71d91185f186b1eee73d8fd7e0d6"
   },
   "metadata": {
     "title": "中国之旅",
@@ -11,6 +11,10 @@
   "requiredRuleModules": [
     {
       "id": "core",
+      "version": 1
+    },
+    {
+      "id": "rail-hub",
       "version": 1
     }
   ],

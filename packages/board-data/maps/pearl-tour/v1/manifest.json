@@ -2,7 +2,7 @@
   "ref": {
     "id": "pearl-tour",
     "version": 1,
-    "contentHash": "31f2564ea45231c1a56953d6db380ccd798c4aa499a543257870b4cccfc450b7"
+    "contentHash": "6fca0225a90fcdfa8f56459a9258177d6a5125d227a8231fbea9615a96373469"
   },
   "metadata": {
     "title": "珠江之旅",
@@ -11,6 +11,10 @@
   "requiredRuleModules": [
     {
       "id": "core",
+      "version": 1
+    },
+    {
+      "id": "port-trade",
       "version": 1
     }
   ],

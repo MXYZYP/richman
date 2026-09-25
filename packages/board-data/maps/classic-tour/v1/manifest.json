@@ -2,7 +2,7 @@
   "ref": {
     "id": "classic-tour",
     "version": 1,
-    "contentHash": "174335e46299f0fbba18cede146ad80f6f1e2b98a484efe942be54414587d9ee"
+    "contentHash": "8f693654ac0a163390747cd2da75fdc908d40f1229b86c6b432f62e7294163c5"
   },
   "metadata": {
     "title": "世界名城",
@@ -11,6 +11,10 @@
   "requiredRuleModules": [
     {
       "id": "core",
+      "version": 1
+    },
+    {
+      "id": "landmark-passport",
       "version": 1
     }
   ],

@@ -330,8 +330,11 @@ describe('prison@1 保释金（owner 2026-09-23 追加）', () => {
       eventType: 'jail_exited_by_bail',
       payload: { playerId, cost: BAIL_COST },
     });
-    // 只发模块事件：不重复发 core 的 bank_paid（金额已随模块事件带给客户端）。
-    expect(result.events.some((event) => event.type === 'bank_paid')).toBe(false);
+    // 保释金离开牌桌：除模块事件外还必须发一条 core 的 bank_paid（金额与模块事件 payload 一致）。
+    // 这条是 simulate.ts 现金守恒不变量（sum(玩家现金) + bankBalance === 初始资金 × 人数）的唯一依据：
+    // 只扣玩家 cash 而不留银行流水，残差会永久留在账上，逐局跑模拟时必然报红。
+    // 「银行收支」类统计按 core 事件求和，模块事件不算账，所以这里不存在重复计数。
+    expect(result.events).toContainEqual({ type: 'bank_paid', playerId, amount: BAIL_COST });
     // 保释不动牌堆：持卡记录保持原样（此处本来为空），牌堆队列逐项一致。
     expect(result.state.publicRuleState.modules[PRISON_MODULE_KEY]).toBeUndefined();
     // 保释前在押记录确实存在（否则这条用例根本没在验证「释放后状态被清掉」）。

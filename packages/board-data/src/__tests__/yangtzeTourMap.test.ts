@@ -7,6 +7,7 @@ import { yangtzeTourMap } from '../yangtzeTourMap';
 const mapDirectory = new URL('../../maps/yangtze-tour/v1/', import.meta.url);
 
 const coreModule = { id: 'core', version: 1 } as const;
+const yangtzeFerryModule = { id: 'yangtze-ferry', version: 1 } as const;
 
 function readMapJson(fileName: string): any {
   const fileUrl = new URL(fileName, mapDirectory);
@@ -191,7 +192,9 @@ describe('yangtze-tour@1 approved source data', () => {
     expect(byType('chance')).toHaveLength(3);
     expect(byType('destiny')).toHaveLength(4);
     expect(byType('tax')).toHaveLength(2);
-    expect(byType('special')).toHaveLength(3);
+    // #23：15 皖江洪峰 / 33 三峡船闸检修 / 50 虎跳峡险滩原地改造成 yangtze-ferry@1 的渡口格。
+    expect(byType('special')).toHaveLength(0);
+    expect(byType('module')).toHaveLength(3);
 
     // board 来自 JSON.parse（any），这里显式标注数组类型，否则下面 map 的回调参数会退化成隐式 any。
     const eventIds: number[] = board.cells
@@ -203,10 +206,16 @@ describe('yangtze-tour@1 approved source data', () => {
     expect(Math.min(...gaps)).toBeGreaterThanOrEqual(2);
 
     expect(byType('tax').every((cell: any) => cell.amount === 1000)).toBe(true);
-    expect(byType('special').map((cell: any) => cell.effect)).toEqual([
-      { type: 'pay_bank', amount: 1000 },
-      { type: 'skip_turn', turns: 1 },
-      { type: 'receive_bank', amount: 1000 },
+    expect(byType('module').map((cell: any) => ({
+      id: cell.id,
+      name: cell.name,
+      module: cell.module,
+      cellType: cell.cellType,
+      payload: cell.payload,
+    }))).toEqual([
+      { id: 15, name: '皖江洪峰', module: yangtzeFerryModule, cellType: 'ferry', payload: {} },
+      { id: 33, name: '三峡船闸检修', module: yangtzeFerryModule, cellType: 'ferry', payload: {} },
+      { id: 50, name: '虎跳峡险滩', module: yangtzeFerryModule, cellType: 'ferry', payload: {} },
     ]);
   });
 
@@ -249,7 +258,7 @@ describe('yangtze-tour@1 approved source data', () => {
     });
   });
 
-  it('stays on core@1 only, with one presentation per cell and a 54-point snake route', () => {
+  it('stays on core@1 + yangtze-ferry@1, with one presentation per cell and a 54-point snake route', () => {
     const manifest = readMapJson('manifest.json');
     const board = readMapJson('board.json');
     const route = manifest.presentation.routes.find((entry: any) => entry.role === 'route');
@@ -258,8 +267,8 @@ describe('yangtze-tour@1 approved source data', () => {
     expect(manifest.ref.version).toBe(1);
     expect(manifest.ref.contentHash).toMatch(/^[0-9a-f]{64}$/);
     expect(manifest.metadata.title).toBe('长江之旅');
-    // 蛇形图只依赖核心规则：没有额外模块，玩家换图不必先装模块。
-    expect(manifest.requiredRuleModules).toEqual([coreModule]);
+    // #23：三处渡口由 yangtze-ferry@1 结算，地图声明依赖 core@1 + yangtze-ferry@1。
+    expect(manifest.requiredRuleModules).toEqual([coreModule, yangtzeFerryModule]);
     expect(Object.keys(manifest.presentation.cells).map(Number).sort((a, b) => a - b)).toEqual(
       board.cells.map((cell: { id: number }) => cell.id).sort((a: number, b: number) => a - b),
     );
@@ -284,10 +293,10 @@ describe('yangtze-tour@1 approved source data', () => {
   });
 
   it('is a deeply frozen valid immutable map pack whose hash matches its own bytes', () => {
-    expect(() => assertValidMapPack(yangtzeTourMap, [coreModule])).not.toThrow();
+    expect(() => assertValidMapPack(yangtzeTourMap, [coreModule, yangtzeFerryModule])).not.toThrow();
     expect(computeContentHash(yangtzeTourMap)).toBe(yangtzeTourMap.ref.contentHash);
     expect(yangtzeTourMap.ref.contentHash)
-      .toBe('928e1ae597b8865c3417d61bad5214f01591be51269be08be797198503120da1');
+      .toBe('fd44de6931fb54f7367ccb2f14fbfe7e9df00280b4d045bbe59087fa6f8443f5');
     expect(Object.isFrozen(yangtzeTourMap)).toBe(true);
     expect(Object.isFrozen(yangtzeTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(yangtzeTourMap.game.cards.destiny[2]!.effect)).toBe(true);

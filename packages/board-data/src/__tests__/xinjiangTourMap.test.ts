@@ -7,6 +7,7 @@ import { xinjiangTourMap } from '../xinjiangTourMap';
 const mapDirectory = new URL('../../maps/xinjiang-tour/v1/', import.meta.url);
 
 const coreModule = { id: 'core', version: 1 } as const;
+const oasisCampModule = { id: 'oasis-camp', version: 1 } as const;
 
 function readMapJson(fileName: string): any {
   const fileUrl = new URL(fileName, mapDirectory);
@@ -195,7 +196,7 @@ describe('xinjiang-tour@1 approved source data', () => {
     expect(new Set(normal.map((cell: any) => cell.price as number)).size).toBeGreaterThanOrEqual(8);
   });
 
-  it('spreads 3 chance / 4 destiny / 2 tax / 2 special cells and never lets two card cells touch', () => {
+  it('spreads 3 chance / 4 destiny / 2 tax / 2 oasis cells and never lets two card cells touch', () => {
     const board = readMapJson('board.json');
     const byType = (type: string) => board.cells.filter((cell: any) => cell.type === type);
 
@@ -203,7 +204,9 @@ describe('xinjiang-tour@1 approved source data', () => {
     expect(byType('chance')).toHaveLength(3);
     expect(byType('destiny')).toHaveLength(4);
     expect(byType('tax')).toHaveLength(2);
-    expect(byType('special')).toHaveLength(2);
+    // #23：12 库木塔格沙漠 / 38 沙尘暴原地改造成 oasis-camp@1 的绿洲营地格，special 归零。
+    expect(byType('special')).toHaveLength(0);
+    expect(byType('module')).toHaveLength(2);
     expect(byType('airport')).toHaveLength(1);
 
     // board 来自 JSON.parse（any），这里显式标注数组类型，否则下面 map 的回调参数会退化成隐式 any。
@@ -221,9 +224,15 @@ describe('xinjiang-tour@1 approved source data', () => {
     expect(Math.min(...gaps)).toBeGreaterThanOrEqual(2);
 
     expect(byType('tax').map((cell: any) => cell.amount)).toEqual([1000, 1200]);
-    expect(byType('special').map((cell: any) => cell.effect)).toEqual([
-      { type: 'skip_turn', turns: 1 },
-      { type: 'pay_bank', amount: 1200 },
+    expect(byType('module').map((cell: any) => ({
+      id: cell.id,
+      name: cell.name,
+      module: cell.module,
+      cellType: cell.cellType,
+      payload: cell.payload,
+    }))).toEqual([
+      { id: 12, name: '库木塔格沙漠', module: oasisCampModule, cellType: 'oasis', payload: {} },
+      { id: 38, name: '沙尘暴', module: oasisCampModule, cellType: 'oasis', payload: {} },
     ]);
   });
 
@@ -266,7 +275,7 @@ describe('xinjiang-tour@1 approved source data', () => {
     });
   });
 
-  it('stays on core@1 only, with one presentation per cell and ring + branch routes', () => {
+  it('stays on core@1 + oasis-camp@1, with one presentation per cell and ring + branch routes', () => {
     const manifest = readMapJson('manifest.json');
     const board = readMapJson('board.json');
     const routes = manifest.presentation.routes;
@@ -276,8 +285,8 @@ describe('xinjiang-tour@1 approved source data', () => {
     expect(manifest.ref.contentHash).toMatch(/^[0-9a-f]{64}$/);
     expect(manifest.metadata.title).toBe('新疆之旅');
     expect(manifest.metadata.description).toContain('独库公路');
-    // 环形图只依赖核心规则：机场等待与支线掷骰都由 core 处理，玩家换图不必先装模块。
-    expect(manifest.requiredRuleModules).toEqual([coreModule]);
+    // #23：两处绿洲营地由 oasis-camp@1 结算；机场等待与支线掷骰仍由 core 处理。
+    expect(manifest.requiredRuleModules).toEqual([coreModule, oasisCampModule]);
     expect(Object.keys(manifest.presentation.cells).map(Number).sort((a, b) => a - b)).toEqual(
       board.cells.map((cell: { id: number }) => cell.id).sort((a: number, b: number) => a - b),
     );
@@ -300,10 +309,10 @@ describe('xinjiang-tour@1 approved source data', () => {
   });
 
   it('is a deeply frozen valid immutable map pack whose hash matches its own bytes', () => {
-    expect(() => assertValidMapPack(xinjiangTourMap, [coreModule])).not.toThrow();
+    expect(() => assertValidMapPack(xinjiangTourMap, [coreModule, oasisCampModule])).not.toThrow();
     expect(computeContentHash(xinjiangTourMap)).toBe(xinjiangTourMap.ref.contentHash);
     expect(xinjiangTourMap.ref.contentHash)
-      .toBe('08a39b81e3534d6c24664b4a2d218de732c2e2577e5442fcb26384c09759a169');
+      .toBe('4068b428fa4852dd1f8555f900572d3666a31e69516c811ca9bd26d4ea73f32f');
     expect(Object.isFrozen(xinjiangTourMap)).toBe(true);
     expect(Object.isFrozen(xinjiangTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(xinjiangTourMap.game.cards.destiny[2]!.effect)).toBe(true);

@@ -597,8 +597,10 @@ function handleJailCardChoice(
  *
  * 扣 `jailBailCost` 付给银行（**不进任何玩家口袋**），立即出狱，并在本回合照常掷骰移动 ——
  * 与「使用出狱许可证」落到同一阶段（`awaiting_roll`），区别只是代价从「一张许可证」换成现金。
- * 只发模块事件、不额外发 core 的 `bank_paid`：与 great-wall 的 `beacon_claimed` 一致，
- * 金额已经随模块事件带给客户端，重复发一条会让「银行收支」类统计把它算两遍。
+ * 除模块事件外补发一条 core 的 `bank_paid`（金额同为 `jailBailCost`）：保释金真的离开了牌桌，
+ * 只有留下这条流水，simulate.ts 的现金守恒不变量（sum(玩家现金) + bankBalance === 初始资金 × 人数）
+ * 才能逐局守衡。模块事件只是给客户端看的语义事件，不参与银行记账，因此不会重复计数。
+ * 与 great-wall 的 `beacon_claimed`、world-tour 的付费换乘同属一套约定。
  *
  * 现金不足时返回 `INSUFFICIENT_FUNDS`：正常路径下引擎根本不会给出这个选项
  * （`jailChoiceActions` 已按现金过滤），走到这里只能是房间快照过期或客户端乱提交。
@@ -625,7 +627,11 @@ function handleJailBailChoice(
     )),
   };
   const released = removeFromJail(paid, playerId, prisonState, PRISON_DECISION_PHASE);
-  const events: GameEvent[] = [moduleEvent('jail_exited_by_bail', { playerId, cost })];
+  const events: GameEvent[] = [
+    moduleEvent('jail_exited_by_bail', { playerId, cost }),
+    // 保释金离开牌桌：按仓库既有约定补一条 bank_paid，否则现金守恒不变量会持续失配（simulate.ts）。
+    { type: 'bank_paid', playerId, amount: cost },
+  ];
   return { ok: true, state: withEvents(released, events), events };
 }
 

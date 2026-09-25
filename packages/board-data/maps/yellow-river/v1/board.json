@@ -113,12 +113,14 @@
     },
     {
       "id": 8,
-      "type": "special",
+      "type": "module",
+      "module": {
+        "id": "river-tide",
+        "version": 1
+      },
+      "cellType": "river-works",
       "name": "凌汛封河",
-      "effect": {
-        "type": "skip_turn",
-        "turns": 1
-      }
+      "payload": {}
     },
     {
       "id": 9,
@@ -337,12 +339,14 @@
     },
     {
       "id": 24,
-      "type": "special",
+      "type": "module",
+      "module": {
+        "id": "river-tide",
+        "version": 1
+      },
+      "cellType": "river-works",
       "name": "决口抢险",
-      "effect": {
-        "type": "pay_bank",
-        "amount": 1000
-      }
+      "payload": {}
     },
     {
       "id": 25,
@@ -603,12 +607,14 @@
     },
     {
       "id": 42,
-      "type": "special",
+      "type": "module",
+      "module": {
+        "id": "river-tide",
+        "version": 1
+      },
+      "cellType": "river-works",
       "name": "河道断流",
-      "effect": {
-        "type": "skip_turn",
-        "turns": 1
-      }
+      "payload": {}
     },
     {
       "id": 43,
@@ -806,12 +812,14 @@
     },
     {
       "id": 57,
-      "type": "special",
+      "type": "module",
+      "module": {
+        "id": "river-tide",
+        "version": 1
+      },
+      "cellType": "river-works",
       "name": "引黄灌溉",
-      "effect": {
-        "type": "receive_bank",
-        "amount": 1000
-      }
+      "payload": {}
     },
     {
       "id": 58,

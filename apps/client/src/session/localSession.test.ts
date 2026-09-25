@@ -86,14 +86,32 @@ function selectDebtSequenceFallback(
 
 async function reachDebtThroughVisibleActions(session: LocalSession): Promise<void> {
   for (let actionCount = 0; actionCount < 300; actionCount += 1) {
+    // 先等动画/电脑思考结束再读 availableActions：presenter 在动画期间会把行动列表刻意清空
+    // （见 localSession 的 availableActions computed），拿这个空数组去挑动作只会得到
+    // 「No end_turn action for debt sequence phase managing」这种假失败。#23 之后地图带上了
+    // 规则模块，落在模块格多出一段待选动作动画，这个窗口被撞上的概率明显变高。
+    for (let microtask = 0; microtask < 1000; microtask += 1) {
+      await Promise.resolve();
+      if (!session.isAnimating.value && !session.isBotThinking.value) break;
+    }
     if (session.state.value.debt) return;
     const phase = session.state.value.turnPhase;
-    const actions = session.availableActions.value;
+    // 直接向快照要行动列表（getAvailableActions 就是 UI 用的同一个函数），不走 session.availableActions：
+    // 后者是 computed，且动画期间被刻意清空，测试里很容易读到与 state 不一致的那一份（读到的空数组
+    // 会被误当成「这个阶段没有 end_turn」）。
+    const actions = getAvailableActions(session.state.value);
     // 单机真人抽卡确认：先接受待确认卡牌。接受后阶段可能仍是 managing（卡牌没有移动），
     // 所以这里不要求阶段推进，下一轮再找真正的推进动作。
     const acceptAction = actions.find((candidate) => candidate.intent.type === 'accept_card');
     if (acceptAction) {
       await session.sendIntent(acceptAction.intent);
+      continue;
+    }
+    // #23 起每张地图都挂了规则模块：落在模块格会写入待选动作，先把它消费掉（同样不要求本步推进阶段，
+    // 模块决策消费完之后通常仍是 managing，下一轮再取真正的推进动作）。
+    const moduleAction = actions.find((candidate) => candidate.intent.type === 'module');
+    if (moduleAction) {
+      await session.sendIntent(moduleAction.intent);
       continue;
     }
     const action = selectDebtSequenceAction(phase, actions);
@@ -102,7 +120,7 @@ async function reachDebtThroughVisibleActions(session: LocalSession): Promise<vo
     if (session.state.value.debt) return;
     if (session.state.value.turnPhase !== phase) continue;
 
-    const fallback = selectDebtSequenceFallback(phase, session.availableActions.value);
+    const fallback = selectDebtSequenceFallback(phase, getAvailableActions(session.state.value));
     if (fallback) {
       await session.sendIntent(fallback.intent);
       if (session.state.value.debt) return;
@@ -440,7 +458,19 @@ describe('createLocalSession', () => {
         { id: 'bot-a', nickname: '电脑一', isBot: true },
         { id: 'bot-b', nickname: '电脑二', isBot: true },
       ],
-      seed: '83',
+      // Seed re-picked after china-tour gained rail-hub@1 (#23). The burst this test counts is
+      // "how many BOT delay calls pass between two human turns", and every module decision a bot
+      // makes is one more delay call inside the same round -- so the old seed '83' now ends with
+      // the human acting on almost every step and never accumulates >20. A 400-seed sweep run
+      // against this test's own predicate (burst > 20 && humanWasSkippedInBurst && playing &&
+      // no debt && currentPlayerId === 'human') left exactly two seeds that still satisfy it:
+      // '246' and '252'. A later map/module change can legitimately invalidate them again; if this
+      // test starts failing on `expected 'game_over' to be 'condition_met'`, re-run that sweep
+      // instead of weakening the threshold.
+      // Note: a human turn never calls `wait(botDelay)` (only runBotTurnIfNeeded does), so
+      // `humanWasSkippedInBurst` is really "a lap boundary passed between two BOT delays" -- it is
+      // satisfied almost immediately. The load-bearing assertion is `burstBotDelays > 20`.
+      seed: '252',
       wait: async (ms) => {
         if (ms !== botDelay) return;
         botDelayCalls += 1;
@@ -512,7 +542,13 @@ describe('createLocalSession', () => {
         { id: 'bot-a', nickname: '电脑一', isBot: true },
         { id: 'bot-b', nickname: '电脑二', isBot: true },
       ],
-      seed: '2',
+      // seed 只用来把「真人先破产、剩两台电脑打到底」这条剧本走通。
+      // #23 给 china-tour 挂上 rail-hub@1 后经济与回合节奏变了，旧 seed '2' 会让真人一直不破产
+      // （378 步后由真人获胜）；中间试过的 seed '3' 又走到另一个极端 —— 真人破产和终局发生在
+      // 同一步，于是「真人破产之后电脑还在走」这段窗口为空（botDelaysAfterHumanBankruptcy === 0）。
+      // seed '38' 实测真人先破产，之后两台电脑继续打完才终局（真人破产 → bot 胜），是本图上
+      // 能稳定演出这条剧本的 seed。
+      seed: '38',
       wait: async (ms) => {
         if (
           ms === botDelay

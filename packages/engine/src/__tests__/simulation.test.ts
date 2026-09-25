@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { runGame, runSimulation, randomConfigs } from '../simulate';
-import { worldTourMap } from '@richman/board-data';
+import {
+  PRODUCTION_RULE_MODULES,
+  getActiveMapPack,
+  listActiveMaps,
+  worldTourMap,
+} from '@richman/board-data';
 
 // 属性测试（03 §4.4 合法性保证）+ 现金守恒（M2 收尾）
 // 全 bot 自弈：每个决策点 chooseBotIntent 出招、applyIntent 结算。
@@ -92,5 +97,61 @@ describe('runSimulation 汇总统计', () => {
     expect(result.illegalIntents).toBe(0);
     expect(result.conservationViolations).toBe(0);
     expect(result.exception).toBeNull();
+  });
+});
+
+// #23 之后每张正式地图都挂了自己的规则模块。原先把仿真固定在 china-tour + world-tour，
+// 于是 great-wall / prison 的记账缺口能长期潜伏 —— 实测被漏掉的「只扣现金、不留银行流水」共 7 处：
+// 认领烽火台 600、保释金 1500、换乘车费 500、票号存入 1000、集市进货 500、扎营费 600、顺流船费 400。
+// 这类缺口一旦发生，守恒差额会永久留在账上，之后每一步都被判为违例（china-tour 单局曾累计 902 步）。
+// 改成「所有正式地图 × 3 局」后，新增地图 / 新增模块自动纳入，不再依赖手工补测。
+describe('全部正式地图都跑同一套不变量（#23 每张地图各带一个规则模块）', () => {
+  const perMap = listActiveMaps().map((entry) => {
+    const pack = getActiveMapPack(entry.ref.id);
+    return {
+      mapId: pack.ref.id,
+      moduleKeys: pack.game.requiredRuleModules.map((ref) => `${ref.id}@${ref.version}`),
+      results: randomConfigs(3, 4242).map((config) => runGame(config, CI_CAP, pack)),
+    };
+  });
+
+  it('每张正式地图都挂了模块，且与 registry 声明一一对应（无孤儿模块、无漏挂）', () => {
+    const mapsWithoutModule = perMap
+      .filter((entry) => entry.moduleKeys.every((key) => key.startsWith('core@')))
+      .map((entry) => entry.mapId);
+    expect(mapsWithoutModule).toEqual([]);
+
+    const boundIds = [...new Set(perMap.flatMap((entry) => entry.moduleKeys))]
+      .map((key) => key.split('@')[0])
+      .filter((id) => id !== 'core')
+      .sort();
+    const declaredIds = PRODUCTION_RULE_MODULES
+      .map((ref) => ref.id)
+      .filter((id) => id !== 'core')
+      .sort();
+    expect(boundIds).toEqual(declaredIds);
+  });
+
+  it('所有地图的 bot 决策都合法（illegalIntents === 0）', () => {
+    const illegal = perMap
+      .filter((entry) => entry.results.some((result) => result.illegalIntents > 0))
+      .map((entry) => entry.mapId);
+    expect(illegal).toEqual([]);
+  });
+
+  it('所有地图现金守恒不变量成立（conservationViolations === 0）', () => {
+    const violated = perMap
+      .filter((entry) => entry.results.some((result) => result.conservationViolations > 0))
+      .map((entry) => `${entry.mapId}:${entry.results
+        .map((result) => result.conservationViolations)
+        .join('/')}`);
+    expect(violated).toEqual([]);
+  });
+
+  it('所有地图无异常抛出', () => {
+    const crashed = perMap
+      .filter((entry) => entry.results.some((result) => result.exception !== null))
+      .map((entry) => entry.mapId);
+    expect(crashed).toEqual([]);
   });
 });

@@ -7,6 +7,7 @@ import { pearlTourMap } from '../pearlTourMap';
 const mapDirectory = new URL('../../maps/pearl-tour/v1/', import.meta.url);
 
 const coreModule = { id: 'core', version: 1 } as const;
+const portTradeModule = { id: 'port-trade', version: 1 } as const;
 
 function readMapJson(fileName: string): any {
   const fileUrl = new URL(fileName, mapDirectory);
@@ -198,7 +199,7 @@ describe('pearl-tour@1 approved source data', () => {
     expect(new Set(normal.map((cell: any) => cell.price as number)).size).toBe(13);
   });
 
-  it('spreads 3 chance / 4 destiny / 2 tax / 2 special cells and never lets two events touch', () => {
+  it('spreads 3 chance / 4 destiny / 2 tax / 2 port cells and never lets two events touch', () => {
     const board = readMapJson('board.json');
     const byType = (type: string) => board.cells.filter((cell: any) => cell.type === type);
 
@@ -206,7 +207,9 @@ describe('pearl-tour@1 approved source data', () => {
     expect(byType('chance')).toHaveLength(3);
     expect(byType('destiny')).toHaveLength(4);
     expect(byType('tax')).toHaveLength(2);
-    expect(byType('special')).toHaveLength(2);
+    // #23：16 台风过境 / 35 天生桥险滩原地改造成 port-trade@1 的 port 格，special 归零。
+    expect(byType('special')).toHaveLength(0);
+    expect(byType('module')).toHaveLength(2);
 
     // board 来自 JSON.parse（any），这里显式标注数组类型，否则下面 map 的回调参数会退化成隐式 any。
     const eventIds: number[] = board.cells
@@ -219,9 +222,15 @@ describe('pearl-tour@1 approved source data', () => {
     expect(Math.min(...gaps)).toBeGreaterThanOrEqual(2);
 
     expect(byType('tax').every((cell: any) => cell.amount === 1000)).toBe(true);
-    expect(byType('special').map((cell: any) => cell.effect)).toEqual([
-      { type: 'pay_bank', amount: 1000 },
-      { type: 'receive_bank', amount: 1000 },
+    expect(byType('module').map((cell: any) => ({
+      id: cell.id,
+      name: cell.name,
+      module: cell.module,
+      cellType: cell.cellType,
+      payload: cell.payload,
+    }))).toEqual([
+      { id: 16, name: '台风过境', module: portTradeModule, cellType: 'port', payload: {} },
+      { id: 35, name: '天生桥险滩', module: portTradeModule, cellType: 'port', payload: {} },
     ]);
   });
 
@@ -264,7 +273,7 @@ describe('pearl-tour@1 approved source data', () => {
     });
   });
 
-  it('stays on core@1 only, with one presentation per cell and a 48-point triangle route', () => {
+  it('stays on core@1 + port-trade@1, with one presentation per cell and a 48-point triangle route', () => {
     const manifest = readMapJson('manifest.json');
     const board = readMapJson('board.json');
     const route = manifest.presentation.routes.find((entry: any) => entry.role === 'route');
@@ -273,8 +282,8 @@ describe('pearl-tour@1 approved source data', () => {
     expect(manifest.ref.version).toBe(1);
     expect(manifest.ref.contentHash).toMatch(/^[0-9a-f]{64}$/);
     expect(manifest.metadata.title).toBe('珠江之旅');
-    // 三角形图只依赖核心规则：没有额外模块，玩家换图不必先装模块。
-    expect(manifest.requiredRuleModules).toEqual([coreModule]);
+    // #23：两个口岸格由 port-trade@1 结算，地图声明依赖 core@1 + port-trade@1。
+    expect(manifest.requiredRuleModules).toEqual([coreModule, portTradeModule]);
     expect(Object.keys(manifest.presentation.cells).map(Number).sort((a, b) => a - b)).toEqual(
       board.cells.map((cell: { id: number }) => cell.id).sort((a: number, b: number) => a - b),
     );
@@ -295,10 +304,10 @@ describe('pearl-tour@1 approved source data', () => {
   });
 
   it('is a deeply frozen valid immutable map pack whose hash matches its own bytes', () => {
-    expect(() => assertValidMapPack(pearlTourMap, [coreModule])).not.toThrow();
+    expect(() => assertValidMapPack(pearlTourMap, [coreModule, portTradeModule])).not.toThrow();
     expect(computeContentHash(pearlTourMap)).toBe(pearlTourMap.ref.contentHash);
     expect(pearlTourMap.ref.contentHash)
-      .toBe('31f2564ea45231c1a56953d6db380ccd798c4aa499a543257870b4cccfc450b7');
+      .toBe('6fca0225a90fcdfa8f56459a9258177d6a5125d227a8231fbea9615a96373469');
     expect(Object.isFrozen(pearlTourMap)).toBe(true);
     expect(Object.isFrozen(pearlTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(pearlTourMap.game.cards.destiny[2]!.effect)).toBe(true);

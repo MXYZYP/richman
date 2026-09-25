@@ -7,6 +7,7 @@ import { shanxiTourMap } from '../shanxiTourMap';
 const mapDirectory = new URL('../../maps/shanxi-tour/v1/', import.meta.url);
 
 const coreModule = { id: 'core', version: 1 } as const;
+const piaohaoModule = { id: 'piaohao', version: 1 } as const;
 
 function readMapJson(fileName: string): any {
   const fileUrl = new URL(fileName, mapDirectory);
@@ -187,7 +188,7 @@ describe('shanxi-tour@1 approved source data', () => {
     ]);
   });
 
-  it('spreads 3 chance / 4 destiny / 2 tax / 2 special cells and never lets two card cells touch', () => {
+  it('spreads 3 chance / 4 destiny / 2 tax / 2 票号 cells and never lets two card cells touch', () => {
     const board = readMapJson('board.json');
     const byType = (type: string) => board.cells.filter((cell: any) => cell.type === type);
 
@@ -195,7 +196,9 @@ describe('shanxi-tour@1 approved source data', () => {
     expect(byType('chance')).toHaveLength(3);
     expect(byType('destiny')).toHaveLength(4);
     expect(byType('tax')).toHaveLength(2);
-    expect(byType('special')).toHaveLength(2);
+    // #23：7 应县木塔 / 26 碛口黄河渡原地改造成 piaohao@1 的票号格，special 归零。
+    expect(byType('special')).toHaveLength(0);
+    expect(byType('module')).toHaveLength(2);
     expect(byType('airport')).toHaveLength(0);
 
     // board 来自 JSON.parse（any），这里显式标注数组类型，否则下面 map 的回调参数会退化成隐式 any。
@@ -213,9 +216,15 @@ describe('shanxi-tour@1 approved source data', () => {
     expect(Math.min(...gaps)).toBeGreaterThanOrEqual(2);
 
     expect(byType('tax').map((cell: any) => cell.amount)).toEqual([1200, 1000]);
-    expect(byType('special').map((cell: any) => cell.effect)).toEqual([
-      { type: 'skip_turn', turns: 1 },
-      { type: 'skip_turn', turns: 1 },
+    expect(byType('module').map((cell: any) => ({
+      id: cell.id,
+      name: cell.name,
+      module: cell.module,
+      cellType: cell.cellType,
+      payload: cell.payload,
+    }))).toEqual([
+      { id: 7, name: '应县木塔', module: piaohaoModule, cellType: 'piaohao', payload: {} },
+      { id: 26, name: '碛口黄河渡', module: piaohaoModule, cellType: 'piaohao', payload: {} },
     ]);
   });
 
@@ -258,7 +267,7 @@ describe('shanxi-tour@1 approved source data', () => {
     });
   });
 
-  it('stays on core@1 only, with one presentation per cell and a single 48-point snake route', () => {
+  it('stays on core@1 + piaohao@1, with one presentation per cell and a single 48-point snake route', () => {
     const manifest = readMapJson('manifest.json');
     const board = readMapJson('board.json');
     const routes = manifest.presentation.routes;
@@ -268,8 +277,8 @@ describe('shanxi-tour@1 approved source data', () => {
     expect(manifest.ref.contentHash).toMatch(/^[0-9a-f]{64}$/);
     expect(manifest.metadata.title).toBe('山西之旅');
     expect(manifest.metadata.description).toContain('蛇形');
-    // 纯蛇形网格只依赖核心规则：没有机场、没有支线，玩家换图不必先装模块。
-    expect(manifest.requiredRuleModules).toEqual([coreModule]);
+    // #23：两座晋商票号由 piaohao@1 结算；蛇形网格本身仍没有机场与支线。
+    expect(manifest.requiredRuleModules).toEqual([coreModule, piaohaoModule]);
     expect(Object.keys(manifest.presentation.cells).map(Number).sort((a, b) => a - b)).toEqual(
       board.cells.map((cell: { id: number }) => cell.id).sort((a: number, b: number) => a - b),
     );
@@ -301,10 +310,10 @@ describe('shanxi-tour@1 approved source data', () => {
   });
 
   it('is a deeply frozen valid immutable map pack whose hash matches its own bytes', () => {
-    expect(() => assertValidMapPack(shanxiTourMap, [coreModule])).not.toThrow();
+    expect(() => assertValidMapPack(shanxiTourMap, [coreModule, piaohaoModule])).not.toThrow();
     expect(computeContentHash(shanxiTourMap)).toBe(shanxiTourMap.ref.contentHash);
     expect(shanxiTourMap.ref.contentHash)
-      .toBe('64ab61de86d5dd795c5e419e72226e2c45d8c504a7692839a47a2d06ef36b94b');
+      .toBe('26da09b32511753648af002149f02b254a1e3b79f041dd610a3a1fda2cdd424e');
     expect(Object.isFrozen(shanxiTourMap)).toBe(true);
     expect(Object.isFrozen(shanxiTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(shanxiTourMap.game.cards.destiny[2]!.effect)).toBe(true);

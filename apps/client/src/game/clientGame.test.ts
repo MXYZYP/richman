@@ -866,8 +866,9 @@ describe('getCellDetail', () => {
       {
         cellId: 26,
         name: '品尝兰州牛肉面',
-        typeLabel: '特殊格',
-        description: '停下时暂停 1 回合。',
+        typeLabel: '高铁枢纽',
+        description: '停在高铁枢纽可候车休息：身上带着停赛就一次性全部清空，否则领一笔候车补贴；'
+          + '也可付费换乘直达下一个枢纽（跳跃，不领过起点工资，一回合只能换乘一次）。',
       },
       {
         cellId: 52,

@@ -79,7 +79,10 @@ function expectedIcon(cell: ChinaTourCell): BuiltInIconId | undefined {
     case 'chance': return 'chance';
     case 'destiny': return 'destiny';
     case 'tax': return 'tax';
-    case 'special': return cell.id === 26 ? 'special-food' : 'special-moon';
+    case 'special':
+    case 'module':
+      // #23：26 / 39 已原地改造成 rail-hub@1 模块格，presentation 的图标保持不变。
+      return cell.id === 26 ? 'special-food' : 'special-moon';
     case 'world': return 'world';
     default: return undefined;
   }
@@ -99,17 +102,21 @@ function expectDeepFrozen(value: unknown): void {
 }
 
 describe('china-tour@1 map pack', () => {
-  it('暴露 exact identity、metadata 与 core@1', () => {
+  it('暴露 exact identity、metadata 与 core@1 + rail-hub@1', () => {
     expect(chinaTourMap.ref).toEqual({
       id: 'china-tour',
       version: 1,
-      contentHash: 'f3910d3ea6fea31cc6e230e0c2019fd0baab2ad9d6928cd57288db3e99a12123',
+      contentHash: '26a6f9529d6a4374fb64ef43113fe60e06fd71d91185f186b1eee73d8fd7e0d6',
     });
     expect(chinaTourMap.metadata).toEqual({
       title: '中国之旅',
       description: '环游中国并经营地产的经典地图',
     });
-    expect(chinaTourMap.game.requiredRuleModules).toEqual([{ id: 'core', version: 1 }]);
+    // #23：26 兰州（牛肉面）/ 39 维港（夜景）原地改造成高铁枢纽，地图开始依赖 rail-hub@1。
+    expect(chinaTourMap.game.requiredRuleModules).toEqual([
+      { id: 'core', version: 1 },
+      { id: 'rail-hub', version: 1 },
+    ]);
     // metadata.title（公开名称）与 board.boardName（棋盘中央标题）的双标题边界
     expect(chinaTourMap.game.board.boardName).toBe('大富翁·中国之旅');
   });

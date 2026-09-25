@@ -312,6 +312,25 @@ function currentRentSummary(
   };
 }
 
+/**
+ * 模块格的类型名：cellType → 中文名。
+ * 未登记的 cellType 回落到「特殊格」，而不是把内部 id 泄给玩家。
+ */
+const MODULE_CELL_TYPE_LABELS: Readonly<Record<string, string>> = {
+  'airport-branch': '机场',
+  'beacon': '烽火台',
+  'goto-jail': '进牢格',
+  // 路线图 #23：八张纯 core 地图各补一个模块。
+  'rail-hub': '高铁枢纽',
+  'landmark': '地标',
+  'port': '口岸',
+  'piaohao': '票号',
+  'caravan': '集市',
+  'oasis': '绿洲营地',
+  'ferry': '渡口',
+  'river-works': '河工段',
+};
+
 function nonPropertyTypeLabel(cell: Exclude<Cell, PropertyCell>): string {
   switch (cell.type) {
     case 'start':
@@ -330,9 +349,7 @@ function nonPropertyTypeLabel(cell: Exclude<Cell, PropertyCell>): string {
       return '世界之窗';
     case 'module':
       // 模块格的类型名按 cellType 走，别一律落到「特殊格」——不同模块的格子玩法完全不同。
-      if (cell.cellType === 'airport-branch') return '机场';
-      if (cell.cellType === 'beacon') return '烽火台';
-      return '特殊格';
+      return MODULE_CELL_TYPE_LABELS[cell.cellType] ?? '特殊格';
   }
 }
 
@@ -388,6 +405,35 @@ function describeModuleCell(cell: Extract<Cell, { type: 'module' }>, state: Game
     const claimCost = payload.claimCost ?? 0;
     const toll = payload.toll ?? 0;
     return `停在无主烽火台时可花 ${formatMoney(claimCost)} 占据它；其他玩家之后再停在此格，须向你支付 ${formatMoney(toll)} 通行费。`;
+  }
+  // 路线图 #23 的八个模块：参数都是引擎常量（格内 payload 为空），故这里只讲清「停下来能做什么」，
+  // 具体金额统一放在设置面板的「规则说明」里给出（见 ui/mapRules.ts 的 MODULE_NOTES），
+  // 避免同一组数字在客户端维护两份。
+  switch (cell.module.id) {
+    case 'rail-hub':
+      return '停在高铁枢纽可候车休息：身上带着停赛就一次性全部清空，否则领一笔候车补贴；'
+        + '也可付费换乘直达下一个枢纽（跳跃，不领过起点工资，一回合只能换乘一次）。';
+    case 'landmark-passport':
+      return '停在地标可免费盖一枚纪念章：集得越多，单枚奖励越高；集满全部地标后，'
+        + '每次经过起点再领一笔环球旅行家津贴。地标人人可盖、互不冲突。';
+    case 'port-trade':
+      return '停在口岸可押注赌一把：掷两颗骰子，点数之和达标就连本带利拿回，否则押金没收。';
+    case 'piaohao':
+      return '停在票号可存入生息，也可随时取现本息；回合开始时若现金不足而票号里有余，'
+        + '票号会自动划出一笔钱垫付给你。';
+    case 'caravan-market':
+      return '停在集市可花钱进货囤着，或按当前市价出货；市价是全场共享的行情，每回合随机涨落。';
+    case 'oasis-camp':
+      return '停在绿洲可扎营（每人一处，在别处再扎营等于迁移，旧营地作废）；'
+        + '此后每次经过自己的营地都能领一笔补给，也可撤营退回部分费用。';
+    case 'yangtze-ferry':
+      return '停在渡口可付费顺流直达下一个渡口（跳跃，不领过起点工资），或免费逆流回到上一个渡口；'
+        + '一回合只能换乘一次，抵达的渡口不再结算落点。';
+    case 'river-tide':
+      return '停在河工段可出钱修堤、把黄河水位压低；水位高时全场过路费上浮，'
+        + '水位低时全场过路费缩水（修堤的人自己掏钱，受益的是所有地主）。';
+    default:
+      break;
   }
   return `由 ${cell.module.id}@${cell.module.version} 模块规则结算。`;
 }

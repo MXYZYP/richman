@@ -13,6 +13,14 @@ import type { ApplyResult, CoreIntent, GameEvent, GameState, Intent } from './ty
 import { worldTourRuleModuleDefinition } from './worldTourModule';
 import { greatWallRuleModuleDefinition } from './greatWallModule';
 import { prisonRuleModuleDefinition } from './prisonModule';
+import { piaohaoRuleModuleDefinition } from './piaohaoModule';
+import { yangtzeFerryRuleModuleDefinition } from './yangtzeFerryModule';
+import { portTradeRuleModuleDefinition } from './portTradeModule';
+import { caravanMarketRuleModuleDefinition } from './caravanMarketModule';
+import { oasisCampRuleModuleDefinition } from './oasisCampModule';
+import { railHubRuleModuleDefinition } from './railHubModule';
+import { landmarkPassportRuleModuleDefinition } from './landmarkPassportModule';
+import { riverTideRuleModuleDefinition } from './riverTideModule';
 
 type ReadonlyCell = DeepReadonly<Cell>;
 
@@ -515,4 +523,15 @@ export const defaultRuleModuleRegistry = createRuleModuleRegistry([
   worldTourRuleModuleDefinition,
   greatWallRuleModuleDefinition,
   prisonRuleModuleDefinition,
+  // #23「每张地图都要有规则」：为 8 张纯 core 地图各补一个模块。
+  // 顺序按 ref.id 字典序排列（runPostTransitionHooks / runBotStrategyHooks 按 id+version 排序执行），
+  // 与注册表内部的 #resolveEnabled 结果一致，读代码时不必再心算排序。
+  caravanMarketRuleModuleDefinition,
+  landmarkPassportRuleModuleDefinition,
+  oasisCampRuleModuleDefinition,
+  piaohaoRuleModuleDefinition,
+  portTradeRuleModuleDefinition,
+  railHubRuleModuleDefinition,
+  riverTideRuleModuleDefinition,
+  yangtzeFerryRuleModuleDefinition,
 ]);

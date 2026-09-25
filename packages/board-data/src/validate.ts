@@ -64,6 +64,15 @@ try {
     { id: 'world-tour', version: 1 },
     { id: 'great-wall', version: 1 },
     { id: 'prison', version: 1 },
+    // #23：与 registry.ts 的 PRODUCTION_RULE_MODULES 保持一致（两处都在注册门禁上）。
+    { id: 'caravan-market', version: 1 },
+    { id: 'landmark-passport', version: 1 },
+    { id: 'oasis-camp', version: 1 },
+    { id: 'piaohao', version: 1 },
+    { id: 'port-trade', version: 1 },
+    { id: 'rail-hub', version: 1 },
+    { id: 'river-tide', version: 1 },
+    { id: 'yangtze-ferry', version: 1 },
   ];
   for (const pack of formalPacks) assertValidMapPack(pack, knownModules, []);
   const registeredChinaPack = formalPacks[0];

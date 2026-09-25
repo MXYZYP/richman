@@ -26,6 +26,14 @@ function makePack(id: string, version: number, title = `${id} v${version}`): Map
   const pack: any = structuredClone(chinaTourMap);
   pack.ref = { id, version, contentHash: '0'.repeat(64) };
   pack.metadata.title = title;
+  // #23 之后 china-tour 声明了 rail-hub@1，而本套 registry 测试用的是「只认 core@1」的迷你白名单。
+  // 为了让 fixture 保持纯 core：模块格降级成语义等价的核心格，requiredRuleModules 收回 core@1 一项。
+  pack.game.requiredRuleModules = [{ id: 'core', version: 1 }];
+  pack.game.board.cells = pack.game.board.cells.map((cell: any) => (
+    cell.type === 'module'
+      ? { id: cell.id, type: 'special', name: cell.name, effect: { type: 'none' } }
+      : cell
+  ));
   pack.ref.contentHash = computeContentHash(pack as MapPack);
   return pack as MapPack;
 }
@@ -139,6 +147,15 @@ describe('production map registry', () => {
       { id: 'world-tour', version: 1 },
       { id: 'great-wall', version: 1 },
       { id: 'prison', version: 1 },
+      // #23「每张地图都要有规则」：8 张纯 core 地图各配一个模块，白名单同步扩到 12 项。
+      { id: 'caravan-market', version: 1 },
+      { id: 'landmark-passport', version: 1 },
+      { id: 'oasis-camp', version: 1 },
+      { id: 'piaohao', version: 1 },
+      { id: 'port-trade', version: 1 },
+      { id: 'rail-hub', version: 1 },
+      { id: 'river-tide', version: 1 },
+      { id: 'yangtze-ferry', version: 1 },
     ]);
     expect(publicApi).not.toHaveProperty('registerMapPack');
 

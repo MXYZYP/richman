@@ -95,12 +95,14 @@
     },
     {
       "id": 7,
+      "type": "module",
+      "module": {
+        "id": "piaohao",
+        "version": 1
+      },
+      "cellType": "piaohao",
       "name": "应县木塔",
-      "type": "special",
-      "effect": {
-        "type": "skip_turn",
-        "turns": 1
-      }
+      "payload": {}
     },
     {
       "id": 8,
@@ -354,12 +356,14 @@
     },
     {
       "id": 26,
+      "type": "module",
+      "module": {
+        "id": "piaohao",
+        "version": 1
+      },
+      "cellType": "piaohao",
       "name": "碛口黄河渡",
-      "type": "special",
-      "effect": {
-        "type": "skip_turn",
-        "turns": 1
-      }
+      "payload": {}
     },
     {
       "id": 27,

@@ -34,6 +34,15 @@ export const PRODUCTION_RULE_MODULES: readonly RuleModuleRef[] = [
   { id: 'world-tour', version: 1 },
   { id: 'great-wall', version: 1 },
   { id: 'prison', version: 1 },
+  // #23「每张地图都要有规则」：8 张纯 core 地图各配一个模块。
+  { id: 'caravan-market', version: 1 },
+  { id: 'landmark-passport', version: 1 },
+  { id: 'oasis-camp', version: 1 },
+  { id: 'piaohao', version: 1 },
+  { id: 'port-trade', version: 1 },
+  { id: 'rail-hub', version: 1 },
+  { id: 'river-tide', version: 1 },
+  { id: 'yangtze-ferry', version: 1 },
 ];
 
 export interface MapRegistry {

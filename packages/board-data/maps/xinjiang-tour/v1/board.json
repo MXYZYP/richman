@@ -161,12 +161,14 @@
     },
     {
       "id": 12,
+      "type": "module",
+      "module": {
+        "id": "oasis-camp",
+        "version": 1
+      },
+      "cellType": "oasis",
       "name": "库木塔格沙漠",
-      "type": "special",
-      "effect": {
-        "type": "skip_turn",
-        "turns": 1
-      }
+      "payload": {}
     },
     {
       "id": 13,
@@ -483,12 +485,14 @@
     },
     {
       "id": 38,
+      "type": "module",
+      "module": {
+        "id": "oasis-camp",
+        "version": 1
+      },
+      "cellType": "oasis",
       "name": "沙尘暴",
-      "type": "special",
-      "effect": {
-        "type": "pay_bank",
-        "amount": 1200
-      }
+      "payload": {}
     },
     {
       "id": 39,

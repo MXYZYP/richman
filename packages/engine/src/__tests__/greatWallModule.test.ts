@@ -169,12 +169,17 @@ describe('great-wall@1 public runtime state', () => {
       beaconOwnersByCellId: { [String(BEACON_CELL_ID)]: playerId },
     });
     expect(claimed.state.publicRuleState.pendingActions).toEqual([]);
-    expect(claimed.state.recentLog.slice(-1)).toEqual([{
-      type: 'module',
-      module: greatWallRef,
-      eventType: 'beacon_claimed',
-      payload: { playerId, cellId: BEACON_CELL_ID, cost: BEACON_CLAIM_COST },
-    }]);
+    // 尾巴上固定是「模块事件 + 一条 core 的 bank_paid」：认领费离开牌桌必须有银行流水，
+    // 否则现金守恒不变量在 simulate.ts 里会持续失配。两条都要逐字段校验。
+    expect(claimed.state.recentLog.slice(-2)).toEqual([
+      {
+        type: 'module',
+        module: greatWallRef,
+        eventType: 'beacon_claimed',
+        payload: { playerId, cellId: BEACON_CELL_ID, cost: BEACON_CLAIM_COST },
+      },
+      { type: 'bank_paid', playerId, amount: BEACON_CLAIM_COST },
+    ]);
   });
 
   it('选择不占据只记事件、不扣钱、不写入占据关系，且选项不会被立刻摆回来', () => {

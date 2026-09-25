@@ -74,11 +74,22 @@ describe('apply-map-pack: camelCase', () => {
 
 describe('apply-map-pack: readKnownModules', () => {
   it('从 registry.ts 的 PRODUCTION_RULE_MODULES 常量解析出白名单，不自己维护副本', () => {
+    // 本用例的期望值刻意写全：它守的是「readKnownModules 能原样解析出数组字面量」，
+    // 一旦 parser 漂移（漏掉某个模块 / 顺序错乱）必须在这里当场变红。
+    // 新增规则模块时同步补一行（当前 13 项 = core + 12 个地图模块）。
     expect(readKnownModules(registrySource)).toEqual([
       { id: 'core', version: 1 },
       { id: 'world-tour', version: 1 },
       { id: 'great-wall', version: 1 },
       { id: 'prison', version: 1 },
+      { id: 'caravan-market', version: 1 },
+      { id: 'landmark-passport', version: 1 },
+      { id: 'oasis-camp', version: 1 },
+      { id: 'piaohao', version: 1 },
+      { id: 'port-trade', version: 1 },
+      { id: 'rail-hub', version: 1 },
+      { id: 'river-tide', version: 1 },
+      { id: 'yangtze-ferry', version: 1 },
     ]);
     expect(registrySource).toContain('PRODUCTION_RULE_MODULES: readonly RuleModuleRef[] = [');
   });

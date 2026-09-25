@@ -211,12 +211,14 @@
     },
     {
       "id": 15,
-      "type": "special",
+      "type": "module",
+      "module": {
+        "id": "yangtze-ferry",
+        "version": 1
+      },
+      "cellType": "ferry",
       "name": "皖江洪峰",
-      "effect": {
-        "type": "pay_bank",
-        "amount": 1000
-      }
+      "payload": {}
     },
     {
       "id": 16,
@@ -468,12 +470,14 @@
     },
     {
       "id": 33,
-      "type": "special",
+      "type": "module",
+      "module": {
+        "id": "yangtze-ferry",
+        "version": 1
+      },
+      "cellType": "ferry",
       "name": "三峡船闸检修",
-      "effect": {
-        "type": "skip_turn",
-        "turns": 1
-      }
+      "payload": {}
     },
     {
       "id": 34,
@@ -702,12 +706,14 @@
     },
     {
       "id": 50,
-      "type": "special",
+      "type": "module",
+      "module": {
+        "id": "yangtze-ferry",
+        "version": 1
+      },
+      "cellType": "ferry",
       "name": "虎跳峡险滩",
-      "effect": {
-        "type": "receive_bank",
-        "amount": 1000
-      }
+      "payload": {}
     },
     {
       "id": 51,

@@ -450,12 +450,14 @@
     },
     {
       "id": 44,
-      "type": "special",
+      "type": "module",
+      "module": {
+        "id": "caravan-market",
+        "version": 1
+      },
+      "cellType": "caravan",
       "name": "季风停航",
-      "effect": {
-        "type": "skip_turn",
-        "turns": 1
-      }
+      "payload": {}
     },
     {
       "id": 43,
@@ -558,12 +560,14 @@
     },
     {
       "id": 56,
-      "type": "special",
+      "type": "module",
+      "module": {
+        "id": "caravan-market",
+        "version": 1
+      },
+      "cellType": "caravan",
       "name": "遭遇海盗",
-      "effect": {
-        "type": "pay_bank",
-        "amount": 1000
-      }
+      "payload": {}
     },
     {
       "id": 55,
@@ -572,12 +576,14 @@
     },
     {
       "id": 54,
-      "type": "special",
+      "type": "module",
+      "module": {
+        "id": "caravan-market",
+        "version": 1
+      },
+      "cellType": "caravan",
       "name": "红海逆风",
-      "effect": {
-        "type": "skip_turn",
-        "turns": 1
-      }
+      "payload": {}
     },
     {
       "id": 53,
@@ -775,12 +781,14 @@
     },
     {
       "id": 36,
-      "type": "special",
+      "type": "module",
+      "module": {
+        "id": "caravan-market",
+        "version": 1
+      },
+      "cellType": "caravan",
       "name": "沙漠商队获赏",
-      "effect": {
-        "type": "receive_bank",
-        "amount": 1000
-      }
+      "payload": {}
     },
     {
       "id": 37,

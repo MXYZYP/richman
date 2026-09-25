@@ -378,12 +378,14 @@
     },
     {
       "id": 26,
-      "type": "special",
+      "type": "module",
+      "module": {
+        "id": "landmark-passport",
+        "version": 1
+      },
+      "cellType": "landmark",
       "name": "享用英式下午茶",
-      "effect": {
-        "type": "skip_turn",
-        "turns": 1
-      }
+      "payload": {}
     },
     {
       "id": 27,
@@ -573,12 +575,14 @@
     },
     {
       "id": 39,
-      "type": "special",
+      "type": "module",
+      "module": {
+        "id": "landmark-passport",
+        "version": 1
+      },
+      "cellType": "landmark",
       "name": "观赏北极极光",
-      "effect": {
-        "type": "skip_turn",
-        "turns": 1
-      }
+      "payload": {}
     },
     {
       "id": 40,

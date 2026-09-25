@@ -7,6 +7,7 @@ import { yellowRiverMap } from '../yellowRiverMap';
 const mapDirectory = new URL('../../maps/yellow-river/v1/', import.meta.url);
 
 const coreModule = { id: 'core', version: 1 } as const;
+const riverTideModule = { id: 'river-tide', version: 1 } as const;
 
 function readMapJson(fileName: string): any {
   const fileUrl = new URL(fileName, mapDirectory);
@@ -190,7 +191,7 @@ describe('yellow-river@1 approved source data', () => {
     expect(new Set(prices).size).toBe(11);
   });
 
-  it('spreads 4 chance / 4 destiny / 2 tax / 4 special cells and never doubles up', () => {
+  it('spreads 4 chance / 4 destiny / 2 tax / 4 河工 cells and never doubles up', () => {
     const board = readMapJson('board.json');
     const byType = (type: string) => board.cells.filter((cell: any) => cell.type === type);
 
@@ -198,18 +199,26 @@ describe('yellow-river@1 approved source data', () => {
     expect(byType('chance')).toHaveLength(4);
     expect(byType('destiny')).toHaveLength(4);
     expect(byType('tax')).toHaveLength(2);
-    expect(byType('special')).toHaveLength(4);
+    // #23：8 凌汛封河 / 24 决口抢险 / 42 河道断流 / 57 引黄灌溉原地改造成 river-tide@1 的河工格。
+    expect(byType('special')).toHaveLength(0);
+    expect(byType('module')).toHaveLength(4);
     // 事件格之间不贴在一起，保证走一格就有事发生、不会连续空转。
     const eventIds = board.cells
       .filter((cell: any) => cell.type !== 'property' && cell.type !== 'start')
       .map((cell: any) => cell.id as number);
     expect(eventIds).toEqual([4, 8, 11, 16, 20, 24, 27, 38, 42, 45, 48, 54, 57, 60]);
     expect(byType('tax').every((cell: any) => cell.amount === 1000)).toBe(true);
-    expect(byType('special').map((cell: any) => cell.effect)).toEqual([
-      { type: 'skip_turn', turns: 1 },
-      { type: 'pay_bank', amount: 1000 },
-      { type: 'skip_turn', turns: 1 },
-      { type: 'receive_bank', amount: 1000 },
+    expect(byType('module').map((cell: any) => ({
+      id: cell.id,
+      name: cell.name,
+      module: cell.module,
+      cellType: cell.cellType,
+      payload: cell.payload,
+    }))).toEqual([
+      { id: 8, name: '凌汛封河', module: riverTideModule, cellType: 'river-works', payload: {} },
+      { id: 24, name: '决口抢险', module: riverTideModule, cellType: 'river-works', payload: {} },
+      { id: 42, name: '河道断流', module: riverTideModule, cellType: 'river-works', payload: {} },
+      { id: 57, name: '引黄灌溉', module: riverTideModule, cellType: 'river-works', payload: {} },
     ]);
   });
 
@@ -252,7 +261,7 @@ describe('yellow-river@1 approved source data', () => {
     });
   });
 
-  it('stays on core@1 only, with one presentation per cell and a 64-point spiral route', () => {
+  it('stays on core@1 + river-tide@1, with one presentation per cell and a 64-point spiral route', () => {
     const manifest = readMapJson('manifest.json');
     const board = readMapJson('board.json');
     const route = manifest.presentation.routes.find((entry: any) => entry.role === 'route');
@@ -261,8 +270,8 @@ describe('yellow-river@1 approved source data', () => {
     expect(manifest.ref.version).toBe(1);
     expect(manifest.ref.contentHash).toMatch(/^[0-9a-f]{64}$/);
     expect(manifest.metadata.title).toBe('黄河之旅');
-    // 螺旋图只依赖核心规则：没有额外模块，玩家换图不必先装模块。
-    expect(manifest.requiredRuleModules).toEqual([coreModule]);
+    // #23：四格河工由 river-tide@1 结算，并靠 positiveRentHook 按水位改写地产租金。
+    expect(manifest.requiredRuleModules).toEqual([coreModule, riverTideModule]);
     expect(Object.keys(manifest.presentation.cells).map(Number).sort((a, b) => a - b)).toEqual(
       board.cells.map((cell: { id: number }) => cell.id).sort((a: number, b: number) => a - b),
     );
@@ -285,10 +294,10 @@ describe('yellow-river@1 approved source data', () => {
   });
 
   it('is a deeply frozen valid immutable map pack whose hash matches its own bytes', () => {
-    expect(() => assertValidMapPack(yellowRiverMap, [coreModule])).not.toThrow();
+    expect(() => assertValidMapPack(yellowRiverMap, [coreModule, riverTideModule])).not.toThrow();
     expect(computeContentHash(yellowRiverMap)).toBe(yellowRiverMap.ref.contentHash);
     expect(yellowRiverMap.ref.contentHash)
-      .toBe('139a4c98823e458ccd3aaf711e80e4ab473820da89389d74872f9f8ea68c0aff');
+      .toBe('21dcfca118da28c5882be3b7bf3a7ee6c365581414f67fa621657e0c59747fee');
     expect(Object.isFrozen(yellowRiverMap)).toBe(true);
     expect(Object.isFrozen(yellowRiverMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(yellowRiverMap.game.cards.destiny[2]!.effect)).toBe(true);

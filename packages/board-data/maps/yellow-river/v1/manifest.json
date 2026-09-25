@@ -2,7 +2,7 @@
   "ref": {
     "id": "yellow-river",
     "version": 1,
-    "contentHash": "139a4c98823e458ccd3aaf711e80e4ab473820da89389d74872f9f8ea68c0aff"
+    "contentHash": "21dcfca118da28c5882be3b7bf3a7ee6c365581414f67fa621657e0c59747fee"
   },
   "metadata": {
     "title": "黄河之旅",
@@ -11,6 +11,10 @@
   "requiredRuleModules": [
     {
       "id": "core",
+      "version": 1
+    },
+    {
+      "id": "river-tide",
       "version": 1
     }
   ],

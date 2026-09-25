@@ -368,6 +368,43 @@ function assertPrisonCellPayloadShape(cellType: string, payload: unknown, path: 
 }
 
 /**
+ * #23「每张地图都要有规则」新增的 8 个模块格：cellType 与 payload 都是固定的。
+ *
+ * 这些模块的参数（费用、收益、上限、阈值）全部是**模块内的常量**。一格一参数会让
+ * 「同一模块在不同地图上表现不同」变得难以推理，也让 contentHash 无谓漂移 ——
+ * 因此统一要求 payload 是空对象，并把 cellType 锁死成引擎注册的那一个字符串。
+ *
+ * 写错 cellType 的表现是「落上去完全没反应」（注册表按 ref + cellType 查 handler），
+ * 属于最难在运行期发现的一类地图错误，所以必须在校验期拦住。
+ */
+const SIMPLE_MODULE_CELL_TYPES: ReadonlyMap<string, string> = new Map([
+  ['piaohao@1', 'piaohao'],
+  ['yangtze-ferry@1', 'ferry'],
+  ['port-trade@1', 'port'],
+  ['caravan-market@1', 'caravan'],
+  ['oasis-camp@1', 'oasis'],
+  ['rail-hub@1', 'rail-hub'],
+  ['landmark-passport@1', 'landmark'],
+  ['river-tide@1', 'river-works'],
+]);
+
+function assertSimpleModuleCellPayloadShape(
+  ref: unknown,
+  cellType: string,
+  payload: unknown,
+  path: string,
+): void {
+  if (ref === null || typeof ref !== 'object') return;
+  const moduleRef = ref as RuleModuleRef;
+  const expected = SIMPLE_MODULE_CELL_TYPES.get(`${moduleRef.id}@${moduleRef.version}`);
+  if (expected === undefined) return;
+  if (cellType !== expected) {
+    fail(path, `cellType must be ${expected} for ${moduleRef.id}@${moduleRef.version}`);
+  }
+  assertEmptyPayload(payload, path);
+}
+
+/**
  * prison@1 的卡牌/格效果 payload。与 world-tour / great-wall 一样只对自己模块的 ref 生效，
  * 非本模块的效果直接放行；一旦确认是本模块，未支持的 effectType 必须 fail（不能静默吞掉）。
  */
@@ -795,6 +832,7 @@ function assertBoard(
       if (isPrisonModule(cell.module)) {
         assertPrisonCellPayloadShape(cell.cellType, cell.payload, `${path}.payload`);
       }
+      assertSimpleModuleCellPayloadShape(cell.module, cell.cellType, cell.payload, `${path}.payload`);
     } else if (!CORE_CELL_TYPES.has(cell.type)) {
       fail(`game.board.cells[${index}].type`, 'must be a supported core cell type');
     }

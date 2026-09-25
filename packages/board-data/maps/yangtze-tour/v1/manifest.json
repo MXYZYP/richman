@@ -2,7 +2,7 @@
   "ref": {
     "id": "yangtze-tour",
     "version": 1,
-    "contentHash": "928e1ae597b8865c3417d61bad5214f01591be51269be08be797198503120da1"
+    "contentHash": "fd44de6931fb54f7367ccb2f14fbfe7e9df00280b4d045bbe59087fa6f8443f5"
   },
   "metadata": {
     "title": "长江之旅",
@@ -11,6 +11,10 @@
   "requiredRuleModules": [
     {
       "id": "core",
+      "version": 1
+    },
+    {
+      "id": "yangtze-ferry",
       "version": 1
     }
   ],

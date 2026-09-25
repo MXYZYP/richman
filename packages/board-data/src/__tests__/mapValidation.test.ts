@@ -14,6 +14,13 @@ function editableChinaTour(): any {
   return structuredClone(chinaTourMap);
 }
 
+// #23 之后 china-tour 声明了 rail-hub@1；凡是以 china-tour 为底稿的用例都必须带上它，
+// 否则会在「未知规则模块」这一步提前失败，掩盖掉真正想断言的校验分支。
+const CHINA_TOUR_MODULES = [
+  { id: 'core', version: 1 },
+  { id: 'rail-hub', version: 1 },
+] as const;
+
 function rehash(pack: any): MapPack {
   pack.ref.contentHash = computeContentHash(pack as MapPack);
   return pack as MapPack;
@@ -204,7 +211,7 @@ describe('assertValidMapPack', () => {
   });
 
   it('接受 china-tour@1', () => {
-    expect(() => assertValidMapPack(chinaTourMap, [{ id: 'core', version: 1 }])).not.toThrow();
+    expect(() => assertValidMapPack(chinaTourMap, CHINA_TOUR_MODULES)).not.toThrow();
   });
 
   it.each([
@@ -216,7 +223,7 @@ describe('assertValidMapPack', () => {
     const pack = editableChinaTour();
     mutate(pack);
 
-    expect(() => assertValidMapPack(rehash(pack), [{ id: 'core', version: 1 }])).toThrow(expected);
+    expect(() => assertValidMapPack(rehash(pack), CHINA_TOUR_MODULES)).toThrow(expected);
   });
 
   it('拒绝未知 core cell type，并允许相邻租金档相等', () => {
@@ -235,19 +242,19 @@ describe('assertValidMapPack', () => {
     const pack = editableChinaTour();
     pack.metadata.title = '被篡改的标题';
 
-    expect(() => assertValidMapPack(pack, [{ id: 'core', version: 1 }])).toThrow(
+    expect(() => assertValidMapPack(pack, CHINA_TOUR_MODULES)).toThrow(
       /ref\.contentHash.*canonical/i,
     );
   });
 
   it('拒绝重复和未知规则模块', () => {
-    const duplicate = editableChinaTour();
+    const duplicate: any = makeMinimalMap();
     duplicate.game.requiredRuleModules.push({ id: 'core', version: 1 });
     expect(() => assertValidMapPack(rehash(duplicate), [{ id: 'core', version: 1 }])).toThrow(
       /game\.requiredRuleModules\[1\].*duplicate/i,
     );
 
-    const unknown = editableChinaTour();
+    const unknown: any = makeMinimalMap();
     unknown.game.requiredRuleModules = [
       { id: 'core', version: 1 },
       { id: 'future', version: 1 },
@@ -256,7 +263,7 @@ describe('assertValidMapPack', () => {
       /game\.requiredRuleModules\[1\].*unknown/i,
     );
 
-    const missingCore = editableChinaTour();
+    const missingCore: any = makeMinimalMap();
     missingCore.game.requiredRuleModules = [];
     expect(() => assertValidMapPack(rehash(missingCore), [{ id: 'core', version: 1 }])).toThrow(
       /requiredRuleModules.*core@1/i,
@@ -456,7 +463,7 @@ describe('assertValidMapPack', () => {
       branchEntryId: 999,
     };
 
-    expect(() => assertValidMapPack(rehash(pack), [{ id: 'core', version: 1 }])).toThrow(
+    expect(() => assertValidMapPack(rehash(pack), CHINA_TOUR_MODULES)).toThrow(
       /board\.cells\[14\]\.branchEntryId.*existing cell/i,
     );
   });
@@ -473,7 +480,7 @@ describe('assertValidMapPack', () => {
     const effect = cards.find((card: any) => card.effect.type === 'move_to').effect;
     mutate(effect);
 
-    expect(() => assertValidMapPack(rehash(pack), [{ id: 'core', version: 1 }])).toThrow(expected);
+    expect(() => assertValidMapPack(rehash(pack), CHINA_TOUR_MODULES)).toThrow(expected);
   });
 
   it.each([
@@ -507,13 +514,13 @@ describe('assertValidMapPack', () => {
   it('要求 station rents 覆盖地图上的全部车站，并禁止 utility 自带 rents', () => {
     const stationPack = editableChinaTour();
     stationPack.game.board.cells.find((cell: any) => cell.subtype === 'station').rents.pop();
-    expect(() => assertValidMapPack(rehash(stationPack), [{ id: 'core', version: 1 }])).toThrow(
+    expect(() => assertValidMapPack(rehash(stationPack), CHINA_TOUR_MODULES)).toThrow(
       /rents.*station count/i,
     );
 
     const utilityPack = editableChinaTour();
     utilityPack.game.board.cells.find((cell: any) => cell.subtype === 'utility').rents = [1];
-    expect(() => assertValidMapPack(rehash(utilityPack), [{ id: 'core', version: 1 }])).toThrow(
+    expect(() => assertValidMapPack(rehash(utilityPack), CHINA_TOUR_MODULES)).toThrow(
       /utility.*must not define rents/i,
     );
   });
@@ -521,13 +528,13 @@ describe('assertValidMapPack', () => {
   it('要求卡牌 ID 全局唯一且正文非空', () => {
     const duplicate = editableChinaTour();
     duplicate.game.cards.destiny[0].id = duplicate.game.cards.chance[0].id;
-    expect(() => assertValidMapPack(rehash(duplicate), [{ id: 'core', version: 1 }])).toThrow(
+    expect(() => assertValidMapPack(rehash(duplicate), CHINA_TOUR_MODULES)).toThrow(
       /game\.cards\.destiny\[0\]\.id.*unique/i,
     );
 
     const blank = editableChinaTour();
     blank.game.cards.chance[0].text = ' ';
-    expect(() => assertValidMapPack(rehash(blank), [{ id: 'core', version: 1 }])).toThrow(
+    expect(() => assertValidMapPack(rehash(blank), CHINA_TOUR_MODULES)).toThrow(
       /game\.cards\.chance\[0\]\.text.*non-empty/i,
     );
   });

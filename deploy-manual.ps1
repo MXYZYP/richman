@@ -143,6 +143,21 @@ $files = @(
   # Same hazard as greatWallModule.ts above: moduleRegistry.ts imports it, so a stale or
   # missing copy makes the server fail while building the default registry.
   "packages/engine/src/prisonModule.ts",
+  # ---------- #23 "every map needs a rule": one module for each of the eight maps that
+  # used to be pure core@1 (v2.16.0) ----------
+  # moduleSupport.ts is the shared helper layer these eight modules are built on
+  # (moduleKeyOf / withRawModuleState / pickRandomIndex / crossedTurnBoundary ...).
+  # moduleRegistry.ts imports the eight modules, so a missing upload makes the server die
+  # while building the default registry ("Unknown rule module").
+  "packages/engine/src/moduleSupport.ts",
+  "packages/engine/src/railHubModule.ts",
+  "packages/engine/src/landmarkPassportModule.ts",
+  "packages/engine/src/portTradeModule.ts",
+  "packages/engine/src/piaohaoModule.ts",
+  "packages/engine/src/caravanMarketModule.ts",
+  "packages/engine/src/oasisCampModule.ts",
+  "packages/engine/src/yangtzeFerryModule.ts",
+  "packages/engine/src/riverTideModule.ts",
   # ---------- Engine tests (keep the server copies current with the 2.x registry API) ----------
   "packages/engine/src/__tests__/moduleEnvelope.test.ts",
   "packages/engine/src/__tests__/moduleRegistry.test.ts",
@@ -151,6 +166,20 @@ $files = @(
   "packages/engine/src/__tests__/botDifficulty.test.ts",
   "packages/engine/src/__tests__/greatWallModule.test.ts",
   "packages/engine/src/__tests__/prisonModule.test.ts",
+  # One suite per new v2.16.0 module. Same rule as everything else in this list: the server
+  # type-checks and runs the engine package, so a stale copy would validate the old contract.
+  "packages/engine/src/__tests__/railHubModule.test.ts",
+  "packages/engine/src/__tests__/landmarkPassportModule.test.ts",
+  "packages/engine/src/__tests__/portTradeModule.test.ts",
+  "packages/engine/src/__tests__/piaohaoModule.test.ts",
+  "packages/engine/src/__tests__/caravanMarketModule.test.ts",
+  "packages/engine/src/__tests__/oasisCampModule.test.ts",
+  "packages/engine/src/__tests__/yangtzeFerryModule.test.ts",
+  "packages/engine/src/__tests__/riverTideModule.test.ts",
+  # The per-map invariant suite. It now sweeps every production map (modules bound, no illegal
+  # intents, cash conservation) instead of a couple of hand-picked seeds, so the server needs the
+  # new copy -- a stale one would still pass while the money-leak bug stayed invisible.
+  "packages/engine/src/__tests__/simulation.test.ts",
   # Bargain tests (#105 trade / #106 auction). The server runs the client build (vue-tsc) but
   # engine tests are executed there too; a stale copy would validate the old engine contract.
   "packages/engine/src/__tests__/bargain.test.ts",
