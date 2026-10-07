@@ -21,6 +21,11 @@ $files = @(
   # file must be uploaded too. Skip it and the server keeps its old copy, and the deployed
   # bundle keeps showing the previous version number and changelog in the home screen.
   "release-notes.json",
+  # CHANGELOG.md is auto-generated from release-notes.json by scripts/release.ts. It is NOT read
+  # by the client (the version shown in the home screen comes from release-notes.json directly via
+  # apps/client/src/releaseCatalog.ts), so leaving it out only keeps a stale copy on the server.
+  # Uploaded anyway so the on-server repo matches what the release script produced.
+  "CHANGELOG.md",
   # ---------- Client source ----------
   "apps/client/index.html",
   "apps/client/src/main.ts",
