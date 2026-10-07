@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getActiveMapPack } from '@richman/board-data';
+import { getActiveMapPack, type JsonValue } from '@richman/board-data';
 import { applyIntent, chooseBotIntent, createGame, type GameState } from '@richman/engine';
 import { formatRecentLogEvent, getAssetRows, getAvailableActions, getCellDetail, getPendingCardChoice, getPendingPurchaseOffer, getPlayerAssetDialogModel, getTurnTitle } from './clientGame';
 import { resolveLocalGameState } from './mapResolver';
@@ -357,6 +357,119 @@ describe('World Tour client terminology', () => {
     expect(formatRecentLogEvent(state, {
       type: 'module', module: { id: 'world-tour', version: 1 }, eventType: 'flight_declined', payload: { playerId, kind: 'short-flight' },
     })).toContain('放弃搭乘短途航班');
+  });
+
+  // 回归：piaohao@1:piaohao_interest 曾把内部标识符原样吐给玩家
+  // （`formatWorldTourModuleEvent` 只放行 world-tour@1，其余模块全掉进裸标识符兜底）。
+  it('formats piaohao interest as Chinese text with the interest amount, not a raw module id', () => {
+    const state = resolveLocalGameState(createGame({
+      mapRef: worldMap.ref,
+      ruleModules: worldMap.game.requiredRuleModules,
+      board: worldMap.game.board,
+      cards: worldMap.game.cards,
+      config: worldMap.game.config,
+      players: sessionPlayers,
+      seed: 'piaohao-interest-log',
+    }));
+    const playerId = state.currentPlayerId;
+
+    const message = formatRecentLogEvent(state, {
+      type: 'module',
+      module: { id: 'piaohao', version: 1 },
+      eventType: 'piaohao_interest',
+      // amount = 本期利息，balance = 计息后总额；两者都在 payload 里。
+      payload: { playerId, amount: 80, balance: 1080 },
+    });
+
+    expect(message).toContain('票号');
+    expect(message).toContain('利息');
+    expect(message).toContain('¥80');
+    // 本期利息才是这条战报的主角；余额不该在同一行里被读成利息。
+    expect(message).not.toContain('1,080');
+    // 内部契约一个字都不许露到 UI 上。
+    expect(message).not.toContain('piaohao');
+    expect(message).not.toContain('@1');
+  });
+
+  it('never leaks a raw module@version:eventType identifier into the battle log', () => {
+    const state = resolveLocalGameState(createGame({
+      mapRef: worldMap.ref,
+      ruleModules: worldMap.game.requiredRuleModules,
+      board: worldMap.game.board,
+      cards: worldMap.game.cards,
+      config: worldMap.game.config,
+      players: sessionPlayers,
+      seed: 'module-log-no-raw-id',
+    }));
+    const playerId = state.currentPlayerId;
+
+    // 每个已注册模块各挑一个真实事件；文案可以各不相同，但都不许出现裸标识符。
+    const samples: ReadonlyArray<{ id: string; eventType: string; payload: JsonValue }> = [
+      { id: 'rail-hub', eventType: 'rail_waited', payload: { playerId, clearedTurns: 0, bonus: 300 } },
+      { id: 'rail-hub', eventType: 'rail_transferred', payload: { playerId, fromCellId: 5, toCellId: 20, fare: 500 } },
+      { id: 'landmark-passport', eventType: 'landmark_stamped', payload: { playerId, cellId: 5, count: 2, total: 8, reward: 200, completed: false } },
+      { id: 'landmark-passport', eventType: 'passport_lap_bonus', payload: { playerId, amount: 1000, stamps: 8 } },
+      { id: 'port-trade', eventType: 'port_traded', payload: { playerId, cellId: 5, dice: [4, 5], sum: 9, win: true, stake: 500, payout: 2000 } },
+      { id: 'port-trade', eventType: 'port_traded', payload: { playerId, cellId: 5, dice: [1, 2], sum: 3, win: false, stake: 500, payout: 0 } },
+      { id: 'piaohao', eventType: 'piaohao_deposited', payload: { playerId, cellId: 5, amount: 1000, balance: 1000 } },
+      { id: 'piaohao', eventType: 'piaohao_withdrawn', payload: { playerId, cellId: 5, amount: 1080 } },
+      { id: 'piaohao', eventType: 'piaohao_advance', payload: { playerId, amount: 500, cost: 550, balance: 450 } },
+      { id: 'caravan-market', eventType: 'caravan_traded', payload: { playerId, cellId: 5, kind: 'buy', units: 3, marketPrice: 900, amount: 500 } },
+      { id: 'caravan-market', eventType: 'caravan_market', payload: { previous: 800, price: 900, delta: 100 } },
+      { id: 'oasis-camp', eventType: 'oasis_camped', payload: { playerId, cellId: 5, cost: 800, previousCellId: null } },
+      { id: 'oasis-camp', eventType: 'oasis_abandoned', payload: { playerId, cellId: 5, refund: 400 } },
+      { id: 'oasis-camp', eventType: 'oasis_bonus', payload: { playerId, cellId: 5, amount: 300 } },
+      { id: 'yangtze-ferry', eventType: 'ferry_transferred', payload: { playerId, fromCellId: 5, toCellId: 20, cost: 0, direction: 'upstream' } },
+      { id: 'river-tide', eventType: 'river_dike_built', payload: { playerId, cellId: 5, cost: 600, previous: 3, level: 2 } },
+      { id: 'river-tide', eventType: 'river_tide_changed', payload: { previous: 2, level: 3, delta: 1, multiplier: 1.2 } },
+      { id: 'river-tide', eventType: 'river_tide_rent', payload: { playerId, amount: 240 } },
+    ];
+
+    for (const sample of samples) {
+      const message = formatRecentLogEvent(state, {
+        type: 'module',
+        module: { id: sample.id, version: 1 },
+        eventType: sample.eventType,
+        payload: sample.payload ?? {},
+      });
+      expect(message, `${sample.id}@1:${sample.eventType}`).not.toContain('模块事件');
+      expect(message, `${sample.id}@1:${sample.eventType}`).not.toContain(`${sample.id}@1:`);
+      expect(message, `${sample.id}@1:${sample.eventType}`).not.toContain(sample.eventType);
+      // 文案必须真的说了点人话，而不是退化成空串或纯符号。
+      expect(message.trim().length, sample.eventType).toBeGreaterThan(2);
+    }
+  });
+
+  it('falls back to readable text for an unregistered module event instead of a raw identifier', () => {
+    const state = resolveLocalGameState(createGame({
+      mapRef: worldMap.ref,
+      ruleModules: worldMap.game.requiredRuleModules,
+      board: worldMap.game.board,
+      cards: worldMap.game.cards,
+      config: worldMap.game.config,
+      players: sessionPlayers,
+      seed: 'module-log-unknown-event',
+    }));
+
+    // 未登记事件：读成人类可读兜底，仍不得泄露模块 id。
+    const message = formatRecentLogEvent(state, {
+      type: 'module',
+      module: { id: 'piaohao', version: 99 },
+      eventType: 'some_future_event',
+      payload: { playerId: state.currentPlayerId },
+    });
+    expect(message).toBe('票号结算');
+    expect(message).not.toContain('some_future_event');
+
+    // 完全未知的模块 id 也不能把 id 本身吐出来。
+    const unknownModule = formatRecentLogEvent(state, {
+      type: 'module',
+      module: { id: 'brand-new-module', version: 7 },
+      eventType: 'whatever',
+      payload: {},
+    });
+    expect(unknownModule).toBe('特殊玩法结算');
+    expect(unknownModule).not.toContain('brand-new-module');
   });
 });
 

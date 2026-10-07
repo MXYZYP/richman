@@ -495,7 +495,7 @@ function confirmBankruptcy() {
 }
 
 .asset-row.mortgaged {
-  background: var(--game-panel-quiet);
+  background: var(--game-panel-sunken);
 }
 
 .asset-row-head {
@@ -530,7 +530,7 @@ function confirmBankruptcy() {
   flex: 0 0 auto;
   padding: 3px 7px;
   border-radius: 8px;
-  background: var(--game-panel-quiet);
+  background: var(--game-panel-sunken);
   color: var(--color-muted);
   font-size: 11px;
   font-style: normal;

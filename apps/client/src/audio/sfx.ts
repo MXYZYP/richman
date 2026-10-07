@@ -20,37 +20,53 @@ export const SFX_DEFAULT_VOLUME = 0.7;
 const ATTACK_MS = 3;
 
 /**
- * 骰子音色（#2：由「四次点击」换成「真骰子滚落」的自然音）。
+ * 骰子音色（#2：由「四次点击」换成「真骰子滚落」的自然音；#后续再修为「短促清脆」）。
  *
- * 上一版是四记等距带通噪声脉冲，听感像敲了四下木鱼：次数太少、间隔太规则、
- * 没有"滚动"的持续摩擦声，也没有收尾那一下停稳。真人掷骰的声学结构其实是三层：
+ * 真人掷骰的声学结构是三层：
  *   1) 滚落摩擦（bed）——骰子在盘里翻滚时持续的沙沙声，带通中心频率先升后降；
- *   2) 撞击（knock）——9 次疏密不均的清脆磕碰，每次的中心频率/增益/衰减都带随机抖动，
+ *   2) 撞击（knock）——疏密不均的清脆磕碰，每次的中心频率/增益/衰减都带随机抖动，
  *      避免重复感（人耳对等间隔同音高的连击极其敏感，一听就是电子音）；
  *   3) 停稳（settle）——最后两记低频闷响，表示骰子定住。
  * 三层都只是白噪声/正弦经过滤波与包络，不引入任何音频素材文件。
+ *
+ * ★ 「短促清脆、不刺耳」的取舍（本版调整的核心，评审重点）：
+ *   · **短促**：总长从 ~552ms 压到 ~300ms。做法是把摩擦段与撞击段整体缩短，
+ *     并让撞击从 9 次减到 6 次 —— 9 次里有好几次挤在前 60ms 内，听感是"一串"而不是"几下"。
+ *   · **清脆**：撞击的带通中心频率整体下移（原最高 3120Hz → 现最高 2340Hz），
+ *     同时把增益从 0.11 提到 0.13。变闷容易，变刺耳难；所以走"降高频 + 提增益"这条更安全的路。
+ *   · **不刺耳**：摩擦段增益 0.05 → 0.035，且中心频率上冲从 2400Hz 降到 2000Hz。
+ *     高频白噪声（沙沙声）比中频撞击更刺耳，也更容易在廉价喇叭上产生失真。
+ *   · 与美术风格统一：整体仍是"木质骰子落木盘"的暖调，不引入金属/电子音色。
+ *
+ * 下方每个常量都标注了调整前后的值，便于回溯。
  */
-const DICE_ROLL_KNOCK_COUNT = 9;
-/** 各次撞击的基准偏移（毫秒）：间隔逐次拉开，模拟骰子掷出后一路减速、最后又磕一下才定住。 */
-const DICE_ROLL_KNOCK_OFFSETS_MS: readonly number[] = [0, 26, 52, 84, 118, 152, 196, 248, 318];
-/** 每次撞击的时间抖动幅度（毫秒）：±9ms 足以打散等距感，又不会乱到听起来散架。 */
-const DICE_ROLL_KNOCK_JITTER_MS = 9;
-/** 撞击基准中心频率（Hz）：高低交错，模拟骰子不同棱角着地。 */
-const DICE_ROLL_KNOCK_FILTER_HZ: readonly number[] = [980, 1480, 2240, 1260, 2680, 1720, 3120, 1180, 2060];
+const DICE_ROLL_KNOCK_COUNT = 6;
+/** 各次撞击的基准偏移（毫秒）：间隔逐次拉开，模拟骰子掷出后一路减速、最后又磕一下才定住。
+ *  （原 9 次 / [0,26,52,84,118,152,196,248,318]，总跨度 318ms → 现 6 次 / 跨度 172ms。） */
+const DICE_ROLL_KNOCK_OFFSETS_MS: readonly number[] = [0, 22, 48, 80, 118, 172];
+/** 每次撞击的时间抖动幅度（毫秒）：±8ms 足以打散等距感，又不会乱到听起来散架。 */
+const DICE_ROLL_KNOCK_JITTER_MS = 8;
+/** 撞击基准中心频率（Hz）：高低交错，模拟骰子不同棱角着地。
+ *  整体从 [980,1480,2240,1260,2680,1720,3120,1180,2060] 下移到 2600Hz 以内的暖调。 */
+const DICE_ROLL_KNOCK_FILTER_HZ: readonly number[] = [980, 1480, 1960, 1260, 2340, 1720];
 const DICE_ROLL_KNOCK_Q = 1.4;
-const DICE_ROLL_KNOCK_BASE_GAIN = 0.11;
-const DICE_ROLL_KNOCK_BASE_DECAY_MS = 46;
-/** 滚落摩擦声：整段约 400ms，中心频率 700 → 2400 → 900Hz，像骰子滚出去又滚回来。 */
-const DICE_ROLL_BED_MS = 400;
-const DICE_ROLL_BED_GAIN = 0.05;
+/** 撞击增益（原 0.11 → 0.13）：撞击次数从 9 减到 6，总能量降了，用单次增益补回清脆感。 */
+const DICE_ROLL_KNOCK_BASE_GAIN = 0.13;
+/** 单次撞击衰减（原 46ms → 38ms）：衰减更短 = 更"脆"、不拖尾。 */
+const DICE_ROLL_KNOCK_BASE_DECAY_MS = 38;
+/** 滚落摩擦声：整段约 260ms（原 400ms），中心频率 900 → 2000 → 1000Hz（原 700 → 2400 → 900）。 */
+const DICE_ROLL_BED_MS = 260;
+/** 摩擦段增益（原 0.05 → 0.035）：高频白噪声刺耳且易失真，压低它不牺牲"清脆"。 */
+const DICE_ROLL_BED_GAIN = 0.035;
 /** 停稳闷响：[频率 Hz, 相对停稳时刻的延迟 ms, 增益]。 */
 const DICE_SETTLE_THUMPS: readonly (readonly [number, number, number])[] = [
-  [196, 0, 0.09],
-  [147, 34, 0.055],
+  [196, 0, 0.075],
+  [147, 30, 0.045],
 ];
-const DICE_ROLL_SETTLE_OFFSET_MS = 352;
-/** 白噪声缓冲长度：需覆盖最长的一段（滚动摩擦声 400ms）。 */
-const DICE_NOISE_SECONDS = 0.5;
+/** 停稳时刻（原 352ms → 214ms），跟在最后一次撞击（172ms）之后，间隔与缩短后的滚动同比例。 */
+const DICE_ROLL_SETTLE_OFFSET_MS = 214;
+/** 白噪声缓冲长度：需覆盖最长的一段（滚动摩擦声 260ms），留一倍余量。 */
+const DICE_NOISE_SECONDS = 0.4;
 
 let ctx: AudioContext | null = null;
 let noiseCache: { context: AudioContext; buffer: AudioBuffer } | null = null;
@@ -191,9 +207,10 @@ function diceRollBed(ac: AudioContext, at: number, durationMs: number): void {
   filter.type = 'bandpass';
   filter.Q.value = 0.9;
   const seconds = durationMs / 1000;
-  filter.frequency.setValueAtTime(700, at);
-  filter.frequency.linearRampToValueAtTime(2400, at + seconds * 0.45);
-  filter.frequency.linearRampToValueAtTime(900, at + seconds);
+  // 扫频端点刻意收在 900~2000Hz：上冲过高会让白噪声发毛、廉价喇叭上直接失真。
+  filter.frequency.setValueAtTime(900, at);
+  filter.frequency.linearRampToValueAtTime(2000, at + seconds * 0.45);
+  filter.frequency.linearRampToValueAtTime(1000, at + seconds);
   const gainNode = ac.createGain();
   const peak = DICE_ROLL_BED_GAIN * volume;
   gainNode.gain.setValueAtTime(0.0001, at);

@@ -115,7 +115,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--color-accent) 50%, var(--color-border));
   border-radius: 999px;
-  background: var(--game-panel-quiet);
+  background: var(--game-panel-sunken);
   color: var(--color-primary);
 }
 
@@ -176,7 +176,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
   height: 26px;
   place-items: center;
   border-radius: 8px;
-  background: var(--game-panel-quiet);
+  background: var(--game-panel-sunken);
   color: var(--color-muted);
   font-size: 13px;
   font-weight: 900;
@@ -205,7 +205,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
 .name em {
   padding: 1px 5px;
   border-radius: 7px;
-  background: var(--game-panel-quiet);
+  background: var(--game-panel-sunken);
   color: var(--color-muted);
   font-size: 10px;
   font-style: normal;

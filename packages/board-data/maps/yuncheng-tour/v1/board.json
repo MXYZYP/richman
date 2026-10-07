@@ -1,0 +1,620 @@
+{
+  "boardName": "大富翁·运城之旅",
+  "direction": "clockwise",
+  "cells": [
+    {
+      "id": 0,
+      "name": "起点",
+      "type": "start"
+    },
+    {
+      "id": 1,
+      "name": "盐湖区",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 800,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700,
+      "type": "property"
+    },
+    {
+      "id": 2,
+      "name": "命运",
+      "type": "destiny"
+    },
+    {
+      "id": 3,
+      "name": "西街",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 800,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500,
+        6250,
+        7500
+      ],
+      "mortgageValue": 700,
+      "type": "property"
+    },
+    {
+      "id": 4,
+      "name": "机会",
+      "type": "chance"
+    },
+    {
+      "id": 5,
+      "name": "运城站",
+      "subtype": "station",
+      "price": 2000,
+      "mortgageValue": 1000,
+      "rents": [
+        200,
+        600,
+        1200,
+        1900,
+        2700
+      ],
+      "type": "property"
+    },
+    {
+      "id": 6,
+      "name": "河东票号",
+      "type": "module",
+      "module": {
+        "id": "piaohao",
+        "version": 1
+      },
+      "cellType": "piaohao",
+      "payload": {}
+    },
+    {
+      "id": 7,
+      "name": "东街",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        130,
+        600,
+        1800,
+        4500,
+        6000,
+        7500
+      ],
+      "mortgageValue": 800,
+      "type": "property"
+    },
+    {
+      "id": 8,
+      "name": "河东市场",
+      "subtype": "station",
+      "price": 2000,
+      "mortgageValue": 1000,
+      "rents": [
+        200,
+        600,
+        1200,
+        1900,
+        2700
+      ],
+      "type": "property"
+    },
+    {
+      "id": 9,
+      "name": "安邑",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        130,
+        600,
+        1800,
+        4500,
+        6000,
+        7500
+      ],
+      "mortgageValue": 800,
+      "type": "property"
+    },
+    {
+      "id": 10,
+      "name": "盐税",
+      "type": "tax",
+      "amount": 1200
+    },
+    {
+      "id": 11,
+      "name": "圣惠街",
+      "subtype": "normal",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5000,
+        6600,
+        8200
+      ],
+      "mortgageValue": 900,
+      "type": "property"
+    },
+    {
+      "id": 12,
+      "name": "机会",
+      "type": "chance"
+    },
+    {
+      "id": 13,
+      "name": "龙居",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        130,
+        600,
+        1800,
+        4500,
+        6000,
+        7500
+      ],
+      "mortgageValue": 800,
+      "type": "property"
+    },
+    {
+      "id": 14,
+      "name": "闻喜",
+      "subtype": "normal",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5000,
+        6600,
+        8200
+      ],
+      "mortgageValue": 900,
+      "type": "property"
+    },
+    {
+      "id": 15,
+      "name": "蒲津渡",
+      "subtype": "station",
+      "price": 2000,
+      "mortgageValue": 1000,
+      "rents": [
+        200,
+        600,
+        1200,
+        1900,
+        2700
+      ],
+      "type": "property"
+    },
+    {
+      "id": 16,
+      "name": "运城盐池",
+      "subtype": "utility",
+      "price": 1500,
+      "mortgageValue": 750,
+      "type": "property"
+    },
+    {
+      "id": 17,
+      "name": "永济",
+      "subtype": "normal",
+      "price": 2000,
+      "houseCost": 1100,
+      "rents": [
+        160,
+        800,
+        2200,
+        5500,
+        7200,
+        9000
+      ],
+      "mortgageValue": 1000,
+      "type": "property"
+    },
+    {
+      "id": 18,
+      "name": "命运",
+      "type": "destiny"
+    },
+    {
+      "id": 19,
+      "name": "鹳雀楼",
+      "subtype": "normal",
+      "price": 2600,
+      "houseCost": 1500,
+      "rents": [
+        220,
+        1100,
+        3000,
+        7200,
+        9600,
+        12000
+      ],
+      "mortgageValue": 1300,
+      "type": "property"
+    },
+    {
+      "id": 20,
+      "name": "普救寺戏台",
+      "type": "module",
+      "module": {
+        "id": "piaohao",
+        "version": 1
+      },
+      "cellType": "piaohao",
+      "payload": {}
+    },
+    {
+      "id": 21,
+      "name": "芮城永乐宫",
+      "subtype": "normal",
+      "price": 2400,
+      "houseCost": 1400,
+      "rents": [
+        200,
+        1000,
+        2800,
+        6500,
+        8800,
+        11000
+      ],
+      "mortgageValue": 1200,
+      "type": "property"
+    },
+    {
+      "id": 22,
+      "name": "关卡盘查",
+      "type": "special",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 800
+      }
+    },
+    {
+      "id": 23,
+      "name": "临猗",
+      "subtype": "normal",
+      "price": 2000,
+      "houseCost": 1100,
+      "rents": [
+        160,
+        800,
+        2200,
+        5500,
+        7200,
+        9000
+      ],
+      "mortgageValue": 1000,
+      "type": "property"
+    },
+    {
+      "id": 24,
+      "name": "黄河金三角",
+      "subtype": "utility",
+      "price": 1500,
+      "mortgageValue": 750,
+      "type": "property"
+    },
+    {
+      "id": 25,
+      "name": "机会",
+      "type": "chance"
+    },
+    {
+      "id": 26,
+      "name": "河津龙门",
+      "subtype": "normal",
+      "price": 2200,
+      "houseCost": 1200,
+      "rents": [
+        180,
+        900,
+        2500,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1100,
+      "type": "property"
+    },
+    {
+      "id": 27,
+      "name": "万荣",
+      "subtype": "normal",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5000,
+        6600,
+        8200
+      ],
+      "mortgageValue": 900,
+      "type": "property"
+    },
+    {
+      "id": 28,
+      "name": "土地税",
+      "type": "tax",
+      "amount": 1000
+    },
+    {
+      "id": 29,
+      "name": "后土祠",
+      "subtype": "normal",
+      "price": 2000,
+      "houseCost": 1100,
+      "rents": [
+        160,
+        800,
+        2200,
+        5500,
+        7200,
+        9000
+      ],
+      "mortgageValue": 1000,
+      "type": "property"
+    },
+    {
+      "id": 30,
+      "name": "稷山",
+      "subtype": "normal",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5000,
+        6600,
+        8200
+      ],
+      "mortgageValue": 900,
+      "type": "property"
+    },
+    {
+      "id": 31,
+      "name": "永济站",
+      "subtype": "station",
+      "price": 2000,
+      "mortgageValue": 1000,
+      "rents": [
+        200,
+        600,
+        1200,
+        1900,
+        2700
+      ],
+      "type": "property"
+    },
+    {
+      "id": 32,
+      "name": "汾河秋汛",
+      "type": "special",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": 33,
+      "name": "绛县",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        130,
+        600,
+        1800,
+        4500,
+        6000,
+        7500
+      ],
+      "mortgageValue": 800,
+      "type": "property"
+    },
+    {
+      "id": 34,
+      "name": "禹门渡",
+      "type": "module",
+      "module": {
+        "id": "piaohao",
+        "version": 1
+      },
+      "cellType": "piaohao",
+      "payload": {}
+    },
+    {
+      "id": 35,
+      "name": "新绛",
+      "subtype": "normal",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5000,
+        6600,
+        8200
+      ],
+      "mortgageValue": 900,
+      "type": "property"
+    },
+    {
+      "id": 36,
+      "name": "命运",
+      "type": "destiny"
+    },
+    {
+      "id": 37,
+      "name": "平陆",
+      "subtype": "normal",
+      "price": 2000,
+      "houseCost": 1100,
+      "rents": [
+        160,
+        800,
+        2200,
+        5500,
+        7200,
+        9000
+      ],
+      "mortgageValue": 1000,
+      "type": "property"
+    },
+    {
+      "id": 38,
+      "name": "垣曲",
+      "subtype": "normal",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5000,
+        6600,
+        8200
+      ],
+      "mortgageValue": 900,
+      "type": "property"
+    },
+    {
+      "id": 39,
+      "name": "机会",
+      "type": "chance"
+    },
+    {
+      "id": 40,
+      "name": "夏县",
+      "subtype": "normal",
+      "price": 1800,
+      "houseCost": 1000,
+      "rents": [
+        140,
+        700,
+        2000,
+        5000,
+        6600,
+        8200
+      ],
+      "mortgageValue": 900,
+      "type": "property"
+    },
+    {
+      "id": 41,
+      "name": "司马光祠",
+      "subtype": "normal",
+      "price": 2000,
+      "houseCost": 1100,
+      "rents": [
+        160,
+        800,
+        2200,
+        5500,
+        7200,
+        9000
+      ],
+      "mortgageValue": 1000,
+      "type": "property"
+    },
+    {
+      "id": 42,
+      "name": "芮城",
+      "subtype": "normal",
+      "price": 2000,
+      "houseCost": 1100,
+      "rents": [
+        160,
+        800,
+        2200,
+        5500,
+        7200,
+        9000
+      ],
+      "mortgageValue": 1000,
+      "type": "property"
+    },
+    {
+      "id": 43,
+      "name": "永乐宫壁画",
+      "subtype": "normal",
+      "price": 2200,
+      "houseCost": 1200,
+      "rents": [
+        180,
+        900,
+        2500,
+        6000,
+        8000,
+        10000
+      ],
+      "mortgageValue": 1100,
+      "type": "property"
+    },
+    {
+      "id": 44,
+      "name": "解州关帝",
+      "subtype": "station",
+      "price": 2000,
+      "mortgageValue": 1000,
+      "rents": [
+        200,
+        600,
+        1200,
+        1900,
+        2700
+      ],
+      "type": "property"
+    },
+    {
+      "id": 45,
+      "name": "命运",
+      "type": "destiny"
+    },
+    {
+      "id": 46,
+      "name": "关帝祖庙税",
+      "type": "tax",
+      "amount": 1500
+    },
+    {
+      "id": 47,
+      "name": "运城盐湖",
+      "subtype": "normal",
+      "price": 2400,
+      "houseCost": 1400,
+      "rents": [
+        200,
+        1000,
+        2800,
+        6500,
+        8800,
+        11000
+      ],
+      "mortgageValue": 1200,
+      "nextId": 0,
+      "type": "property"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import {
   checkReleaseFiles,
   createRelease,
   parseCreateArguments,
+  rebuildChangelog,
 } from './release';
 import { parseReleaseCatalog, renderChangelog } from './releaseNotes';
 
@@ -132,6 +133,40 @@ describe('release file command', () => {
     const packageRoot = await createFixture();
     await writeFile(join(packageRoot, 'package.json'), JSON.stringify({ version: '9.9.9' }));
     await expect(checkReleaseFiles(packageRoot)).rejects.toThrow(/package\.json.*9\.9\.9.*2\.4\.0/);
+  });
+
+  it('rebuilds a stale changelog in place without bumping the version', async () => {
+    const rootDir = await createFixture();
+    // 模拟「精简了既有版本的更新说明文案」：只改 json，CHANGELOG 变成过期状态。
+    const trimmed = parseReleaseCatalog({
+      releases: [{
+        version: '2.4.0',
+        date: '2026-07-30',
+        title: '版本说明与更新记录',
+        changes: ['首页新增当前版本入口。', '修复手机布局。'],
+      }],
+    });
+    const notesPath = join(rootDir, 'release-notes.json');
+    await writeFile(notesPath, `${JSON.stringify(trimmed, null, 2)}\n`);
+    await expect(checkReleaseFiles(rootDir)).rejects.toThrow(/CHANGELOG/);
+
+    const before = await readReleaseFiles(rootDir);
+    expect(await rebuildChangelog(rootDir)).toBe(1);
+
+    const after = await readReleaseFiles(rootDir);
+    // 只允许 CHANGELOG 变；release-notes.json / package.json 必须逐字节不变（版本号不 bump）。
+    expect([after[0], after[1]]).toEqual([before[0], before[1]]);
+    expect(after[2]).toBe(renderChangelog(trimmed));
+    await expect(checkReleaseFiles(rootDir)).resolves.toBeTruthy();
+  });
+
+  it('refuses to rebuild the changelog when the version itself is out of sync', async () => {
+    const rootDir = await createFixture();
+    await writeFile(join(rootDir, 'CHANGELOG.md'), '# 手工修改\n');
+    await writeFile(join(rootDir, 'package.json'), JSON.stringify({ version: '9.9.9' }));
+    // skipChangelog 只跳过派生文件比对，版本号不一致仍必须拦住 ——
+    // 否则会「修好」一个内容正确、版本号却错误的 CHANGELOG。
+    await expect(rebuildChangelog(rootDir)).rejects.toThrow(/package\.json.*9\.9\.9.*2\.4\.0/);
   });
 
   it('treats an all-zero previous SHA as a first-push bootstrap and rejects malformed SHAs', async () => {

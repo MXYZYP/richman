@@ -62,7 +62,21 @@ async function writeAtomicFiles(files: readonly { path: string; content: string 
   }
 }
 
-export async function checkReleaseFiles(rootDir: string): Promise<ReleaseCatalog> {
+export interface CheckReleaseOptions {
+  /**
+   * 跳过「CHANGELOG.md 是否与 release-notes.json 同步」这一项比对。
+   *
+   * 只有 `rebuildChangelog` 需要它：那个命令存在的意义就是修复 CHANGELOG 失配，
+   * 若先跑完整 check 就会在「CHANGELOG 过期」上抛错、永远走不到重建逻辑（死锁）。
+   * 版本号一致性仍然照常校验，所以不会把别的问题一起掩盖掉。
+   */
+  readonly skipChangelog?: boolean;
+}
+
+export async function checkReleaseFiles(
+  rootDir: string,
+  options: CheckReleaseOptions = {},
+): Promise<ReleaseCatalog> {
   const [catalogValue, packageValue, changelog] = await Promise.all([
     readJson(join(rootDir, RELEASE_FILE), RELEASE_FILE),
     readJson(join(rootDir, PACKAGE_FILE), PACKAGE_FILE),
@@ -79,7 +93,7 @@ export async function checkReleaseFiles(rootDir: string): Promise<ReleaseCatalog
     throw new Error(`package.json 版本 ${String(packageJson.version)} 与发布清单 ${catalogVersion} 不一致`);
   }
 
-  if (changelog !== renderChangelog(catalog)) {
+  if (!options.skipChangelog && changelog !== renderChangelog(catalog)) {
     throw new Error('CHANGELOG.md 与 release-notes.json 不一致，请重新生成');
   }
   return catalog;
@@ -203,6 +217,25 @@ export function parseCreateArguments(args: readonly string[]): Omit<CreateReleas
   return { bump, title, changes };
 }
 
+/**
+ * 按 release-notes.json 重建 CHANGELOG.md，**不**动版本号。
+ *
+ * 为什么需要它：CHANGELOG.md 是纯派生文件（由 `renderChangelog()` 生成），
+ * 手改几乎必然与生成规则不一致，`check` 会报「CHANGELOG.md 与 release-notes.json 不一致」。
+ * 典型触发场景就是**精简既有版本的更新说明文案** —— 你改了 json，但不想发一个新版本号。
+ * 此时 `create` 不适用（它会 bump 版本），只能重建派生的 CHANGELOG。
+ */
+export async function rebuildChangelog(rootDir: string): Promise<number> {
+  // skipChangelog 是必须的：CHANGELOG 过期正是本命令要修的那一个故障，
+  // 若在这里跑完整 check 就会先抛错、永远到不了下面这行重建逻辑。
+  // 版本号一致性仍然校验，避免「顺手把 CHANGELOG 对齐到一个错版本号上」。
+  const current = await checkReleaseFiles(rootDir, { skipChangelog: true });
+  await writeAtomicFiles([
+    { path: join(rootDir, CHANGELOG_FILE), content: renderChangelog(current) },
+  ]);
+  return current.releases.length;
+}
+
 async function main(): Promise<void> {
   const rootDir = fileURLToPath(new URL('../', import.meta.url));
   const [command, ...args] = process.argv.slice(2);
@@ -218,7 +251,13 @@ async function main(): Promise<void> {
     process.stdout.write(`Release metadata valid: ${catalog.releases[0].version}.\n`);
     return;
   }
-  throw new Error('命令必须是 create 或 check');
+  if (command === 'rebuild-changelog') {
+    // 刻意不 bump 版本号：只把 CHANGELOG 同步到当前的 release-notes.json。
+    const count = await rebuildChangelog(rootDir);
+    process.stdout.write(`CHANGELOG.md rebuilt from release-notes.json (${count} releases).\n`);
+    return;
+  }
+  throw new Error('命令必须是 create、check 或 rebuild-changelog');
 }
 
 const entryPath = process.argv[1] === undefined ? '' : pathToFileURL(resolve(process.argv[1])).href;

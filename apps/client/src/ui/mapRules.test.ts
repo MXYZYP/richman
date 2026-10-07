@@ -66,11 +66,11 @@ describe('describeMapRules：按地图数据生成规则事实', () => {
     expect(summary.moduleNotes).toEqual([]);
   });
 
-  it('#23：十一张正式地图全都声明了至少一个特化模块，没有一张还停在「仅核心规则」', () => {
+  it('#23：十二张正式地图全都声明了至少一个特化模块，没有一张还停在「仅核心规则」', () => {
     for (const mapId of [
       'china-tour', 'world-tour', 'classic-tour', 'silk-road',
       'great-wall', 'yellow-river', 'yangtze-tour', 'pearl-tour',
-      'xinjiang-tour', 'shanxi-tour', 'northeast-tour',
+      'xinjiang-tour', 'shanxi-tour', 'northeast-tour', 'yuncheng-tour',
     ]) {
       const summary = describeMapRulesById(mapId)!;
       const named = summary.facts.find((fact) => fact.label === '规则模块')?.value;
@@ -87,6 +87,7 @@ describe('describeMapRules：按地图数据生成规则事实', () => {
       { mapId: 'classic-tour', note: '地标护照', cellLabel: '地标', cellCount: 2 },
       { mapId: 'pearl-tour', note: '湾区口岸', cellLabel: '口岸', cellCount: 2 },
       { mapId: 'shanxi-tour', note: '晋商票号', cellLabel: '票号', cellCount: 2 },
+      { mapId: 'yuncheng-tour', note: '晋商票号', cellLabel: '票号', cellCount: 3 },
       { mapId: 'silk-road', note: '丝路商队', cellLabel: '集市', cellCount: 4 },
       { mapId: 'xinjiang-tour', note: '绿洲营地', cellLabel: '绿洲营地', cellCount: 2 },
       { mapId: 'yangtze-tour', note: '长江渡轮', cellLabel: '渡轮停靠点', cellCount: 3 },
@@ -199,11 +200,11 @@ describe('describeMapRules：按地图数据生成规则事实', () => {
 });
 
 describe('describeMapRulesById：按 id 解析并兜住未知名', () => {
-  it('十一张正式地图都能解析出摘要', () => {
+  it('十二张正式地图都能解析出摘要', () => {
     for (const mapId of [
       'china-tour', 'world-tour', 'classic-tour', 'silk-road',
       'great-wall', 'yellow-river', 'yangtze-tour', 'pearl-tour',
-      'xinjiang-tour', 'shanxi-tour', 'northeast-tour',
+      'xinjiang-tour', 'shanxi-tour', 'northeast-tour', 'yuncheng-tour',
     ]) {
       const summary = describeMapRulesById(mapId);
       expect(summary, `${mapId} 应能解析`).not.toBeNull();

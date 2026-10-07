@@ -239,7 +239,7 @@ function closeFromBackdrop(event: MouseEvent): void {
 .status-badges span {
   padding: 2px 7px;
   border-radius: 8px;
-  background: var(--game-panel-quiet);
+  background: var(--game-panel-sunken);
   color: var(--color-muted);
   font-size: 10px;
   font-weight: 900;
@@ -269,7 +269,7 @@ function closeFromBackdrop(event: MouseEvent): void {
 }
 
 .dialog-close:hover {
-  background: var(--game-panel-quiet);
+  background: var(--game-panel-sunken);
 }
 
 .dialog-close:focus-visible {

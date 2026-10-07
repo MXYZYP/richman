@@ -1,0 +1,684 @@
+{
+  "ref": {
+    "id": "yuncheng-tour",
+    "version": 1,
+    "contentHash": "24aec483a20c2f8d93dd38bff4ed867e8b64c94388f2371c2b5dd8f5dd4fcd25"
+  },
+  "metadata": {
+    "title": "运城之旅",
+    "description": "盐湖之畔的黄河金三角：48 格 6×8 蛇形闭环，从运城站出发经解州关帝庙、鹳雀楼一路向东南到运城盐湖，沿途票号通商、河工争水，走到盐池白土再折回起点。"
+  },
+  "requiredRuleModules": [
+    {
+      "id": "core",
+      "version": 1
+    },
+    {
+      "id": "piaohao",
+      "version": 1
+    }
+  ],
+  "presentation": {
+    "canvas": {
+      "size": 100
+    },
+    "cells": {
+      "0": {
+        "x": 4.75,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "起点",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "start"
+        }
+      },
+      "1": {
+        "x": 20.25,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "盐湖区",
+        "propertyBand": "band:yuncheng"
+      },
+      "2": {
+        "x": 35.75,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "3": {
+        "x": 51.25,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "西街",
+        "propertyBand": "band:yuncheng"
+      },
+      "4": {
+        "x": 66.75,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "5": {
+        "x": 82.25,
+        "y": 1.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "运城站",
+        "propertyBand": "band:yuejin"
+      },
+      "6": {
+        "x": 82.25,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "河东票号",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-food"
+        }
+      },
+      "7": {
+        "x": 66.75,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "东街",
+        "propertyBand": "band:yuncheng"
+      },
+      "8": {
+        "x": 51.25,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "河东市场",
+        "propertyBand": "band:yuejin"
+      },
+      "9": {
+        "x": 35.75,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "安邑",
+        "propertyBand": "band:fenhe"
+      },
+      "10": {
+        "x": 20.25,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "盐税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "11": {
+        "x": 4.75,
+        "y": 13.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "圣惠街",
+        "propertyBand": "band:yuncheng"
+      },
+      "12": {
+        "x": 4.75,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "13": {
+        "x": 20.25,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "龙居",
+        "propertyBand": "band:fenhe"
+      },
+      "14": {
+        "x": 35.75,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "闻喜",
+        "propertyBand": "band:fenhe"
+      },
+      "15": {
+        "x": 51.25,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "蒲津渡",
+        "propertyBand": "band:yuejin"
+      },
+      "16": {
+        "x": 66.75,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "运城盐池",
+        "propertyBand": "band:utility"
+      },
+      "17": {
+        "x": 82.25,
+        "y": 26.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "永济",
+        "propertyBand": "band:yongji"
+      },
+      "18": {
+        "x": 82.25,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "19": {
+        "x": 66.75,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "鹳雀楼",
+        "propertyBand": "band:yongji"
+      },
+      "20": {
+        "x": 51.25,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "普救寺戏台",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-food"
+        }
+      },
+      "21": {
+        "x": 35.75,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "芮城永乐宫",
+        "propertyBand": "band:luyinchuan"
+      },
+      "22": {
+        "x": 20.25,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "关卡盘查"
+      },
+      "23": {
+        "x": 4.75,
+        "y": 38.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "临猗",
+        "propertyBand": "band:fenhe"
+      },
+      "24": {
+        "x": 4.75,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "黄河金三角",
+        "propertyBand": "band:utility"
+      },
+      "25": {
+        "x": 20.25,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "26": {
+        "x": 35.75,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "河津龙门",
+        "propertyBand": "band:hetao"
+      },
+      "27": {
+        "x": 51.25,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "万荣",
+        "propertyBand": "band:fenhe"
+      },
+      "28": {
+        "x": 66.75,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "土地税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "29": {
+        "x": 82.25,
+        "y": 51.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "后土祠",
+        "propertyBand": "band:fenhe"
+      },
+      "30": {
+        "x": 82.25,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "稷山",
+        "propertyBand": "band:fenhe"
+      },
+      "31": {
+        "x": 66.75,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "永济站",
+        "propertyBand": "band:yuejin"
+      },
+      "32": {
+        "x": 51.25,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "汾河秋汛"
+      },
+      "33": {
+        "x": 35.75,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "绛县",
+        "propertyBand": "band:fenhe"
+      },
+      "34": {
+        "x": 20.25,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "禹门渡",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-food"
+        }
+      },
+      "35": {
+        "x": 4.75,
+        "y": 63.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "新绛",
+        "propertyBand": "band:fenhe"
+      },
+      "36": {
+        "x": 4.75,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "37": {
+        "x": 20.25,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "平陆",
+        "propertyBand": "band:hetao"
+      },
+      "38": {
+        "x": 35.75,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "垣曲",
+        "propertyBand": "band:hetao"
+      },
+      "39": {
+        "x": 51.25,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "机会",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "40": {
+        "x": 66.75,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "夏县",
+        "propertyBand": "band:fenhe"
+      },
+      "41": {
+        "x": 82.25,
+        "y": 76.25,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "司马光祠",
+        "propertyBand": "band:fenhe"
+      },
+      "42": {
+        "x": 82.25,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "芮城",
+        "propertyBand": "band:luyinchuan"
+      },
+      "43": {
+        "x": 66.75,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "永乐宫壁画",
+        "propertyBand": "band:luyinchuan"
+      },
+      "44": {
+        "x": 51.25,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "解州关帝",
+        "propertyBand": "band:yuejin"
+      },
+      "45": {
+        "x": 35.75,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "命运",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "46": {
+        "x": 20.25,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "关帝祖庙税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "47": {
+        "x": 4.75,
+        "y": 88.75,
+        "width": 13,
+        "height": 10,
+        "shortLabel": "运城盐湖",
+        "propertyBand": "band:yuncheng"
+      }
+    },
+    "routes": [
+      {
+        "type": "polyline",
+        "role": "route",
+        "strokeWidth": 1,
+        "dashPattern": [
+          2,
+          1.4
+        ],
+        "lineCap": "round",
+        "opacity": 0.9,
+        "zIndex": 0,
+        "points": [
+          {
+            "x": 11.25,
+            "y": 6.25
+          },
+          {
+            "x": 26.75,
+            "y": 6.25
+          },
+          {
+            "x": 42.25,
+            "y": 6.25
+          },
+          {
+            "x": 57.75,
+            "y": 6.25
+          },
+          {
+            "x": 73.25,
+            "y": 6.25
+          },
+          {
+            "x": 88.75,
+            "y": 6.25
+          },
+          {
+            "x": 88.75,
+            "y": 18.75
+          },
+          {
+            "x": 73.25,
+            "y": 18.75
+          },
+          {
+            "x": 57.75,
+            "y": 18.75
+          },
+          {
+            "x": 42.25,
+            "y": 18.75
+          },
+          {
+            "x": 26.75,
+            "y": 18.75
+          },
+          {
+            "x": 11.25,
+            "y": 18.75
+          },
+          {
+            "x": 11.25,
+            "y": 31.25
+          },
+          {
+            "x": 26.75,
+            "y": 31.25
+          },
+          {
+            "x": 42.25,
+            "y": 31.25
+          },
+          {
+            "x": 57.75,
+            "y": 31.25
+          },
+          {
+            "x": 73.25,
+            "y": 31.25
+          },
+          {
+            "x": 88.75,
+            "y": 31.25
+          },
+          {
+            "x": 88.75,
+            "y": 43.75
+          },
+          {
+            "x": 73.25,
+            "y": 43.75
+          },
+          {
+            "x": 57.75,
+            "y": 43.75
+          },
+          {
+            "x": 42.25,
+            "y": 43.75
+          },
+          {
+            "x": 26.75,
+            "y": 43.75
+          },
+          {
+            "x": 11.25,
+            "y": 43.75
+          },
+          {
+            "x": 11.25,
+            "y": 56.25
+          },
+          {
+            "x": 26.75,
+            "y": 56.25
+          },
+          {
+            "x": 42.25,
+            "y": 56.25
+          },
+          {
+            "x": 57.75,
+            "y": 56.25
+          },
+          {
+            "x": 73.25,
+            "y": 56.25
+          },
+          {
+            "x": 88.75,
+            "y": 56.25
+          },
+          {
+            "x": 88.75,
+            "y": 68.75
+          },
+          {
+            "x": 73.25,
+            "y": 68.75
+          },
+          {
+            "x": 57.75,
+            "y": 68.75
+          },
+          {
+            "x": 42.25,
+            "y": 68.75
+          },
+          {
+            "x": 26.75,
+            "y": 68.75
+          },
+          {
+            "x": 11.25,
+            "y": 68.75
+          },
+          {
+            "x": 11.25,
+            "y": 81.25
+          },
+          {
+            "x": 26.75,
+            "y": 81.25
+          },
+          {
+            "x": 42.25,
+            "y": 81.25
+          },
+          {
+            "x": 57.75,
+            "y": 81.25
+          },
+          {
+            "x": 73.25,
+            "y": 81.25
+          },
+          {
+            "x": 88.75,
+            "y": 81.25
+          },
+          {
+            "x": 88.75,
+            "y": 93.75
+          },
+          {
+            "x": 73.25,
+            "y": 93.75
+          },
+          {
+            "x": 57.75,
+            "y": 93.75
+          },
+          {
+            "x": 42.25,
+            "y": 93.75
+          },
+          {
+            "x": 26.75,
+            "y": 93.75
+          },
+          {
+            "x": 11.25,
+            "y": 93.75
+          }
+        ]
+      }
+    ],
+    "center": [],
+    "theme": {
+      "colors": {
+        "board": "#EDE3D0",
+        "cell": "#FFFCF5",
+        "border": "#6B4A2A",
+        "route": "#9C3B2E",
+        "title": "#3E2E18",
+        "decoration": "#C9A961",
+        "center": "#F5EBD8"
+      },
+      "propertyBands": {
+        "band:yuncheng": "#4A7C8C",
+        "band:yongji": "#8C5A3C",
+        "band:yuejin": "#A8752E",
+        "band:hetao": "#5B6E7A",
+        "band:fenhe": "#7A8B4E",
+        "band:luyinchuan": "#8E5572",
+        "band:utility": "#6E57A8"
+      }
+    }
+  }
+}

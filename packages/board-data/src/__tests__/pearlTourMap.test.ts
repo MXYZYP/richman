@@ -20,10 +20,16 @@ const CELL = 5;
 const CELL_HEIGHT = 5;
 /** 每条边各 17 格（含两端顶点）。 */
 const PER_EDGE = 17;
-/** 三角形三个顶点的格中心坐标。 */
-const APEX = { x: 50, y: 6.5 };
-const LEFT = { x: 5.5, y: 92 };
-const RIGHT = { x: 94.5, y: 92 };
+/**
+ * 三角形三个顶点的格左上角坐标。
+ *
+ * #需求6：外接框改成正方形 [3,97]×[3,97]，四边留白都恰好 3。
+ * 顶点格中心落在底边中点 (3 + 92 + 5) / 2 = 50 上 → APEX.x = 50 - 2.5 = 47.5。
+ * 底边步长 (92-3)/16 与斜边步长 (92-3)/16 严格相等，三角形不再被横向拉扁。
+ */
+const APEX = { x: 47.5, y: 3 };
+const LEFT = { x: 3, y: 92 };
+const RIGHT = { x: 92, y: 92 };
 
 const round = (value: number): number => Math.round(value * 1e6) / 1e6;
 
@@ -307,7 +313,7 @@ describe('pearl-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(pearlTourMap, [coreModule, portTradeModule])).not.toThrow();
     expect(computeContentHash(pearlTourMap)).toBe(pearlTourMap.ref.contentHash);
     expect(pearlTourMap.ref.contentHash)
-      .toBe('ff56ad382dc3623c7bc3e1055503a7947d4856e066eae4e06fbab5f60effa0e5');
+      .toBe('98e57edad6512373a8665fdca15788bc5640752605a23a89689bc54f6b3e866b');
     expect(Object.isFrozen(pearlTourMap)).toBe(true);
     expect(Object.isFrozen(pearlTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(pearlTourMap.game.cards.destiny[2]!.effect)).toBe(true);

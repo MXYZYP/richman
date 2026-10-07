@@ -23,6 +23,8 @@ dialog.mobile-sheet.sheet {
   /* 扩展面 / 短阴影 / 焦点色 */
   --game-panel-raised: #fbfcf6;
   --game-panel-quiet: #edf0e3;
+  /* 凹陷面：弹层内列表项底色。经典基线同样是浅一档的绿灰 */
+  --game-panel-sunken: #e7ecdd;
   --game-line-soft: #cdd5c3;
   --game-shadow-panel: 0 1px 0 #ccd5c2, 0 5px 12px rgb(57 72 44 / 8%);
   --game-shadow-dialog: 0 20px 48px rgb(57 72 44 / 26%);
@@ -71,7 +73,7 @@ dialog.mobile-sheet.sheet {
  * 选择器保持与经典一致，仅作用于对局根容器与对局弹层（含 Teleport 到 body 的弹层），
  * 不污染首页 / 大厅。切换由 ui/themeManager.ts 设置 document.documentElement.dataset.theme。
  *
- * 每套皮肤必须覆盖**完整同一组变量**（经典那 48 条），否则会漏出上一套的颜色。
+ * 每套皮肤必须覆盖**完整同一组变量**（经典那 44 条），否则会漏出上一套的颜色。
  * 新增皮肤时照抄一个既有块的变量清单逐条替换色值即可，不要删项。
  */
 
@@ -79,228 +81,242 @@ dialog.mobile-sheet.sheet {
 :root[data-theme='ocean'] dialog.cell-dialog-layer,
 :root[data-theme='ocean'] dialog.player-dialog-layer,
 :root[data-theme='ocean'] dialog.mobile-sheet.sheet {
-  --game-page: #e3eef2;
-  --game-panel: #f1f7f9;
-  --game-board-base: #d4e6ec;
-  --game-dice-tray: #c4dde6;
+  /* 浅色掌机基础面：底色压深一点，让米白格子浮起来 */
+  --game-page: #dfeaf0;
+  --game-panel: #f0f6f9;
+  --game-board-base: #cfe0e8;
+  --game-dice-tray: #bdd6e1;
 
-  --game-action-bg: linear-gradient(180deg, #7fc8e8, #4aa3cf);
-  --game-action-text: #073047;
-  --game-action-shadow: #2c7fa6;
+  /* 实体按键：深青文字压在中等明度蓝上 —— 比原来更暗一档，按钮更立 */
+  --game-action-bg: linear-gradient(180deg, #6fb9db, #3d97c4);
+  --game-action-text: #04222f;
+  --game-action-shadow: #266d92;
 
-  --game-panel-raised: #f7fbfc;
-  --game-panel-quiet: #e2eef2;
-  --game-line-soft: #c2dbe4;
-  --game-shadow-panel: 0 1px 0 #c2dbe4, 0 5px 12px rgb(20 60 80 / 10%);
-  --game-shadow-dialog: 0 20px 48px rgb(20 60 80 / 28%);
-  --game-focus: #1f7fa6;
+  /* 扩展面 / 凹陷面 / 短阴影 / 焦点色 */
+  --game-panel-raised: #f8fbfd;
+  --game-panel-quiet: #e1edf2;
+  /* 新增：对话框内列表项的底色。与 --game-panel-raised 明确区分，解决"弹层里全是同一块色" */
+  --game-panel-sunken: #dfeaf1;
+  --game-line-soft: #b6d2de;
+  --game-shadow-panel: 0 1px 0 #b6d2de, 0 5px 12px rgb(16 52 72 / 12%);
+  --game-shadow-dialog: 0 20px 48px rgb(16 52 72 / 32%);
+  --game-focus: #17688a;
   --game-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --game-radius-panel: 12px;
   --game-radius-control: 9px;
 
+  /* 对局内既有变量：青蓝主色，muted 加深以提高可读性 */
   --color-bg: var(--game-page);
-  --color-cell: #f7fbfc;
-  --color-border: #aacfdb;
-  --color-text: #1c3a47;
-  --color-muted: #4a6f7d;
-  --color-primary: #1f6f93;
-  --color-accent: #3a9ec4;
+  --color-cell: #f9fcfd;
+  --color-border: #9cc4d3;
+  --color-text: #16333f;
+  --color-muted: #40656f;
+  --color-primary: #17688a;
+  --color-accent: #2e90b8;
 
-  --board-bg: #dbeaf0;
+  /* 棋盘底比格子底明显更深，格子边界不再靠 line-soft硬撑 */
+  --board-bg: #cddfe9;
   --board-surface: var(--game-panel);
-  --board-shadow: 0 14px 40px rgb(20 60 80 / 18%);
-  --center-bg: linear-gradient(135deg, #f7fbfc, #e3eef3);
-  --center-border: #a7c9d6;
-  --title-color: #15596f;
-  --event-bg: #e0f1f7;
-  --event-text: #14566b;
-  --overlay-scrim: rgb(15 45 60 / 46%);
-  --branch-track: #6fa6bd;
-  --price-color: #1f6f93;
-  --cell-function-bg: linear-gradient(180deg, #f7fbfc, #e3eef3);
+  --board-shadow: 0 14px 40px rgb(16 52 72 / 20%);
+  --center-bg: linear-gradient(135deg, #f8fbfd, #dfeaf1);
+  --center-border: #94bfd0;
+  --title-color: #0f4f68;
+  --event-bg: #dceff6;
+  --event-text: #10495e;
+  --overlay-scrim: rgb(12 40 54 / 52%);
+  --branch-track: #5f9cb5;
+  --price-color: #17688a;
+  --cell-function-bg: linear-gradient(180deg, #f9fcfd, #e4eff4);
 
-  --button-enabled-bg: #5bb0d6;
-  --button-enabled-text: #073047;
-  --button-disabled-bg: #dbe7ec;
-  --button-disabled-text: #5d7884;
+  --button-enabled-bg: #4297bd;
+  --button-enabled-text: #ffffff;
+  --button-disabled-bg: #d5e3ea;
+  --button-disabled-text: #556f79;
 
-  --token-ring: #f7fbfc;
-  --token-shadow: 0 2px 6px rgb(15 45 60 / 30%);
+  --token-ring: #f9fcfd;
+  --token-shadow: 0 2px 6px rgb(12 40 54 / 32%);
 
-  --banner-warning-bg: #e6f3f8;
-  --banner-error-bg: #f7e2da;
-}
-
+  --banner-warning-bg: #dceef5;
+  /* 错误横幅改用偏冷的浅红，脱离经典那套直接复用的暖红 */
+  --banner-error-bg: #f6dfe4;
 :root[data-theme='midnight'] .game-view,
 :root[data-theme='midnight'] dialog.cell-dialog-layer,
 :root[data-theme='midnight'] dialog.player-dialog-layer,
 :root[data-theme='midnight'] dialog.mobile-sheet.sheet {
-  --game-page: #1b2030;
-  --game-panel: #232a3d;
-  --game-board-base: #2a3247;
-  --game-dice-tray: #313a52;
+  /* 深色掌机基础面：面板与棋盘拉开明度差，避免大面积同色 */
+  --game-page: #161b29;
+  --game-panel: #212838;
+  --game-board-base: #2e374d;
+  --game-dice-tray: #394360;
 
-  --game-action-bg: linear-gradient(180deg, #f0b860, #d99a3a);
-  --game-action-text: #2a1c08;
-  --game-action-shadow: #9c6c1f;
+  /* 琥珀按键在深底上足够跳，字压得住 */
+  --game-action-bg: linear-gradient(180deg, #f5c26a, #dda243);
+  --game-action-text: #241705;
+  --game-action-shadow: #a2731f;
 
-  --game-panel-raised: #2b3346;
-  --game-panel-quiet: #1f2536;
-  --game-line-soft: #3a4358;
-  --game-shadow-panel: 0 1px 0 #11151f, 0 6px 16px rgb(0 0 0 / 36%);
-  --game-shadow-dialog: 0 24px 60px rgb(0 0 0 / 60%);
-  --game-focus: #f0b860;
+  --game-panel-raised: #2b3448;
+  --game-panel-quiet: #1b2130;
+  /* 关键修复：原先 sunken 与 raised 同色，弹层里列表项与面板底糊成一片 */
+  --game-panel-sunken: #1d2434;
+  --game-line-soft: #3f4a63;
+  --game-shadow-panel: 0 1px 0 #0e121b, 0 6px 16px rgb(0 0 0 / 40%);
+  --game-shadow-dialog: 0 24px 60px rgb(0 0 0 / 66%);
+  --game-focus: #f5c26a;
   --game-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --game-radius-panel: 12px;
   --game-radius-control: 9px;
 
   --color-bg: var(--game-page);
-  --color-cell: #2b3346;
-  --color-border: #3c4660;
-  --color-text: #e8edf5;
-  --color-muted: #9aa6bd;
-  --color-primary: #f0b860;
-  --color-accent: #7fb0d8;
+  --color-cell: #333d53;
+  --color-border: #47536f;
+  --color-text: #eef2f8;
+  --color-muted: #a8b4cb;
+  --color-primary: #f5c26a;
+  --color-accent: #86b6de;
 
-  --board-bg: #232a3d;
+  /* 棋盘底比面板略深，格子(#333d53)明显亮于棋盘(#212838) */
+  --board-bg: #1a2030;
   --board-surface: var(--game-panel);
-  --board-shadow: 0 16px 44px rgb(0 0 0 / 40%);
-  --center-bg: linear-gradient(135deg, #2b3346, #1f2536);
-  --center-border: #3c4660;
-  --title-color: #f0c878;
-  --event-bg: #2a3142;
-  --event-text: #f0d49a;
-  --overlay-scrim: rgb(5 8 14 / 62%);
-  --branch-track: #566187;
-  --price-color: #f0b860;
-  --cell-function-bg: linear-gradient(180deg, #2b3346, #232a3d);
+  --board-shadow: 0 16px 44px rgb(0 0 0 / 46%);
+  --center-bg: linear-gradient(135deg, #333d53, #1d2434);
+  --center-border: #4a5673;
+  --title-color: #f7d28c;
+  --event-bg: #313a4f;
+  --event-text: #f6dda4;
+  --overlay-scrim: rgb(4 6 12 / 68%);
+  --branch-track: #5e6a91;
+  --price-color: #f5c26a;
+  --cell-function-bg: linear-gradient(180deg, #333d53, #212838);
 
-  --button-enabled-bg: #e0a74e;
-  --button-enabled-text: #1c1408;
-  --button-disabled-bg: #2a3142;
-  --button-disabled-text: #7886a0;
+  --button-enabled-bg: #e6b055;
+  --button-enabled-text: #1b1206;
+  --button-disabled-bg: #2c3448;
+  --button-disabled-text: #8694ae;
 
-  --token-ring: #2b3346;
-  --token-shadow: 0 2px 6px rgb(0 0 0 / 50%);
+  --token-ring: #333d53;
+  --token-shadow: 0 2px 6px rgb(0 0 0 / 55%);
 
-  --banner-warning-bg: #2f3550;
-  --banner-error-bg: #3a2730;
-}
-
+  --banner-warning-bg: #343c58;
+  /* 深色下用暗红而非浅红，否则横幅会"发光" */
+  --banner-error-bg: #4a2b36;
 /* 森林（#118）：深绿掌机 —— 草木棋盘 + 翠绿按键，配长城 / 山西这类山脊地图。 */
 :root[data-theme='forest'] .game-view,
 :root[data-theme='forest'] dialog.cell-dialog-layer,
 :root[data-theme='forest'] dialog.player-dialog-layer,
 :root[data-theme='forest'] dialog.mobile-sheet.sheet {
-  --game-page: #dfeadb;
-  --game-panel: #f2f8ee;
-  --game-board-base: #cfe3c8;
-  --game-dice-tray: #bed8b6;
+  /* 浅色掌机基础面：底色压深一档，草木棋盘与格子分层 */
+  --game-page: #d8e6d2;
+  --game-panel: #f1f7ec;
+  --game-board-base: #c7ddbe;
+  --game-dice-tray: #b5d0ab;
 
-  --game-action-bg: linear-gradient(180deg, #8ed08a, #55ab5c);
-  --game-action-text: #10331a;
-  --game-action-shadow: #37803f;
+  /* 按键面稍暗，让深绿字更清晰 */
+  --game-action-bg: linear-gradient(180deg, #7cc478, #4b9e52);
+  --game-action-text: #0b2a13;
+  --game-action-shadow: #327337;
 
-  --game-panel-raised: #f8fcf5;
-  --game-panel-quiet: #e3f0de;
-  --game-line-soft: #bed6b8;
-  --game-shadow-panel: 0 1px 0 #bed6b8, 0 5px 12px rgb(30 60 32 / 10%);
-  --game-shadow-dialog: 0 20px 48px rgb(30 60 32 / 28%);
-  --game-focus: #2f7a3d;
+  --game-panel-raised: #f8fcf4;
+  --game-panel-quiet: #dfedda;
+  --game-panel-sunken: #d6e8d1;
+  --game-line-soft: #b2cdab;
+  --game-shadow-panel: 0 1px 0 #b2cdab, 0 5px 12px rgb(24 54 26 / 12%);
+  --game-shadow-dialog: 0 20px 48px rgb(24 54 26 / 32%);
+  --game-focus: #276f34;
   --game-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --game-radius-panel: 12px;
   --game-radius-control: 9px;
 
   --color-bg: var(--game-page);
-  --color-cell: #f8fcf5;
-  --color-border: #a9c9a2;
-  --color-text: #22331f;
-  --color-muted: #4f6a49;
-  --color-primary: #2f7a3d;
-  --color-accent: #5aa85e;
+  --color-cell: #f9fdf5;
+  --color-border: #9cbf95;
+  --color-text: #1d2e1a;
+  --color-muted: #46603f;
+  --color-primary: #276f34;
+  --color-accent: #4d9e53;
 
-  --board-bg: #d6e8d0;
+  /* 棋盘底明显深于格子底，格子边界清晰 */
+  --board-bg: #cadec2;
   --board-surface: var(--game-panel);
-  --board-shadow: 0 14px 40px rgb(30 60 32 / 18%);
-  --center-bg: linear-gradient(135deg, #f8fcf5, #e4f0df);
-  --center-border: #a6c79f;
-  --title-color: #1f5f2c;
-  --event-bg: #e4f3dd;
-  --event-text: #1d5a2a;
-  --overlay-scrim: rgb(18 38 20 / 46%);
-  --branch-track: #6f9c6c;
-  --price-color: #2f7a3d;
-  --cell-function-bg: linear-gradient(180deg, #f8fcf5, #e4f0df);
+  --board-shadow: 0 14px 40px rgb(24 54 26 / 20%);
+  --center-bg: linear-gradient(135deg, #f9fdf5, #ddecd7);
+  --center-border: #99bd92;
+  --title-color: #1a5326;
+  --event-bg: #dff0d8;
+  --event-text: #174f22;
+  --overlay-scrim: rgb(14 36 16 / 52%);
+  --branch-track: #638f60;
+  --price-color: #276f34;
+  --cell-function-bg: linear-gradient(180deg, #f9fdf5, #e2f0dd);
 
-  --button-enabled-bg: #63b56a;
-  --button-enabled-text: #10331a;
-  --button-disabled-bg: #dbe8d7;
-  --button-disabled-text: #64795f;
+  --button-enabled-bg: #58a85f;
+  --button-enabled-text: #ffffff;
+  --button-disabled-bg: #d3e3d0;
+  --button-disabled-text: #5b7056;
 
-  --token-ring: #f8fcf5;
-  --token-shadow: 0 2px 6px rgb(18 38 20 / 30%);
+  --token-ring: #f9fdf5;
+  --token-shadow: 0 2px 6px rgb(14 36 16 / 32%);
 
-  --banner-warning-bg: #e9f3e2;
-  --banner-error-bg: #f7e2da;
-}
-
+  --banner-warning-bg: #e2f0da;
+  --banner-error-bg: #f4dfd9;
 /* 沙丘（#118）：暖沙掌机 —— 驼色棋盘 + 赭石按键，配丝路 / 新疆 / 黄河这类黄土地图。 */
 :root[data-theme='sand'] .game-view,
 :root[data-theme='sand'] dialog.cell-dialog-layer,
 :root[data-theme='sand'] dialog.player-dialog-layer,
 :root[data-theme='sand'] dialog.mobile-sheet.sheet {
-  --game-page: #f2e8d8;
-  --game-panel: #fbf5e9;
-  --game-board-base: #ead9bd;
-  --game-dice-tray: #e0c9a5;
+  /* 暖沙掌机基础面：驼色棋盘压深，避免整屏发黄发平 */
+  --game-page: #eddfc9;
+  --game-panel: #faf4e6;
+  --game-board-base: #e5d1af;
+  --game-dice-tray: #d9c096;
 
-  --game-action-bg: linear-gradient(180deg, #e8a765, #cd7f3a);
-  --game-action-text: #301604;
-  --game-action-shadow: #95602a;
+  /* 赭石按键稍压深，白字比原来的近黑字更干净 */
+  --game-action-bg: linear-gradient(180deg, #dd9a56, #c4762f);
+  --game-action-text: #2a1203;
+  --game-action-shadow: #8a5622;
 
-  --game-panel-raised: #fdf9f0;
-  --game-panel-quiet: #f2e7d3;
-  --game-line-soft: #ddc9a8;
-  --game-shadow-panel: 0 1px 0 #ddc9a8, 0 5px 12px rgb(80 55 25 / 10%);
-  --game-shadow-dialog: 0 20px 48px rgb(80 55 25 / 28%);
-  --game-focus: #a8641f;
+  --game-panel-raised: #fdfaf2;
+  --game-panel-quiet: #f0e4cd;
+  --game-panel-sunken: #e7d8ba;
+  --game-line-soft: #d7bf9c;
+  --game-shadow-panel: 0 1px 0 #d7bf9c, 0 5px 12px rgb(74 50 22 / 12%);
+  --game-shadow-dialog: 0 20px 48px rgb(74 50 22 / 32%);
+  --game-focus: #96591a;
   --game-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --game-radius-panel: 12px;
   --game-radius-control: 9px;
 
   --color-bg: var(--game-page);
-  --color-cell: #fdf9f0;
-  --color-border: #cfb389;
-  --color-text: #3c2f1c;
-  --color-muted: #6b5940;
-  --color-primary: #a0641f;
-  --color-accent: #d08b3c;
+  --color-cell: #fdfbf4;
+  --color-border: #c4a67c;
+  --color-text: #332818;
+  --color-muted: #61503a;
+  --color-primary: #96591a;
+  --color-accent: #c47f31;
 
-  --board-bg: #eddfc4;
+  /* 棋盘底更深，格子与棋盘不再糊成一片 */
+  --board-bg: #e6d5b4;
   --board-surface: var(--game-panel);
-  --board-shadow: 0 14px 40px rgb(80 55 25 / 18%);
-  --center-bg: linear-gradient(135deg, #fdf9f0, #f3e8d4);
-  --center-border: #cdb086;
-  --title-color: #8a4f12;
-  --event-bg: #faeeda;
-  --event-text: #7a4711;
-  --overlay-scrim: rgb(60 40 18 / 46%);
-  --branch-track: #b08a55;
-  --price-color: #a0641f;
-  --cell-function-bg: linear-gradient(180deg, #fdf9f0, #f3e8d4);
+  --board-shadow: 0 14px 40px rgb(74 50 22 / 20%);
+  --center-bg: linear-gradient(135deg, #fdfaf2, #efe2c9);
+  --center-border: #c0a276;
+  --title-color: #7d450e;
+  --event-bg: #f6e8cf;
+  --event-text: #6d3f0d;
+  --overlay-scrim: rgb(52 34 14 / 52%);
+  --branch-track: #a67f4a;
+  --price-color: #96591a;
+  --cell-function-bg: linear-gradient(180deg, #fdfaf4, #f1e6ce);
 
-  --button-enabled-bg: #d99149;
-  --button-enabled-text: #301604;
-  --button-disabled-bg: #ece0cd;
-  --button-disabled-text: #7d6b52;
+  --button-enabled-bg: #cc8634;
+  --button-enabled-text: #ffffff;
+  --button-disabled-bg: #e7dbc5;
+  --button-disabled-text: #756450;
 
-  --token-ring: #fdf9f0;
-  --token-shadow: 0 2px 6px rgb(60 40 18 / 30%);
+  --token-ring: #fdfbf4;
+  --token-shadow: 0 2px 6px rgb(52 34 14 / 32%);
 
-  --banner-warning-bg: #f8eeda;
-  --banner-error-bg: #f7e2da;
-}
-
+  --banner-warning-bg: #f5e9d2;
+  --banner-error-bg: #f3ddd6;
 /* 弹层动效：260ms 跟手进场 / 160ms 快速退场；不支持的浏览器瞬开瞬关 */
 @media (prefers-reduced-motion: no-preference) {
   dialog.cell-dialog-layer,

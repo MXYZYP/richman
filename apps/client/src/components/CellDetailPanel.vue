@@ -202,7 +202,7 @@ function closeFromBackdrop(event: MouseEvent): void {
   border: 1px solid var(--game-line-soft);
   border-radius: 8px;
   padding: 3px 8px;
-  background: var(--game-panel-quiet);
+  background: var(--game-panel-sunken);
   color: var(--color-muted);
   font-size: 0.74rem;
   font-weight: 800;
@@ -227,7 +227,7 @@ function closeFromBackdrop(event: MouseEvent): void {
 }
 
 .dialog-close:hover {
-  background: var(--game-panel-quiet);
+  background: var(--game-panel-sunken);
 }
 
 .dialog-close:focus-visible {

@@ -818,23 +818,286 @@ function modulePayload(payload: unknown): Record<string, unknown> {
     : {};
 }
 
+/** 从模块 payload 里取整数金额；缺字段或类型不符时返回 null（**不是** 0，避免把「没这个参数」说成「0 元」）。 */
+function payloadAmount(payload: Record<string, unknown>, key: string): number | null {
+  const value = payload[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * 模块事件 → 中文战报。
+ *
+ * 覆盖**全部**已注册规则模块，而不只是 world-tour：早先这里只放行 `world-tour@1`，
+ * 其余模块（含 `piaohao@1` 的 `piaohao_interest`）全部掉进调用方的兜底分支，
+ * 把内部标识符 `模块事件 piaohao@1:piaohao_interest` 原样吐给玩家 —— 既是显示错误，
+ * 也把内部契约（模块 id / 版本 / 事件名）泄露到UI 上。
+ *
+ * 约定：每个模块一个 case 分组，只描述「这一步对玩家意味着什么」；
+ * 金额一律走 `money()`，格子一律走 `cellName()`，避免同一组数字/地名在客户端维护两份。
+ * 返回 null 表示该事件未登记，交给调用方兜底。
+ */
 function formatWorldTourModuleEvent(state: GameState | RenderableGameState, event: Extract<GameEvent, { type: 'module' }>): string | null {
-  if (event.module.id !== 'world-tour' || event.module.version !== 1) return null;
   const payload = modulePayload(event.payload);
   const playerId = typeof payload.playerId === 'string' ? payload.playerId : '';
   const actor = playerName(state, playerId);
-  switch (event.eventType) {
-    case 'airport_wait_started':
-      return `${actor} 停在泰国曼谷机场，下个个人回合进入支线`;
-    case 'toll_immunity_granted':
-      return `${actor} 获得一次过路费抵消`;
-    case 'toll_immunity_used':
-      return `${actor} 抵消本次过路费${typeof payload.amount === 'number' ? ` ${money(payload.amount)}` : ''}`;
-    case 'flight_declined':
-      return `${actor} 放弃搭乘${payload.kind === 'long-flight' ? '长途' : '短途'}航班`;
+  const cellId = payloadAmount(payload, 'cellId');
+
+  switch (event.module.id) {
+    case 'world-tour':
+      if (event.module.version !== 1) return null;
+      switch (event.eventType) {
+        case 'airport_wait_started':
+          return `${actor} 停在泰国曼谷机场，下个个人回合进入支线`;
+        case 'toll_immunity_granted':
+          return `${actor} 获得一次过路费抵消`;
+        case 'toll_immunity_used': {
+          const amount = payloadAmount(payload, 'amount');
+          return `${actor} 抵消本次过路费${amount === null ? '' : ` ${money(amount)}`}`;
+        }
+        case 'flight_declined':
+          return `${actor} 放弃搭乘${payload.kind === 'long-flight' ? '长途' : '短途'}航班`;
+        default:
+          return null;
+      }
+
+    case 'rail-hub':
+      switch (event.eventType) {
+        case 'rail_visited':
+          return `${actor} 停靠高铁枢纽`;
+        case 'rail_declined':
+          return `${actor} 不候车，留在高铁枢纽`;
+        case 'rail_waited': {
+          const cleared = payloadAmount(payload, 'clearedTurns');
+          const bonus = payloadAmount(payload, 'bonus');
+          //候车时身上带着停赛就被一次性清空，此时没有补贴 —— 两种情形要分开说，
+          //否则玩家会以为「候车必得补贴」，进格才发现钱没进账。
+          if (cleared !== null && cleared > 0) return `${actor} 在枢纽候车，暂停的 ${cleared} 个回合一次性清除`;
+          return bonus === null || bonus <= 0
+            ? `${actor} 在枢纽候车休息`
+            : `${actor} 在枢纽候车休息，获得候车补贴 ${money(bonus)}`;
+        }
+        case 'rail_transferred': {
+          const from = payloadAmount(payload, 'fromCellId');
+          const to = payloadAmount(payload, 'toCellId');
+          const fare = payloadAmount(payload, 'fare');
+          return `${actor} 换乘高铁，从 ${cellName(state, from ?? -1)} 直达 ${cellName(state, to ?? -1)}`
+            + `${fare === null ? '' : `，支付车费 ${money(fare)}`}`;
+        }
+        default:
+          return null;
+      }
+
+    case 'landmark-passport':
+      switch (event.eventType) {
+        case 'landmark_visited':
+          return `${actor} 抵达地标`;
+        case 'landmark_declined':
+          return `${actor} 不盖纪念章`;
+        case 'landmark_stamped': {
+          const count = payloadAmount(payload, 'count');
+          const total = payloadAmount(payload, 'total');
+          const reward = payloadAmount(payload, 'reward');
+          const completed = payload.completed === true;
+          const progress = count === null || total === null ? '' : `（${count}/${total}）`;
+          const bonus = reward === null || reward <= 0 ? '' : `，获得奖励 ${money(reward)}`;
+          return `${actor} 盖下纪念章${progress}${bonus}${completed ? '，集齐全部地标' : ''}`;
+        }
+        case 'passport_lap_bonus': {
+          const amount = payloadAmount(payload, 'amount');
+          return `${actor} 环球行摄完成，领取津贴${amount === null ? '' : ` ${money(amount)}`}`;
+        }
+        default:
+          return null;
+      }
+
+    case 'port-trade':
+      switch (event.eventType) {
+        case 'port_visited':
+          return `${actor} 抵达口岸`;
+        case 'port_declined':
+          return `${actor} 不押注，留在口岸`;
+        case 'port_traded': {
+          const win = payload.win === true;
+          const sum = payloadAmount(payload, 'sum');
+          const stake = payloadAmount(payload, 'stake');
+          const payout = payloadAmount(payload, 'payout');
+          const dice = Array.isArray(payload.dice) ? payload.dice.join(' + ') : null;
+          const points = sum === null ? (dice === null ? '' : `（掷出 ${dice}）`) : `（点数 ${sum}）`;
+          if (win) return `${actor} 在口岸押注${points}，获胜，赢得 ${money(payout ?? 0)}`;
+          return `${actor} 在口岸押注${points}，未达标，押金 ${money(stake ?? 0)} 被没收`;
+        }
+        default:
+          return null;
+      }
+
+    case 'piaohao':
+      switch (event.eventType) {
+        case 'piaohao_visited':
+          return `${actor} 停在票号`;
+        case 'piaohao_declined':
+          return `${actor} 不办理票号业务`;
+        case 'piaohao_deposited': {
+          const amount = payloadAmount(payload, 'amount');
+          const balance = payloadAmount(payload, 'balance');
+          return `${actor} 在票号存入${amount === null ? '' : ` ${money(amount)}`}`
+            + `${balance === null ? '' : `，票号余额 ${money(balance)}`}`;
+        }
+        case 'piaohao_withdrawn': {
+          const amount = payloadAmount(payload, 'amount');
+          return `${actor} 从票号取出本息 ${money(amount ?? 0)}`;
+        }
+        // `amount` 是**本期利息**（grown - balance），`balance` 是计息后的总额。
+        // 两个数都在payload 里，但战报只报本期利息 —— 余额变化玩家能在资产面板看到，
+        // 战报里再报一次余额会让同一行出现两个金额、容易读成「利息就是余额」。
+        case 'piaohao_interest': {
+          const amount = payloadAmount(payload, 'amount');
+          return `${actor} 的票号本回合生息，利息 ${money(amount ?? 0)}`;
+        }
+        case 'piaohao_advance': {
+          const cash = payloadAmount(payload, 'amount');
+          const cost = payloadAmount(payload, 'cost');
+          return `${actor} 现金不足，票号垫付 ${money(cash ?? 0)}`
+            + `${cost === null ? '' : `（扣票号 ${money(cost)}，含汇水）`}`;
+        }
+        default:
+          return null;
+      }
+
+    case 'caravan-market':
+      switch (event.eventType) {
+        case 'caravan_visited':
+          return `${actor} 抵达集市`;
+        case 'caravan_declined':
+          return `${actor} 不参与集市交易`;
+        case 'caravan_traded': {
+          const buying = payload.kind === 'buy';
+          const units = payloadAmount(payload, 'units');
+          const amount = payloadAmount(payload, 'amount');
+          const action = buying ? '进货' : '出货';
+          const stock = units === null ? '' : `，持有 ${units} 件`;
+          return `${actor} 在集市${action}${stock}`
+            + `${amount === null ? '' : `，${buying ? '支出' : '收入'} ${money(amount)}`}`;
+        }
+        case 'caravan_market': {
+          const price = payloadAmount(payload, 'price');
+          const delta = payloadAmount(payload, 'delta');
+          if (delta === null || delta === 0) return '集市行情无变化';
+          return `集市行情${delta > 0 ? '上涨' : '回落'}，现价 ${price === null ? '' : ` ${money(price)}`}`;
+        }
+        default:
+          return null;
+      }
+
+    case 'oasis-camp':
+      switch (event.eventType) {
+        case 'oasis_visited':
+          return `${actor} 抵达绿洲`;
+        case 'oasis_declined':
+          return `${actor} 不在绿洲扎营`;
+        case 'oasis_camped': {
+          const cost = payloadAmount(payload, 'cost');
+          const previous = payloadAmount(payload, 'previousCellId');
+          const migrated = previous !== null && previous !== cellId;
+          return `${actor} 在绿洲扎营${cost === null ? '' : `，支付 ${money(cost)}`}`
+            + `${migrated ? '，旧营地已撤销' : ''}`;
+        }
+        case 'oasis_abandoned': {
+          const refund = payloadAmount(payload, 'refund');
+          return `${actor} 撤营，退回${refund === null ? '' : ` ${money(refund)}`}`;
+        }
+        case 'oasis_bonus': {
+          const amount = payloadAmount(payload, 'amount');
+          return `${actor} 途经自己的营地，获得补给 ${money(amount ?? 0)}`;
+        }
+        default:
+          return null;
+      }
+
+    case 'yangtze-ferry':
+      switch (event.eventType) {
+        case 'ferry_visited':
+          return `${actor} 抵达渡口`;
+        case 'ferry_declined':
+          return `${actor} 不乘船，留在渡口`;
+        case 'ferry_transferred': {
+          const from = payloadAmount(payload, 'fromCellId');
+          const to = payloadAmount(payload, 'toCellId');
+          const cost = payloadAmount(payload, 'cost');
+          const downstream = payload.direction === 'downstream';
+          return `${actor} 在${cellName(state, from ?? -1)}${downstream ? '顺流' : '逆流'}抵达 ${cellName(state, to ?? -1)}`
+            + `${cost === null || cost <= 0 ? '，免费' : `，支付船费 ${money(cost)}`}`;
+        }
+        default:
+          return null;
+      }
+
+    case 'river-tide':
+      switch (event.eventType) {
+        case 'river_works_visited':
+          return `${actor} 抵达河工段`;
+        case 'river_works_declined':
+          return `${actor} 不修堤`;
+        case 'river_dike_built': {
+          const cost = payloadAmount(payload, 'cost');
+          const previous = payloadAmount(payload, 'previous');
+          const level = payloadAmount(payload, 'level');
+          return `${actor} 出资修堤${cost === null ? '' : ` ${money(cost)}`}，`
+            + `水位${previous !== null && level !== null ? `由 ${previous} 降至 ${level}` : '下降'}`;
+        }
+        case 'river_tide_changed': {
+          const previous = payloadAmount(payload, 'previous');
+          const level = payloadAmount(payload, 'level');
+          const delta = payloadAmount(payload, 'delta');
+          if (delta === null || delta === 0) return '黄河水位无变化';
+          return `黄河水位${delta > 0 ? '上涨' : '回落'}${previous !== null && level !== null ? `至 ${level}` : ''}，`
+            + '全场过路费随之调整';
+        }
+        case 'river_tide_rent': {
+          const amount = payloadAmount(payload, 'amount');
+          return `${actor} 支付黄河过路费 ${money(amount ?? 0)}`;
+        }
+        default:
+          return null;
+      }
+
     default:
       return null;
   }
+}
+
+/**
+ * 模块 id → 该模块的代表性 cellType。
+ *
+ * 只用于**未登记事件**的兜底文案（想让未知事件读起来像「票号结算」而不是
+ * `piaohao@1:xxx`）。取各模块最有代表性的那一类格子，
+ * 复用 `MODULE_CELL_TYPE_LABELS` 这张既有表，不新增第二份模块中文名清单。
+ */
+function moduleCellTypeHint(moduleId: string): string {
+  switch (moduleId) {
+    case 'rail-hub': return 'rail-hub';
+    case 'landmark-passport': return 'landmark';
+    case 'port-trade': return 'port';
+    case 'piaohao': return 'piaohao';
+    case 'caravan-market': return 'caravan';
+    case 'oasis-camp': return 'oasis';
+    case 'yangtze-ferry': return 'ferry';
+    case 'river-tide': return 'river-works';
+    case 'great-wall': return 'beacon';
+    case 'prison': return 'goto-jail';
+    default: return '';
+  }
+}
+
+/**
+ * 未登记模块事件的兜底文案。
+ *
+ * 刻意**不**再回落到 `模块事件 <id>@<ver>:<eventType>` 那种裸标识符 ——
+ * 那是内部契约，不是给玩家看的文本。未知事件统一读成「某某玩法结算」，既不泄露模块 id，
+ * 也不会让一行战报因为漏注册就变成天书。
+ */
+function formatUnknownModuleEvent(event: Extract<GameEvent, { type: 'module' }>): string {
+  const moduleName = MODULE_CELL_TYPE_LABELS[moduleCellTypeHint(event.module.id)] ?? '特殊玩法';
+  return `${moduleName}结算`;
 }
 
 export function getTurnTitle(state: GameState | RenderableGameState, actorId: string): string {
@@ -936,8 +1199,8 @@ export function formatRecentLogEvent(state: GameState | RenderableGameState, eve
         ? `${cellName(state, event.cellId)} 流拍，仍无人拥有`
         : `${playerName(state, event.winnerId)} 以 ${money(event.amount)} 拍下 ${cellName(state, event.cellId)}`;
     case 'module':
-      return formatWorldTourModuleEvent(state, event)
-        ?? `模块事件 ${event.module.id}@${event.module.version}:${event.eventType}`;
+      // 已登记 → 中文文案；未登记 → 人类可读兜底。绝不下落到裸标识符。
+      return formatWorldTourModuleEvent(state, event) ?? formatUnknownModuleEvent(event);
   }
   const unreachable: never = event;
   return unreachable;

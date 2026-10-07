@@ -36,10 +36,10 @@ describe('data-driven board presentation helpers', () => {
       bandColor: null,
       compact: false,
       style: {
-        left: '0%',
-        top: '88.961039%',
-        width: '11.038961%',
-        height: '11.038961%',
+        left: '2%',
+        top: '87.40259744%',
+        width: '10.59740256%',
+        height: '10.59740256%',
       },
     });
     expect(getCellPresentationModel(china, 10)).toMatchObject({
@@ -51,10 +51,10 @@ describe('data-driven board presentation helpers', () => {
       iconGlyph: '🌐',
       compact: true,
       style: {
-        left: '9.8%',
-        top: '81.8%',
-        width: '8.4%',
-        height: '8.4%',
+        left: '11.408%',
+        top: '80.528%',
+        width: '8.064%',
+        height: '8.064%',
         zIndex: '5',
       },
     });
@@ -182,14 +182,14 @@ describe('data-driven board presentation helpers', () => {
     const panel = getCenterDecorationModel(china, china.presentation.center[0]!);
 
     expect(start.style).toMatchObject({
-      '--mobile-left': '89.73509933774835%',
-      '--mobile-top': '89.73509933774835%',
-      '--mobile-width': '10.264900662251655%',
-      '--mobile-height': '10.264900662251655%',
+      '--mobile-left': '88.145695364%',
+      '--mobile-top': '88.145695364%',
+      '--mobile-width': '9.854304636%',
+      '--mobile-height': '9.854304636%',
     });
     expect(bottomEdge.style).toMatchObject({
-      '--mobile-width': '6.622516556291391%',
-      '--mobile-height': '10.264900662251655%',
+      '--mobile-width': '6.357615894%',
+      '--mobile-height': '9.854304636%',
     });
     expect(panel.style).toMatchObject({
       '--mobile-left': '23.509933774834437%',
@@ -198,11 +198,14 @@ describe('data-driven board presentation helpers', () => {
       '--mobile-height': '52.980132450331126%',
     });
     const title = getCenterDecorationModel(china, china.presentation.center[1]!);
+    // fitContent 的题字：width/height 留空交给内容自适应，改用 maxWidth/maxHeight 封顶。
+    // 这两个值直接来自题字自身的 width/height（boardLayout.ts:95-96），
+    // 所以 #需求6 给画布留白 2、把题字一起缩放后，它们从 22%/8% 变成 21.12%/7.68%。
     expect(title.style).toMatchObject({
       width: undefined,
       height: undefined,
-      maxWidth: '22%',
-      maxHeight: '8%',
+      maxWidth: '21.12%',
+      maxHeight: '7.68%',
       '--mobile-max-width': '22%',
       '--mobile-max-height': '8%',
     });

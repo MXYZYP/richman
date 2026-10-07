@@ -39,3 +39,4 @@ export { pearlTourMap } from './pearlTourMap';
 export { xinjiangTourMap } from './xinjiangTourMap';
 export { shanxiTourMap } from './shanxiTourMap';
 export { northeastTourMap } from './northeastTourMap';
+export { yunchengTourMap } from './yunchengTourMap';

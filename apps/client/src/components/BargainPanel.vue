@@ -462,7 +462,7 @@ function submitBid(): void {
   padding: 4px 6px;
   border: 1px solid var(--color-border);
   border-radius: 7px;
-  background: var(--game-panel-quiet, var(--game-panel-raised));
+  background: var(--game-panel-sunken, var(--game-panel-raised));
   color: var(--color-text);
   font: inherit;
   font-variant-numeric: tabular-nums;
@@ -589,7 +589,7 @@ function submitBid(): void {
 .bargain-btn:disabled,
 .bargain-panel__toggle:disabled {
   cursor: not-allowed;
-  background: var(--game-panel-quiet, var(--game-panel-raised));
+  background: var(--game-panel-sunken, var(--game-panel-raised));
   border-color: transparent;
   color: var(--color-muted);
   box-shadow: none;

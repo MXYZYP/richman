@@ -305,9 +305,9 @@ describe('音效开关与持久化', () => {
     const third = await loadSfx();
     expect(third.isSfxEnabled()).toBe(true);
     third.playSfx('dice');
-    // 一次掷骰 = 1 段摩擦 + 9 次撞击；停稳闷响走振荡器路径，不计在噪声里。
+    // 一次掷骰 = 1 段摩擦 + 6 次撞击；停稳闷响走振荡器路径，不计在噪声里。
     expect(diceBed()).toHaveLength(1);
-    expect(diceKnocks()).toHaveLength(9);
+    expect(diceKnocks()).toHaveLength(6);
   });
 
   it('存储里已经是 0 时模块一加载就是静音', async () => {
@@ -401,17 +401,17 @@ describe('骰子音色（#2 真骰子滚落）', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
   };
 
-  it('由三层构成：1 段滚落摩擦 + 9 次撞击 + 2 记停稳闷响', async () => {
+  it('由三层构成：1 段滚落摩擦 + 6 次撞击 + 2 记停稳闷响', async () => {
     freezeJitter();
     const sfx = await loadSfx();
 
     sfx.playSfx('dice');
 
     expect(diceBed()).toHaveLength(1);
-    expect(diceKnocks()).toHaveLength(9);
+    expect(diceKnocks()).toHaveLength(6);
     expect(diceSettle()).toHaveLength(2);
     // 三个层次之外不再有别的噪声源（旧版的方波蜂鸣已彻底移除）。
-    expect(env.noises).toHaveLength(10);
+    expect(env.noises).toHaveLength(7);
   });
 
   it('每次撞击都是带通白噪声脉冲，中心频率高低交错且互不相同', async () => {
@@ -421,12 +421,15 @@ describe('骰子音色（#2 真骰子滚落）', () => {
     sfx.playSfx('dice');
 
     const knocks = diceKnocks();
-    expect(knocks.map((click) => click.filterType)).toEqual(Array.from({ length: 9 }, () => 'bandpass'));
-    // 9 个中心频率两两不同：等音高的连击一听就是电子音。
+    expect(knocks.map((click) => click.filterType)).toEqual(Array.from({ length: 6 }, () => 'bandpass'));
+    // 6 个中心频率两两不同：等音高的连击一听就是电子音。
     expect(knocks.map((click) => click.filterHz)).toEqual([
-      980, 1480, 2240, 1260, 2680, 1720, 3120, 1180, 2060,
+      980, 1480, 1960, 1260, 2340, 1720,
     ]);
-    expect(new Set(knocks.map((click) => click.filterHz)).size).toBe(9);
+    expect(new Set(knocks.map((click) => click.filterHz)).size).toBe(6);
+    // 「不刺耳」的可测判据：没有任何一次撞击的中心频率越过 2600Hz。
+    // 旧版有 3120Hz，高频带通噪声在廉价喇叭上会发毛甚至失真。
+    expect(Math.max(...knocks.map((click) => click.filterHz))).toBeLessThanOrEqual(2600);
     expect(knocks.every((click) => click.filterQ > 0)).toBe(true);
   });
 
@@ -437,14 +440,16 @@ describe('骰子音色（#2 真骰子滚落）', () => {
     sfx.playSfx('dice');
 
     const starts = diceKnocks().map((click) => click.startedAt);
-    expect(starts).toEqual([0, 0.026, 0.052, 0.084, 0.118, 0.152, 0.196, 0.248, 0.318]);
+    expect(starts).toEqual([0, 0.022, 0.048, 0.08, 0.118, 0.172]);
     const gaps = starts.slice(1).map((start, index) => start - (starts[index] as number));
     for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(0.02);
     // 最后一击已经明显慢下来，不再像前段那样密集。
     expect(gaps.at(-1) as number).toBeGreaterThan(gaps[0] as number);
-    // 整段约 0.5s（滚落 0.4s + 两记停稳闷响收尾），不会拖成一声持续音。
+    // 整段约 0.36s（最后一次撞击 172ms + 停稳两记闷响在 214/244ms 各衰减 120ms），
+    // 不会拖成一声持续音。「短促」的可测判据：整段必须短于 0.4s —— 旧版是 0.55s，
+    // 听下来是"拖"而不是"脆"。
     const soundingEnds = [...env.noises, ...env.tones].map((item) => item.stoppedAt);
-    expect(Math.max(...soundingEnds)).toBeLessThan(0.55);
+    expect(Math.max(...soundingEnds)).toBeLessThan(0.4);
   });
 
   it('每次撞击都有起音斜坡（这是消除爆音的关键）且增益远低于削波阈值', async () => {
@@ -457,7 +462,7 @@ describe('骰子音色（#2 真骰子滚落）', () => {
       // 起音时刻必须晚于发声起点、且很快到达峰值：既不留阶跃，也不拖慢听感。
       expect(click.attackAt).toBeGreaterThan(click.startedAt);
       expect(click.attackAt - click.startedAt).toBeLessThanOrEqual(0.01);
-      // 九击峰值 0.11（音量 0.7 时为 0.077），叠加后也不会碰到 1.0 的削波阈值。
+      // 六击峰值 0.13（音量 0.7 时为 0.091），叠加后也不会碰到 1.0 的削波阈值。
       expect(click.attackTarget).toBeGreaterThan(0);
       expect(click.attackTarget).toBeLessThan(0.2);
       // 每击都必须自然收尾，不能挂着不停。
@@ -473,11 +478,11 @@ describe('骰子音色（#2 真骰子滚落）', () => {
 
     const bed = diceBed()[0] as NoiseRecord;
     expect(bed.filterType).toBe('bandpass');
-    expect(bed.filterHzTrack).toEqual([700, 2400, 900]);
+    expect(bed.filterHzTrack).toEqual([900, 2000, 1000]);
     // 摩擦声是宽频沙沙声，Q 值要比撞击低得多。
     expect(bed.filterQ).toBeLessThan(diceKnocks()[0]?.filterQ as number);
-    // 覆盖整段滚落过程（约 400ms），而不是一闪而过。
-    expect(bed.stoppedAt - bed.startedAt).toBeCloseTo(0.4, 5);
+    // 覆盖整段滚落过程（约 260ms），而不是一闪而过。
+    expect(bed.stoppedAt - bed.startedAt).toBeCloseTo(0.26, 5);
   });
 
   it('停稳是两记低频正弦闷响，第二记稍晚跟上', async () => {
@@ -502,7 +507,7 @@ describe('骰子音色（#2 真骰子滚落）', () => {
     sfx.playSfx('dice');
 
     expect(diceBed()).toHaveLength(2);
-    expect(diceKnocks()).toHaveLength(18);
+    expect(diceKnocks()).toHaveLength(12);
     expect(env.contextCount).toBe(1);
   });
 });
@@ -548,16 +553,16 @@ describe('音效音量（#13）', () => {
     sfx.setSfxVolume(1);
     sfx.playSfx('dice');
     sfx.playSfx('pay');
-    // 一次掷骰 = 摩擦 1 + 撞击 9 + 停稳 2，加一记单音。
+    // 一次掷骰 = 摩擦 1 + 撞击 6 + 停稳 2，加一记单音。
     const full = peaks();
-    expect(full).toHaveLength(13);
+    expect(full).toHaveLength(10);
 
     sfx.setSfxVolume(0.5);
     sfx.playSfx('dice');
     sfx.playSfx('pay');
     const half = peaks().slice(full.length);
 
-    expect(half).toHaveLength(13);
+    expect(half).toHaveLength(10);
     expect(half).toEqual(full.map((value) => value / 2));
   });
 

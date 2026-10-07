@@ -12,6 +12,7 @@ import { silkRoadMap } from '../silkRoadMap';
 import { worldTourMap } from '../worldTourMap';
 import { xinjiangTourMap } from '../xinjiangTourMap';
 import { yangtzeTourMap } from '../yangtzeTourMap';
+import { yunchengTourMap } from '../yunchengTourMap';
 import { yellowRiverMap } from '../yellowRiverMap';
 import {
   createMapRegistry,
@@ -50,7 +51,7 @@ function createRegistry(activeMapRefs: readonly MapRef[], assets: readonly {
 }
 
 describe('production map registry', () => {
-  it('按批准顺序公开并精确解析十一张正式地图', async () => {
+  it('按批准顺序公开并精确解析十二张正式地图', async () => {
     expect(listActiveMaps()).toEqual([
       {
         ref: chinaTourMap.ref,
@@ -107,6 +108,11 @@ describe('production map registry', () => {
         title: northeastTourMap.metadata.title,
         description: northeastTourMap.metadata.description,
       },
+      {
+        ref: yunchengTourMap.ref,
+        title: yunchengTourMap.metadata.title,
+        description: yunchengTourMap.metadata.description,
+      },
     ]);
     expect(getActiveMapPack('china-tour')).toBe(getMapPack(chinaTourMap.ref));
     expect(getMapPack(chinaTourMap.ref)).toEqual(chinaTourMap);
@@ -130,6 +136,8 @@ describe('production map registry', () => {
     expect(getMapPack(shanxiTourMap.ref)).toEqual(shanxiTourMap);
     expect(getActiveMapPack('northeast-tour')).toBe(getMapPack(northeastTourMap.ref));
     expect(getMapPack(northeastTourMap.ref)).toEqual(northeastTourMap);
+    expect(getActiveMapPack('yuncheng-tour')).toBe(getMapPack(yunchengTourMap.ref));
+    expect(getMapPack(yunchengTourMap.ref)).toEqual(yunchengTourMap);
     expect(() => getMapPack({ ...worldTourMap.ref, contentHash: 'f'.repeat(64) }))
       .toThrow(/hash mismatch.*world-tour@1/i);
 
@@ -172,13 +180,13 @@ describe('production map registry', () => {
     });
 
     // 空沙箱里什么都没有：既看不到生产地图（独立实例不共享 packsById），
-    // 也不会因为在里面注册而污染生产的那十一张地图。
+    // 也不会因为在里面注册而污染生产的那十二张地图。
     expect(sandbox.listActiveMaps()).toEqual([]);
     expect(() => sandbox.getMapPack(chinaTourMap.ref)).toThrow(/Unknown map id: china-tour/);
     expect(listActiveMaps().map((entry) => entry.ref.id)).toEqual([
       'china-tour', 'world-tour', 'classic-tour', 'silk-road', 'great-wall',
       'yellow-river', 'yangtze-tour', 'pearl-tour', 'xinjiang-tour', 'shanxi-tour',
-      'northeast-tour',
+      'northeast-tour', 'yuncheng-tour',
     ]);
   });
 

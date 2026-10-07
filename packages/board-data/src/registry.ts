@@ -12,6 +12,7 @@ import { pearlTourMap } from './pearlTourMap';
 import { xinjiangTourMap } from './xinjiangTourMap';
 import { shanxiTourMap } from './shanxiTourMap';
 import { northeastTourMap } from './northeastTourMap';
+import { yunchengTourMap } from './yunchengTourMap';
 
 interface AssetAllowlistEntry {
   readonly ref: MapRef;
@@ -175,6 +176,7 @@ const productionRegistry = createMapRegistry({
     xinjiangTourMap.ref,
     shanxiTourMap.ref,
     northeastTourMap.ref,
+    yunchengTourMap.ref,
   ],
   knownRuleModules: PRODUCTION_RULE_MODULES,
   assetAllowlist: [
@@ -189,6 +191,7 @@ const productionRegistry = createMapRegistry({
     { ref: xinjiangTourMap.ref, paths: [] },
     { ref: shanxiTourMap.ref, paths: [] },
     { ref: northeastTourMap.ref, paths: [] },
+    { ref: yunchengTourMap.ref, paths: [] },
   ],
 });
 
@@ -203,6 +206,7 @@ productionRegistry.registerMapPack(pearlTourMap);
 productionRegistry.registerMapPack(xinjiangTourMap);
 productionRegistry.registerMapPack(shanxiTourMap);
 productionRegistry.registerMapPack(northeastTourMap);
+productionRegistry.registerMapPack(yunchengTourMap);
 
 export function listActiveMaps(): readonly MapCatalogEntry[] {
   return productionRegistry.listActiveMaps();

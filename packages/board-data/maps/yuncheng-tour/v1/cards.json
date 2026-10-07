@@ -1,0 +1,218 @@
+{
+  "chance": [
+    {
+      "id": "yc-c01",
+      "text": "在解州关帝庙前守岁一晚：花费 400 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 400
+      }
+    },
+    {
+      "id": "yc-c02",
+      "text": "盐池采盐获一批老卤：得 1600 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1600
+      }
+    },
+    {
+      "id": "yc-c03",
+      "text": "沿黄河金三角驱车不停：前进四步",
+      "effect": {
+        "type": "move_steps",
+        "steps": 4
+      }
+    },
+    {
+      "id": "yc-c04",
+      "text": "河东老陈醋作坊分红：得 1900 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1900
+      }
+    },
+    {
+      "id": "yc-c05",
+      "text": "在鹳雀楼拍下黄河落日：稿酬 1000 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1000
+      }
+    },
+    {
+      "id": "yc-c06",
+      "text": "盐池决堤冲了晒盐场：赔偿 1300 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1300
+      }
+    },
+    {
+      "id": "yc-c07",
+      "text": "修缮解州城垣与关隘：房屋每栋付 320 元；关隘每处付 980 元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 320,
+        "perHotel": 980
+      }
+    },
+    {
+      "id": "yc-c08",
+      "text": "翻出票号旧账分到红利：得 2500 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2500
+      }
+    },
+    {
+      "id": "yc-c09",
+      "text": "黄河渡口遇风浪，货船搁浅：每人救援你 480 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 480
+      }
+    },
+    {
+      "id": "yc-c10",
+      "text": "禹门渡检修封航：暂停一次",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 1
+      }
+    },
+    {
+      "id": "yc-c11",
+      "text": "盐池环保核查罚款：损失 1100 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1100
+      }
+    },
+    {
+      "id": "yc-c12",
+      "text": "给永乐宫壁画做测绘向导：得 1200 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1200
+      }
+    }
+  ],
+  "destiny": [
+    {
+      "id": "yc-d01",
+      "text": "沿涑水河返程回到起点，并可领取起点奖金 2000 元",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": "yc-d02",
+      "text": "在盐池边迷了路，退回起点，且不可领取起点奖金",
+      "effect": {
+        "type": "move_to",
+        "cellId": 0,
+        "collectSalary": false
+      }
+    },
+    {
+      "id": "yc-d03",
+      "text": "蒲津渡驿马传讯：直接前往蒲津渡，可领起点奖金",
+      "effect": {
+        "type": "move_to",
+        "cellId": 15,
+        "collectSalary": true
+      }
+    },
+    {
+      "id": "yc-d04",
+      "text": "修葺后土祠大殿：得 2300 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2300
+      }
+    },
+    {
+      "id": "yc-d05",
+      "text": "修缮庙宇与关隘：房屋每栋付 260 元；关隘每处付 1050 元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 260,
+        "perHotel": 1050
+      }
+    },
+    {
+      "id": "yc-d06",
+      "text": "在永乐宫听了一段蒲剧",
+      "effect": {
+        "type": "none"
+      }
+    },
+    {
+      "id": "yc-d07",
+      "text": "登上鹳雀楼取回一幅题匾：奖金 3200 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 3200
+      }
+    },
+    {
+      "id": "yc-d08",
+      "text": "帮老乡收了半亩稷山麦：得 1200 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1200
+      }
+    },
+    {
+      "id": "yc-d09",
+      "text": "在盐滩上采到一筐滩枣：得 1600 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1600
+      }
+    },
+    {
+      "id": "yc-d10",
+      "text": "请同行商队喝了一壶老茶：每人送礼金 750 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 750
+      }
+    },
+    {
+      "id": "yc-d11",
+      "text": "被盐关税吏刁难，货物被扣：损失 1100 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1100
+      }
+    },
+    {
+      "id": "yc-d12",
+      "text": "黄河滩塌方，乡邻赶来相助：每人各出 950 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 950
+      }
+    },
+    {
+      "id": "yc-d13",
+      "text": "在河东老街遇到老朋友：可以再翻一张机会",
+      "effect": {
+        "type": "draw_card",
+        "deck": "chance"
+      }
+    },
+    {
+      "id": "yc-d14",
+      "text": "在禹门渡挖到一块盐晶标本：得 1700 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1700
+      }
+    }
+  ]
+}

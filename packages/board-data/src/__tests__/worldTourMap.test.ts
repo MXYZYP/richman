@@ -405,12 +405,21 @@ describe('world-tour@1 approved source data', () => {
       .map((cell: { id: number }) => manifest.presentation.cells[cell.id]);
 
     expect(outerPlacements).toHaveLength(52);
+    // 边界从数据推导，不写死 0 / 100 —— #需求6 给四边留白 2 之后，
+    // 「贴齐画布边缘」已不再成立，锁死数字会让留白修正必然红。
+    const minX = Math.min(...outerPlacements.map((cell: any) => cell.x));
+    const maxX = Math.max(...outerPlacements.map((cell: any) => cell.x + cell.width));
+    const minY = Math.min(...outerPlacements.map((cell: any) => cell.y));
+    const maxY = Math.max(...outerPlacements.map((cell: any) => cell.y + cell.height));
     expect({
-      top: outerPlacements.filter((cell: any) => cell.y === 0).length,
-      right: outerPlacements.filter((cell: any) => cell.x + cell.width === 100).length,
-      bottom: outerPlacements.filter((cell: any) => cell.y + cell.height === 100).length,
-      left: outerPlacements.filter((cell: any) => cell.x === 0).length,
+      top: outerPlacements.filter((cell: any) => cell.y === minY).length,
+      right: outerPlacements.filter((cell: any) => cell.x + cell.width === maxX).length,
+      bottom: outerPlacements.filter((cell: any) => cell.y + cell.height === maxY).length,
+      left: outerPlacements.filter((cell: any) => cell.x === minX).length,
     }).toEqual({ top: 14, right: 14, bottom: 14, left: 14 });
+    // #需求6：四边留白对称且不贴边，避免最外圈格子被画布裁掉一角。
+    expect({ left: minX, top: minY, right: 100 - maxX, bottom: 100 - maxY })
+      .toEqual({ left: 2, top: 2, right: 2, bottom: 2 });
   });
 
   it('is a deeply frozen valid immutable map pack', () => {

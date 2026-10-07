@@ -106,7 +106,7 @@ describe('china-tour@1 map pack', () => {
     expect(chinaTourMap.ref).toEqual({
       id: 'china-tour',
       version: 1,
-      contentHash: '26a6f9529d6a4374fb64ef43113fe60e06fd71d91185f186b1eee73d8fd7e0d6',
+      contentHash: '4e9c35091fbfb496bdbe081c8385becbd8014f73e301a31ce458dee3368a0cd3',
     });
     expect(chinaTourMap.metadata).toEqual({
       title: '中国之旅',
@@ -145,28 +145,24 @@ describe('china-tour@1 map pack', () => {
   it('保留 14×14 非均匀外环与 9 格支线坐标', () => {
     expect(chinaTourMap.presentation.canvas).toEqual({ size: 100 });
     expect(chinaTourMap.presentation.cells[0]).toMatchObject({
-      x: 88.961039, y: 88.961039, width: 11.038961, height: 11.038961,
-    });
+      x: 87.40259744, y: 87.40259744, width: 10.59740256, height: 10.59740256,    });
     expect(chinaTourMap.presentation.cells[13]).toMatchObject({
-      x: 0, y: 88.961039, width: 11.038961, height: 11.038961,
-    });
+      x: 2, y: 87.40259744, width: 10.59740256, height: 10.59740256,    });
     expect(chinaTourMap.presentation.cells[26]).toMatchObject({
-      x: 0, y: 0, width: 11.038961, height: 11.038961,
-    });
+      x: 2, y: 2, width: 10.59740256, height: 10.59740256,    });
     expect(chinaTourMap.presentation.cells[39]).toMatchObject({
-      x: 88.961039, y: 0, width: 11.038961, height: 11.038961,
-    });
-    expect(chinaTourMap.presentation.cells[52]).toMatchObject({ x: 9.8, y: 81.8, width: 8.4, height: 8.4 });
-    expect(chinaTourMap.presentation.cells[60]).toMatchObject({ x: 80.2, y: 11.4, width: 8.4, height: 8.4 });
+      x: 87.40259744, y: 2, width: 10.59740256, height: 10.59740256,    });
+    expect(chinaTourMap.presentation.cells[52]).toMatchObject({ x: 11.408, y: 80.528, width: 8.064, height: 8.064 });
+    expect(chinaTourMap.presentation.cells[60]).toMatchObject({ x: 78.992, y: 12.944, width: 8.064, height: 8.064 });
   });
 
   it('保留支线路径、中央面板、旋转题字与主题', () => {
     expect(chinaTourMap.presentation.routes).toEqual([{
       type: 'polyline',
       points: [
-        { x: 14, y: 86 }, { x: 22.8, y: 77.2 }, { x: 31.6, y: 68.4 },
-        { x: 40.4, y: 59.6 }, { x: 49.2, y: 50.8 }, { x: 58, y: 42 },
-        { x: 66.8, y: 33.2 }, { x: 75.6, y: 24.4 }, { x: 84.4, y: 15.6 },
+        { x: 15.44, y: 84.56 }, { x: 23.888, y: 76.112 }, { x: 32.336, y: 67.664 },
+        { x: 40.784, y: 59.216 }, { x: 49.232, y: 50.768 }, { x: 57.68, y: 42.32 },
+        { x: 66.128, y: 33.872 }, { x: 74.576, y: 25.424 }, { x: 83.024, y: 16.976 },
       ],
       role: 'route',
       strokeWidth: 1.1,
