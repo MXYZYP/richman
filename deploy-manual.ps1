@@ -83,8 +83,9 @@ $files = @(
   "apps/client/src/components/BoardCell.vue",
   "apps/client/src/components/CellDetailPanel.vue",
   "apps/client/src/components/SettlementDialog.vue",
-  # AssetPanel.vue - 资产弹层，需求 5 接入 --game-panel-sunken。
-  # 不在清单里服务器会保留旧副本，本地改动静默不生效（且 pre-flight 不报错）。
+  # AssetPanel.vue - asset dialog; consumes --game-panel-sunken (theme polish).
+  # Must stay in this manifest: the server keeps stale copies of anything missing,
+  # so local edits silently do nothing and pre-flight does not flag it.
   "apps/client/src/components/AssetPanel.vue",
   "apps/client/src/views/RestoreView.vue",
   "apps/client/src/game/clientGame.ts",
