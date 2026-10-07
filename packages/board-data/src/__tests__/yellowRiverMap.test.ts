@@ -246,7 +246,7 @@ describe('yellow-river@1 approved source data', () => {
   it('locks the owner-approved game config with maxHouseLevel 5', () => {
     expect(readMapJson('game-config.json')).toEqual({
       initialCash: 15000,
-      passStartSalary: 2000,
+      passStartSalary: 2100,
       maxHouseLevel: 5,
       sellHouseRefundRate: 0.5,
       sellLandRate: 0.5,
@@ -297,7 +297,7 @@ describe('yellow-river@1 approved source data', () => {
     expect(() => assertValidMapPack(yellowRiverMap, [coreModule, riverTideModule])).not.toThrow();
     expect(computeContentHash(yellowRiverMap)).toBe(yellowRiverMap.ref.contentHash);
     expect(yellowRiverMap.ref.contentHash)
-      .toBe('21dcfca118da28c5882be3b7bf3a7ee6c365581414f67fa621657e0c59747fee');
+      .toBe('4bfca93325c43b6ecf3bc0fb2dc8cb66b504f62c49ae2b1e1f3f7f9ee832d169');
     expect(Object.isFrozen(yellowRiverMap)).toBe(true);
     expect(Object.isFrozen(yellowRiverMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(yellowRiverMap.game.cards.destiny[2]!.effect)).toBe(true);

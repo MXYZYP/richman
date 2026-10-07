@@ -258,7 +258,7 @@ describe('pearl-tour@1 approved source data', () => {
   it('locks the owner-approved game config with maxHouseLevel 5', () => {
     expect(readMapJson('game-config.json')).toEqual({
       initialCash: 15000,
-      passStartSalary: 2000,
+      passStartSalary: 2300,
       maxHouseLevel: 5,
       sellHouseRefundRate: 0.5,
       sellLandRate: 0.5,
@@ -307,7 +307,7 @@ describe('pearl-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(pearlTourMap, [coreModule, portTradeModule])).not.toThrow();
     expect(computeContentHash(pearlTourMap)).toBe(pearlTourMap.ref.contentHash);
     expect(pearlTourMap.ref.contentHash)
-      .toBe('6fca0225a90fcdfa8f56459a9258177d6a5125d227a8231fbea9615a96373469');
+      .toBe('ff56ad382dc3623c7bc3e1055503a7947d4856e066eae4e06fbab5f60effa0e5');
     expect(Object.isFrozen(pearlTourMap)).toBe(true);
     expect(Object.isFrozen(pearlTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(pearlTourMap.game.cards.destiny[2]!.effect)).toBe(true);

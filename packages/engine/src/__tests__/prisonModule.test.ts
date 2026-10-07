@@ -22,11 +22,11 @@ import type { GameEvent, GameState, PendingModuleAction } from '../types';
 const prisonRef = { id: 'prison', version: 1 } as const;
 const coreRef = { id: 'core', version: 1 } as const;
 
-/** 与 maps/northeast-tour/v1 一致：唯一监狱角格、三个进牢格、保释金 1500 元。 */
+/** 与 maps/northeast-tour/v1 一致：唯一监狱角格、三个进牢格、保释金 2500 元（组 C 上调）。 */
 const JAIL_CELL_ID = 42;
 const GOTO_JAIL_CELL_IDS = [5, 17, 33];
 const GOTO_JAIL_CELL_ID = GOTO_JAIL_CELL_IDS[0]!;
-const BAIL_COST = 1500;
+const BAIL_COST = 2500;
 
 function makePrisonGame(playerCount = 2): GameState {
   return createGame({

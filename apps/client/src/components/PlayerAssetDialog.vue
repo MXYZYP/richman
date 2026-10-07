@@ -439,7 +439,7 @@ function closeFromBackdrop(event: MouseEvent): void {
   font-weight: 800;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 1024px) {
   .player-dialog-layer {
     width: 100%;
     margin: auto 0 0;

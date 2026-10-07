@@ -13,17 +13,17 @@
       "subtype": "normal",
       "name": "纽约市",
       "subtitle": "曼哈顿",
-      "price": 2200,
-      "houseCost": 1500,
+      "price": 3850,
+      "houseCost": 2400,
       "rents": [
-        180,
-        900,
-        2500,
-        7000,
-        8750,
-        10500
+        225,
+        1215,
+        3645,
+        11022,
+        14880,
+        19285
       ],
-      "mortgageValue": 1100
+      "mortgageValue": 1925
     },
     {
       "id": 2,
@@ -31,17 +31,17 @@
       "subtype": "normal",
       "name": "洛杉矶",
       "subtitle": "好莱坞",
-      "price": 2400,
-      "houseCost": 1500,
+      "price": 4200,
+      "houseCost": 2400,
       "rents": [
-        200,
-        1000,
-        3000,
-        7500,
-        9250,
-        11000
+        250,
+        1350,
+        4374,
+        11810,
+        15731,
+        20203
       ],
-      "mortgageValue": 1200
+      "mortgageValue": 2100
     },
     {
       "id": 3,
@@ -54,17 +54,17 @@
       "subtype": "normal",
       "name": "伦敦",
       "subtitle": "泰晤士",
-      "price": 2600,
-      "houseCost": 1500,
+      "price": 4550,
+      "houseCost": 2400,
       "rents": [
-        220,
-        1100,
-        3300,
-        8000,
-        9750,
-        11500
+        275,
+        1485,
+        4811,
+        12597,
+        16581,
+        21122
       ],
-      "mortgageValue": 1300
+      "mortgageValue": 2275
     },
     {
       "id": 5,
@@ -72,17 +72,17 @@
       "subtype": "normal",
       "name": "巴黎",
       "subtitle": "塞纳河",
-      "price": 2600,
-      "houseCost": 1500,
+      "price": 4550,
+      "houseCost": 2400,
       "rents": [
-        220,
-        1100,
-        3300,
-        8000,
-        9750,
-        11500
+        275,
+        1485,
+        4811,
+        12597,
+        16581,
+        21122
       ],
-      "mortgageValue": 1300
+      "mortgageValue": 2275
     },
     {
       "id": 6,
@@ -91,10 +91,10 @@
       "name": "中央车站",
       "price": 2000,
       "rents": [
-        250,
-        500,
-        1000,
-        2000
+        313,
+        675,
+        1458,
+        3149
       ],
       "mortgageValue": 1000
     },
@@ -104,17 +104,17 @@
       "subtype": "normal",
       "name": "东京",
       "subtitle": "涩谷",
-      "price": 2800,
-      "houseCost": 1500,
+      "price": 4900,
+      "houseCost": 2400,
       "rents": [
-        240,
-        1200,
-        3600,
-        8500,
-        10250,
-        12000
+        300,
+        1620,
+        5249,
+        13384,
+        17431,
+        22040
       ],
-      "mortgageValue": 1400
+      "mortgageValue": 2450
     },
     {
       "id": 8,
@@ -122,17 +122,17 @@
       "subtype": "normal",
       "name": "悉尼",
       "subtitle": "港湾",
-      "price": 1600,
-      "houseCost": 1000,
+      "price": 2800,
+      "houseCost": 1600,
       "rents": [
-        120,
-        600,
-        1800,
-        5000,
-        7000,
-        9000
+        150,
+        810,
+        2624,
+        7873,
+        11904,
+        16530
       ],
-      "mortgageValue": 800
+      "mortgageValue": 1400
     },
     {
       "id": 9,
@@ -140,25 +140,25 @@
       "subtype": "normal",
       "name": "罗马",
       "subtitle": "斗兽场",
-      "price": 1400,
-      "houseCost": 1000,
+      "price": 2450,
+      "houseCost": 1600,
       "rents": [
-        100,
-        500,
-        1500,
-        4500,
-        6250,
-        7500
+        125,
+        675,
+        2187,
+        7086,
+        10629,
+        13775
       ],
-      "mortgageValue": 700
+      "mortgageValue": 1225
     },
     {
       "id": 10,
       "type": "property",
       "subtype": "utility",
       "name": "全球运河",
-      "price": 1500,
-      "mortgageValue": 750
+      "price": 2626,
+      "mortgageValue": 1312.5
     },
     {
       "id": 11,
@@ -166,17 +166,17 @@
       "subtype": "normal",
       "name": "旧金山",
       "subtitle": "金门",
-      "price": 2000,
-      "houseCost": 1000,
+      "price": 3500,
+      "houseCost": 1600,
       "rents": [
-        160,
-        800,
-        2200,
-        6000,
-        8000,
-        10000
+        200,
+        1080,
+        3208,
+        9448,
+        13605,
+        18367
       ],
-      "mortgageValue": 1000
+      "mortgageValue": 1750
     },
     {
       "id": 12,
@@ -184,17 +184,17 @@
       "subtype": "normal",
       "name": "柏林",
       "subtitle": "勃兰登堡",
-      "price": 1800,
-      "houseCost": 1000,
+      "price": 3150,
+      "houseCost": 1600,
       "rents": [
-        140,
-        700,
-        2000,
-        5500,
-        7500,
-        9500
+        175,
+        945,
+        2916,
+        8661,
+        12755,
+        17448
       ],
-      "mortgageValue": 900
+      "mortgageValue": 1575
     },
     {
       "id": 13,
@@ -208,17 +208,17 @@
       "subtype": "normal",
       "name": "莫斯科",
       "subtitle": "红场",
-      "price": 1800,
-      "houseCost": 1000,
+      "price": 3150,
+      "houseCost": 1600,
       "rents": [
-        140,
-        700,
-        2000,
-        5500,
-        7500,
-        9500
+        175,
+        945,
+        2916,
+        8661,
+        12755,
+        17448
       ],
-      "mortgageValue": 900
+      "mortgageValue": 1575
     },
     {
       "id": 15,
@@ -231,17 +231,17 @@
       "subtype": "normal",
       "name": "开罗",
       "subtitle": "尼罗河",
-      "price": 600,
-      "houseCost": 500,
+      "price": 1050,
+      "houseCost": 800,
       "rents": [
-        20,
-        100,
-        300,
-        900,
-        1600,
-        2500
+        25,
+        135,
+        437,
+        1417,
+        2721,
+        4592
       ],
-      "mortgageValue": 300
+      "mortgageValue": 525
     },
     {
       "id": 17,
@@ -249,17 +249,17 @@
       "subtype": "normal",
       "name": "伊斯坦布尔",
       "subtitle": "博斯",
-      "price": 1000,
-      "houseCost": 500,
+      "price": 1750,
+      "houseCost": 800,
       "rents": [
-        60,
-        300,
-        900,
-        2700,
-        4000,
-        5500
+        75,
+        405,
+        1312,
+        4252,
+        6802,
+        10102
       ],
-      "mortgageValue": 500
+      "mortgageValue": 875
     },
     {
       "id": 18,
@@ -267,17 +267,17 @@
       "subtype": "normal",
       "name": "新加坡",
       "subtitle": "狮城",
-      "price": 1200,
-      "houseCost": 500,
+      "price": 2100,
+      "houseCost": 800,
       "rents": [
-        80,
-        400,
-        1000,
-        3000,
-        4500,
-        6000
+        100,
+        540,
+        1458,
+        4724,
+        7653,
+        11020
       ],
-      "mortgageValue": 600
+      "mortgageValue": 1050
     },
     {
       "id": 19,
@@ -286,10 +286,10 @@
       "name": "欧洲之星",
       "price": 2000,
       "rents": [
-        250,
-        500,
-        1000,
-        2000
+        313,
+        675,
+        1458,
+        3149
       ],
       "mortgageValue": 1000
     },
@@ -299,17 +299,17 @@
       "subtype": "normal",
       "name": "多伦多",
       "subtitle": "湖滨",
-      "price": 3000,
-      "houseCost": 2000,
+      "price": 5250,
+      "houseCost": 3200,
       "rents": [
-        260,
-        1300,
-        3900,
-        9000,
-        11000,
-        12750
+        325,
+        1755,
+        5686,
+        14172,
+        18707,
+        23417
       ],
-      "mortgageValue": 1500
+      "mortgageValue": 2625
     },
     {
       "id": 21,
@@ -317,17 +317,17 @@
       "subtype": "normal",
       "name": "芝加哥",
       "subtitle": "Loop",
-      "price": 2200,
-      "houseCost": 1500,
+      "price": 3850,
+      "houseCost": 2400,
       "rents": [
-        180,
-        900,
-        2500,
-        7000,
-        8750,
-        10500
+        225,
+        1215,
+        3645,
+        11022,
+        14880,
+        19285
       ],
-      "mortgageValue": 1100
+      "mortgageValue": 1925
     },
     {
       "id": 22,
@@ -335,17 +335,17 @@
       "subtype": "normal",
       "name": "圣保罗",
       "subtitle": "海滨",
-      "price": 3000,
-      "houseCost": 2000,
+      "price": 5250,
+      "houseCost": 3200,
       "rents": [
-        260,
-        1300,
-        3900,
-        9000,
-        11000,
-        12750
+        325,
+        1755,
+        5686,
+        14172,
+        18707,
+        23417
       ],
-      "mortgageValue": 1500
+      "mortgageValue": 2625
     },
     {
       "id": 23,
@@ -364,17 +364,17 @@
       "subtype": "normal",
       "name": "马德里",
       "subtitle": "太阳门",
-      "price": 2400,
-      "houseCost": 1500,
+      "price": 4200,
+      "houseCost": 2400,
       "rents": [
-        200,
-        1000,
-        3000,
-        7500,
-        9250,
-        11000
+        250,
+        1350,
+        4374,
+        11810,
+        15731,
+        20203
       ],
-      "mortgageValue": 1200
+      "mortgageValue": 2100
     },
     {
       "id": 26,
@@ -393,17 +393,17 @@
       "subtype": "normal",
       "name": "雅典",
       "subtitle": "卫城",
-      "price": 2600,
-      "houseCost": 1500,
+      "price": 4550,
+      "houseCost": 2400,
       "rents": [
-        220,
-        1100,
-        3300,
-        8000,
-        9750,
-        11500
+        275,
+        1485,
+        4811,
+        12597,
+        16581,
+        21122
       ],
-      "mortgageValue": 1300
+      "mortgageValue": 2275
     },
     {
       "id": 28,
@@ -411,17 +411,17 @@
       "subtype": "normal",
       "name": "曼谷",
       "subtitle": "湄南河",
-      "price": 2600,
-      "houseCost": 1500,
+      "price": 4550,
+      "houseCost": 2400,
       "rents": [
-        220,
-        1100,
-        3300,
-        8000,
-        9750,
-        11500
+        275,
+        1485,
+        4811,
+        12597,
+        16581,
+        21122
       ],
-      "mortgageValue": 1300
+      "mortgageValue": 2275
     },
     {
       "id": 29,
@@ -429,17 +429,17 @@
       "subtype": "normal",
       "name": "首尔",
       "subtitle": "汉江",
-      "price": 2200,
-      "houseCost": 1500,
+      "price": 3850,
+      "houseCost": 2400,
       "rents": [
-        180,
-        900,
-        2500,
-        7000,
-        8750,
-        10500
+        225,
+        1215,
+        3645,
+        11022,
+        14880,
+        19285
       ],
-      "mortgageValue": 1100
+      "mortgageValue": 1925
     },
     {
       "id": 30,
@@ -452,17 +452,17 @@
       "subtype": "normal",
       "name": "迪拜",
       "subtitle": "塔",
-      "price": 1600,
-      "houseCost": 1000,
+      "price": 2800,
+      "houseCost": 1600,
       "rents": [
-        120,
-        600,
-        1800,
-        5000,
-        7000,
-        9000
+        150,
+        810,
+        2624,
+        7873,
+        11904,
+        16530
       ],
-      "mortgageValue": 800
+      "mortgageValue": 1400
     },
     {
       "id": 32,
@@ -470,17 +470,17 @@
       "subtype": "normal",
       "name": "孟买",
       "subtitle": "港湾",
-      "price": 1400,
-      "houseCost": 1000,
+      "price": 2450,
+      "houseCost": 1600,
       "rents": [
-        100,
-        500,
-        1500,
-        4500,
-        6250,
-        7500
+        125,
+        675,
+        2187,
+        7086,
+        10629,
+        13775
       ],
-      "mortgageValue": 700
+      "mortgageValue": 1225
     },
     {
       "id": 33,
@@ -489,10 +489,10 @@
       "name": "东方快车",
       "price": 2000,
       "rents": [
-        250,
-        500,
-        1000,
-        2000
+        313,
+        675,
+        1458,
+        3149
       ],
       "mortgageValue": 1000
     },
@@ -502,17 +502,17 @@
       "subtype": "normal",
       "name": "墨西哥城",
       "subtitle": "古城",
-      "price": 1400,
-      "houseCost": 1000,
+      "price": 2450,
+      "houseCost": 1600,
       "rents": [
-        100,
-        500,
-        1500,
-        4500,
-        6250,
-        7500
+        125,
+        675,
+        2187,
+        7086,
+        10629,
+        13775
       ],
-      "mortgageValue": 700
+      "mortgageValue": 1225
     },
     {
       "id": 35,
@@ -520,17 +520,17 @@
       "subtype": "normal",
       "name": "开普敦",
       "subtitle": "好望角",
-      "price": 2000,
-      "houseCost": 1000,
+      "price": 3500,
+      "houseCost": 1600,
       "rents": [
-        140,
-        700,
-        2000,
-        5500,
-        7500,
-        9500
+        175,
+        945,
+        2916,
+        8661,
+        12755,
+        17448
       ],
-      "mortgageValue": 1000
+      "mortgageValue": 1750
     },
     {
       "id": 36,
@@ -543,34 +543,34 @@
       "subtype": "normal",
       "name": "里斯本",
       "subtitle": "电车",
-      "price": 1800,
-      "houseCost": 1000,
+      "price": 3150,
+      "houseCost": 1600,
       "rents": [
-        160,
-        800,
-        2200,
-        6000,
-        8000,
-        10000
+        200,
+        1080,
+        3208,
+        9448,
+        13605,
+        18367
       ],
-      "mortgageValue": 900
+      "mortgageValue": 1575
     },
     {
       "id": 38,
       "type": "property",
       "subtype": "normal",
       "name": "威尼斯",
-      "price": 1200,
-      "houseCost": 500,
+      "price": 2100,
+      "houseCost": 800,
       "rents": [
-        80,
-        400,
-        1000,
-        3000,
-        4500,
-        6000
+        100,
+        540,
+        1458,
+        4724,
+        7653,
+        11020
       ],
-      "mortgageValue": 600,
+      "mortgageValue": 1050,
       "subtitle": "水城"
     },
     {
@@ -590,34 +590,34 @@
       "subtype": "normal",
       "name": "斯德哥尔摩",
       "subtitle": "群岛",
-      "price": 1000,
-      "houseCost": 500,
+      "price": 1750,
+      "houseCost": 800,
       "rents": [
-        60,
-        300,
-        900,
-        2700,
-        4000,
-        5500
+        75,
+        405,
+        1312,
+        4252,
+        6802,
+        10102
       ],
-      "mortgageValue": 500
+      "mortgageValue": 875
     },
     {
       "id": 41,
       "type": "property",
       "subtype": "normal",
       "name": "卢浮宫",
-      "price": 2600,
-      "houseCost": 2000,
+      "price": 4550,
+      "houseCost": 3200,
       "rents": [
-        280,
-        1100,
-        3300,
-        8000,
-        9750,
-        11500
+        350,
+        1485,
+        4811,
+        12597,
+        16581,
+        21122
       ],
-      "mortgageValue": 1300,
+      "mortgageValue": 2275,
       "subtitle": "艺术"
     },
     {
@@ -625,17 +625,17 @@
       "type": "property",
       "subtype": "normal",
       "name": "吉萨金字塔",
-      "price": 3500,
-      "houseCost": 2000,
+      "price": 6126,
+      "houseCost": 3200,
       "rents": [
-        350,
-        1750,
-        5000,
-        11000,
-        13000,
-        15000
+        438,
+        2363,
+        7290,
+        17321,
+        22108,
+        27550
       ],
-      "mortgageValue": 1750,
+      "mortgageValue": 3062.5,
       "subtitle": "沙漠"
     },
     {
@@ -645,10 +645,10 @@
       "name": "洲际车站",
       "price": 2000,
       "rents": [
-        250,
-        500,
-        1000,
-        2000
+        313,
+        675,
+        1458,
+        3149
       ],
       "mortgageValue": 1000
     },
@@ -657,17 +657,17 @@
       "type": "property",
       "subtype": "normal",
       "name": "巴塞罗那",
-      "price": 3000,
-      "houseCost": 2000,
+      "price": 5250,
+      "houseCost": 3200,
       "rents": [
-        260,
-        1300,
-        3900,
-        9000,
-        11000,
-        12750
+        325,
+        1755,
+        5686,
+        14172,
+        18707,
+        23417
       ],
-      "mortgageValue": 1500,
+      "mortgageValue": 2625,
       "subtitle": "圣家堂"
     },
     {
@@ -675,17 +675,17 @@
       "type": "property",
       "subtype": "normal",
       "name": "吴哥窟",
-      "price": 3200,
-      "houseCost": 2000,
+      "price": 5600,
+      "houseCost": 3200,
       "rents": [
-        280,
-        1500,
-        4500,
-        10000,
-        12000,
-        14000
+        350,
+        2025,
+        6561,
+        15746,
+        20407,
+        25713
       ],
-      "mortgageValue": 1600,
+      "mortgageValue": 2800,
       "subtitle": "古迹"
     },
     {
@@ -693,17 +693,17 @@
       "type": "property",
       "subtype": "normal",
       "name": "京都",
-      "price": 1000,
-      "houseCost": 500,
+      "price": 1750,
+      "houseCost": 800,
       "rents": [
-        60,
-        300,
-        900,
-        2700,
-        4000,
-        5500
+        75,
+        405,
+        1312,
+        4252,
+        6802,
+        10102
       ],
-      "mortgageValue": 500,
+      "mortgageValue": 875,
       "subtitle": "古都"
     },
     {
@@ -711,8 +711,8 @@
       "type": "property",
       "subtype": "utility",
       "name": "苏伊士运河",
-      "price": 1500,
-      "mortgageValue": 750
+      "price": 2626,
+      "mortgageValue": 1312.5
     },
     {
       "id": 48,
@@ -726,34 +726,34 @@
       "subtype": "normal",
       "name": "布宜诺斯艾利斯",
       "subtitle": "探戈",
-      "price": 2200,
-      "houseCost": 1500,
+      "price": 3850,
+      "houseCost": 2400,
       "rents": [
-        180,
-        900,
-        2500,
-        7000,
-        8750,
-        10500
+        225,
+        1215,
+        3645,
+        11022,
+        14880,
+        19285
       ],
-      "mortgageValue": 1100
+      "mortgageValue": 1925
     },
     {
       "id": 50,
       "type": "property",
       "subtype": "normal",
       "name": "里约热内卢",
-      "price": 3200,
-      "houseCost": 2000,
+      "price": 5600,
+      "houseCost": 3200,
       "rents": [
-        280,
-        1500,
-        4500,
-        10000,
-        12000,
-        14000
+        350,
+        2025,
+        6561,
+        15746,
+        20407,
+        25713
       ],
-      "mortgageValue": 1600,
+      "mortgageValue": 2800,
       "subtitle": "基督山"
     },
     {
@@ -762,17 +762,17 @@
       "subtype": "normal",
       "name": "雷克雅未克",
       "subtitle": "极光",
-      "price": 4000,
-      "houseCost": 2000,
+      "price": 7000,
+      "houseCost": 3200,
       "rents": [
-        500,
-        2000,
-        6000,
-        14000,
-        17000,
-        20000
+        625,
+        2700,
+        8748,
+        22045,
+        28910,
+        36733
       ],
-      "mortgageValue": 2000,
+      "mortgageValue": 3500,
       "nextId": 0
     },
     {

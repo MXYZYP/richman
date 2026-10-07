@@ -1,6 +1,6 @@
 {
   "initialCash": 15000,
-  "passStartSalary": 2000,
+  "passStartSalary": 2100,
   "maxHouseLevel": 5,
   "sellHouseRefundRate": 0.5,
   "sellLandRate": 0.5,

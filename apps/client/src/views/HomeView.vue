@@ -1104,10 +1104,19 @@ onMounted(() => {
 
 <style scoped>
 .home-shell {
+  /* 100dvh 而非 100vh：移动端地址栏伸缩时 vh 不变、dvh 跟随可视区，
+     用 vh 会让内容高度与实际可视区脱节（对局页 .game-view 早已因此改为钉死视口）。
+     安全区：index.html 开了 viewport-fit=cover，内容会延伸到刘海/圆角区域，
+     故四边都要让出 inset，否则底部按钮会被 Home 指示条压住。*/
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 18px;
+  padding:
+    max(18px, env(safe-area-inset-top))
+    max(18px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-bottom))
+    max(18px, env(safe-area-inset-left));
 }
 
 .home-card {
@@ -1116,9 +1125,9 @@ onMounted(() => {
   gap: 18px;
   padding: clamp(20px, 4vw, 34px);
   border: 1px solid var(--color-border);
-  border-radius: 28px;
+  border-radius: var(--radius-card);
   background:
-    linear-gradient(180deg, rgb(255 255 255 / 94%), rgb(247 243 234 / 84%)),
+    var(--surface-card),
     var(--board-surface);
   box-shadow: 0 18px 48px rgb(53 39 20 / 14%);
 }
@@ -1129,7 +1138,7 @@ onMounted(() => {
   padding: 16px 18px;
   border: 1px solid var(--color-border);
   border-radius: 18px;
-  background: rgb(255 255 255 / 60%);
+  background: var(--surface-quiet);
 }
 
 .player-stats h2 {
@@ -1310,7 +1319,7 @@ onMounted(() => {
   padding: 8px 10px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
-  background: rgb(255 255 255 / 70%);
+  background: var(--surface-input);
   color: var(--color-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
@@ -1332,7 +1341,7 @@ onMounted(() => {
   padding-inline: 10px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
-  background: rgb(255 255 255 / 70%);
+  background: var(--surface-input);
   color: var(--color-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
@@ -1486,7 +1495,7 @@ onMounted(() => {
   padding: 16px 18px;
   border: 1px solid var(--color-border);
   border-radius: 18px;
-  background: rgb(255 255 255 / 60%);
+  background: var(--surface-quiet);
 }
 
 .leaderboard-head {
@@ -1676,7 +1685,7 @@ onMounted(() => {
   margin: 0;
   padding: 10px 12px;
   border-radius: 12px;
-  background: #ffe1d8;
+  background: var(--color-error-bg);
   color: var(--color-primary);
   font-weight: 900;
 }
@@ -2080,9 +2089,16 @@ onMounted(() => {
   background: var(--color-border);
 }
 
-@media (max-width: 767px) {
+/* 阈值与 GameView / MobileSheet 的紧凑布局（1024px）统一：
+   折叠屏内屏与小平板竖屏的 CSS 宽度常落在 768–1024，用 767 会把它们误判成桌面。 */
+@media (max-width: 1024px) {
   .home-shell {
-    padding: 10px;
+    /* 移动形态改为顶部对齐：单列内容常高于视口，居中会让首屏上下同时被裁。 */
+    padding:
+      max(10px, env(safe-area-inset-top))
+      max(10px, env(safe-area-inset-right))
+      max(10px, env(safe-area-inset-bottom))
+      max(10px, env(safe-area-inset-left));
     place-items: start center;
   }
 
@@ -2092,6 +2108,13 @@ onMounted(() => {
 
   .home-role-field {
     align-self: start;
+  }
+}
+
+/* 矮视口（横屏手机、折叠屏半开）：一律顶部对齐，避免居中把内容上下切掉。 */
+@media (max-height: 620px) {
+  .home-shell {
+    place-items: start center;
   }
 }
 </style>

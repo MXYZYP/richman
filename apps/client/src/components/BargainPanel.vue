@@ -604,7 +604,10 @@ function submitBid(): void {
   outline-offset: 2px;
 }
 
-@media (max-width: 720px) {
+/* 原为 720px（独立于全站体系）。改到 1024px 与其余组件一致：
+   议价面板是对局内浮层，宿主外壳以 1024px 为移动/桌面分界，
+   768–1024px 若仍走双列，窄屏下两列会被压到读不了。 */
+@media (max-width: 1024px) {
   .bargain-panel__columns {
     grid-template-columns: 1fr;
   }

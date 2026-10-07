@@ -294,7 +294,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
   box-shadow: 0 4px 0 var(--game-line-soft);
 }
 
-@media (max-width: 767px) {
+@media (max-width: 1024px) {
   .settlement-backdrop {
     padding: 12px;
   }

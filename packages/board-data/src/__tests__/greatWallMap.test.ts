@@ -22,13 +22,15 @@ function expectedPlacement(id: number) {
   return { x: 1 + col * 15, y: 1 + row * 20, width: 13, height: 18 };
 }
 
+// 组 C：六座烽火台改为严格递增的垄断梯度（claim 500→2000、toll 200→1800），
+// 使「占住后面几座台」成为明确的战略目标，与 northeast-tour 的节奏惩罚线分头走。
 const expectedBeacons = [
-  { id: 5, name: '烽火台·肃州', claimCost: 600, toll: 300 },
-  { id: 13, name: '烽火台·焉支', claimCost: 600, toll: 300 },
-  { id: 21, name: '烽火台·索桥', claimCost: 800, toll: 400 },
-  { id: 29, name: '烽火台·花马池', claimCost: 800, toll: 400 },
-  { id: 36, name: '烽火台·府谷', claimCost: 1000, toll: 500 },
-  { id: 44, name: '烽火台·居庸', claimCost: 1000, toll: 500 },
+  { id: 5, name: '烽火台·肃州', claimCost: 500, toll: 200 },
+  { id: 13, name: '烽火台·焉支', claimCost: 700, toll: 350 },
+  { id: 21, name: '烽火台·索桥', claimCost: 900, toll: 540 },
+  { id: 29, name: '烽火台·花马池', claimCost: 1200, toll: 840 },
+  { id: 36, name: '烽火台·府谷', claimCost: 1500, toll: 1200 },
+  { id: 44, name: '烽火台·居庸', claimCost: 2000, toll: 1800 },
 ];
 
 describe('great-wall@1 approved source data', () => {
@@ -125,7 +127,8 @@ describe('great-wall@1 approved source data', () => {
   it('locks the owner-approved game config with maxHouseLevel 5', () => {
     expect(readMapJson('game-config.json')).toEqual({
       initialCash: 15000,
-      passStartSalary: 2000,
+      // 组 C：烽火台梯度变陡后占据成本提高，圈薪相应上调以维持局长稳定。
+      passStartSalary: 2200,
       maxHouseLevel: 5,
       sellHouseRefundRate: 0.5,
       sellLandRate: 0.5,

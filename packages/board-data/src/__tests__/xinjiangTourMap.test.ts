@@ -260,7 +260,7 @@ describe('xinjiang-tour@1 approved source data', () => {
   it('locks the owner-approved game config with maxHouseLevel 5', () => {
     expect(readMapJson('game-config.json')).toEqual({
       initialCash: 16000,
-      passStartSalary: 2000,
+      passStartSalary: 1900,
       maxHouseLevel: 5,
       sellHouseRefundRate: 0.5,
       sellLandRate: 0.5,
@@ -312,7 +312,7 @@ describe('xinjiang-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(xinjiangTourMap, [coreModule, oasisCampModule])).not.toThrow();
     expect(computeContentHash(xinjiangTourMap)).toBe(xinjiangTourMap.ref.contentHash);
     expect(xinjiangTourMap.ref.contentHash)
-      .toBe('4068b428fa4852dd1f8555f900572d3666a31e69516c811ca9bd26d4ea73f32f');
+      .toBe('7acab933e05dd10c34f1fc3aefbb6acbb3aad78ab192bbe6d94c9f5136bc251e');
     expect(Object.isFrozen(xinjiangTourMap)).toBe(true);
     expect(Object.isFrozen(xinjiangTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(xinjiangTourMap.game.cards.destiny[2]!.effect)).toBe(true);

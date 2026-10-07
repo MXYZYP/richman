@@ -370,7 +370,11 @@ const playerTokens = computed(() => {
   }
 }
 
-@media (max-width: 767px) {
+/* 阈值与 GameView 外壳的 isMobileLayout（matchMedia max-width:1024px）保持一致。
+   此前这里是 767px，而外壳已抬到 1024px —— 768–1024px（折叠屏内屏、小平板竖屏）
+   会拿到「移动竖排外壳 + 桌面版格子几何」，boardLayout 算好的 --mobile-* 覆写全部不生效，
+   这正是「内屏展开态地图不完整」的残留来源。 */
+@media (max-width: 1024px) {
   /* 棋盘尺寸一律交给 --board-size（脚本实测），这里只切换手机版的格子几何：
      手机上格名/字号改用大一号触屏版坐标（--mobile-*）。 */
   .map-cell,

@@ -252,7 +252,10 @@ describe('shanxi-tour@1 approved source data', () => {
   it('locks the owner-approved game config with maxHouseLevel 5', () => {
     expect(readMapJson('game-config.json')).toEqual({
       initialCash: 15000,
-      passStartSalary: 2000,
+      // 组 B：工资上调至 2600（六图最厚薪，快周转）。
+      // 实测：2800 在「无现金目标、只靠破产判胜」场景下终局率掉到 67%、平均局长飙到 5599 意图，
+      // 会让 fullGameSmoke 的整局对局卡在 playing，故取 2600（实测终局率 100%）。
+      passStartSalary: 2600,
       maxHouseLevel: 5,
       sellHouseRefundRate: 0.5,
       sellLandRate: 0.5,
@@ -313,7 +316,7 @@ describe('shanxi-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(shanxiTourMap, [coreModule, piaohaoModule])).not.toThrow();
     expect(computeContentHash(shanxiTourMap)).toBe(shanxiTourMap.ref.contentHash);
     expect(shanxiTourMap.ref.contentHash)
-      .toBe('26da09b32511753648af002149f02b254a1e3b79f041dd610a3a1fda2cdd424e');
+      .toBe('1a89ee4d317d3322589d4109290d9914327f1668770c9a863d2d6bda6b924485');
     expect(Object.isFrozen(shanxiTourMap)).toBe(true);
     expect(Object.isFrozen(shanxiTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(shanxiTourMap.game.cards.destiny[2]!.effect)).toBe(true);

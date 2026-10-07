@@ -42,7 +42,8 @@ describe('describeMapRules：按地图数据生成规则事实', () => {
       { label: '地图', value: '珠江之旅 · 48 格' },
       { label: '规则模块', value: '湾区口岸' },
       { label: '初始资金', value: '¥15,000' },
-      { label: '过起点收入', value: '¥2,000' },
+      // 过起点收入 2,300：组 B 的节奏差异化（本图地价中段偏高，圈薪同步上调）。
+      { label: '过起点收入', value: '¥2,300' },
       { label: '房屋上限', value: '每块地产最多 5 级' },
       { label: '抵押利息', value: '每回合 10%' },
       { label: '地产地价', value: '13 档（¥1,600 ~ ¥4,500）' },
@@ -121,7 +122,9 @@ describe('describeMapRules：按地图数据生成规则事实', () => {
     const facts = factsOf(mutablePack('northeast-tour'));
 
     expect(facts['规则模块']).toBe('监狱');
-    expect(facts['监狱']).toBe('3 处进牢格（保释金 ¥1,500）');
+    // 保释金 2,500：组 C 上调后（本断言同步自 northeast-tour 的 game-config，
+// 规则文案由数据驱动生成，改地图参数即自动跟随）。
+    expect(facts['监狱']).toBe('3 处进牢格（保释金 ¥2,500）');
     // 顺序稳定：该图没有烽火台，监狱这一行紧挨在「机会 / 命运」之前。
     const labels = summary.facts.map((fact) => fact.label);
     expect(labels.indexOf('机会 / 命运')).toBe(labels.indexOf('监狱') + 1);

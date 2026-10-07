@@ -16,8 +16,9 @@ const greatWallRef = { id: 'great-wall', version: 1 } as const;
 const otherModuleRef = { id: 'core', version: 1 } as const;
 
 const BEACON_CELL_ID = 5;
-const BEACON_CLAIM_COST = 600;
-const BEACON_TOLL = 300;
+// 组 C：great-wall 烽火台改为递增垄断梯度，id=5 是最低一档（claim 500 / toll 200）。
+const BEACON_CLAIM_COST = 500;
+const BEACON_TOLL = 200;
 const BOT_CLAIM_RESERVE = 1000;
 
 function makeGreatWallGame(playerCount = 2): GameState {
@@ -458,7 +459,7 @@ describe('great-wall@1 hydrate validation', () => {
         module: greatWallRef,
         playerId: state.currentPlayerId,
         requiredPhase: 'managing',
-        label: '占据烽火台（600 元）',
+        label: '占据烽火台（500 元）',
         action: 'beacon-choice',
         payload: { optionId, cellId: BEACON_CELL_ID, claim: 'yes' },
       }],
@@ -479,7 +480,7 @@ describe('great-wall@1 hydrate validation', () => {
         module: greatWallRef,
         playerId: state.currentPlayerId,
         requiredPhase: 'awaiting_roll',
-        label: '占据烽火台（600 元）',
+        label: '占据烽火台（500 元）',
         action: 'beacon-choice',
         payload: { optionId, cellId: BEACON_CELL_ID, claim: true },
       }],

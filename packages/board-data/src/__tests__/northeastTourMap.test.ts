@@ -277,7 +277,8 @@ describe('northeast-tour@1 approved source data', () => {
       jailExitMinRoll: 10,
       jailMaxAttempts: 3,
       // 保释金（owner 2026-09-23 追加）：prison@1 的第三个出狱方式，只有带监狱的图才有这个字段。
-      jailBailCost: 1500,
+      // 组 C：1500 -> 2500，让进监狱从「偶发插曲」变成真实经济风险（约合 1.5 圈收入）。
+      jailBailCost: 2500,
       cashGoalPresets: [33000, 52000],
       diceMode: 'two_dice',
       airportBranchDice: 1,
@@ -318,7 +319,7 @@ describe('northeast-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(northeastTourMap, [CORE_MODULE, PRISON_MODULE])).not.toThrow();
     expect(computeContentHash(northeastTourMap)).toBe(northeastTourMap.ref.contentHash);
     expect(northeastTourMap.ref.contentHash)
-      .toBe('5a001524cbe4c9e42597b978500bb6157ad6e08f59b37e76fa6522ba0fb63f9a');
+      .toBe('3b12b6defceedf085f3619f2edb15d38236213b8cce1d1843c3272ed2ca2ca17');
     expect(Object.isFrozen(northeastTourMap)).toBe(true);
     expect(Object.isFrozen(northeastTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(northeastTourMap.game.cards.chance[10]!.effect)).toBe(true);

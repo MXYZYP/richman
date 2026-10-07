@@ -646,4 +646,44 @@ const rulesSummary = computed(() => (
   border-color: color-mix(in srgb, var(--surrender, #b3402f) 40%, var(--color-border));
   color: var(--surrender, #b3402f);
 }
+
+/* ---- 紧凑区间（本组件此前没有任何断点）----
+   768–1024px 区间：外壳（GameView 1024px / MobileSheet 1025px）已认定本组件走
+   「底部抽屉」形态，但本组件自身无对应调整，设置项在竖排布局里仍按桌面假设排布。 */
+@media (max-width: 1024px) {
+  /* 抽屉形态下可用宽度更窄：选项栅格下限放宽一档，避免每行挤成两三字的窄块。 */
+  .settings-options {
+    grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
+  }
+
+  /* 开关行改为两行堆叠：窄屏下标题与说明挤在一行会把说明文字压成竖排字。 */
+  .setting-row {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .setting-row input[type='checkbox'] {
+    flex: 0 0 auto;
+  }
+}
+
+/* 矮视口（如横屏手机、折叠屏半开）：抽屉高度受限，压缩行距与内边距，
+   避免设置项被推到「需要滚动才能看到」的位置。 */
+@media (max-height: 620px) {
+  .setting-row {
+    padding: 8px 10px;
+  }
+
+  .settings-field {
+    gap: 4px;
+  }
+
+  .rules-facts {
+    padding: 6px 8px;
+  }
+
+  .rules-help {
+    padding: 8px 10px;
+  }
+}
 </style>

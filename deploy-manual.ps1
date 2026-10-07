@@ -68,6 +68,17 @@ $files = @(
   "apps/client/src/App.vue",
   "apps/client/src/components/GameSetup.vue",
   "apps/client/src/views/GameView.vue",
+  # Responsive breakpoint alignment (2026-10-07): these four components are all imported by
+  # GameView, but only their .test.ts siblings were listed. Their .vue sources were missing,
+  # so the server kept stale copies and the 1024px breakpoint fix (matching GameView's
+  # isMobileLayout = matchMedia max-width:1024px) never reached the deployed bundle.
+  # BoardCell.vue   - swaps cell graphic variant at the mobile/desktop breakpoint.
+  # CellDetailPanel.vue / SettlementDialog.vue - dialogs that must stay modal below 1025px.
+  # RestoreView.vue - standalone page, dvh + safe-area padding.
+  "apps/client/src/components/BoardCell.vue",
+  "apps/client/src/components/CellDetailPanel.vue",
+  "apps/client/src/components/SettlementDialog.vue",
+  "apps/client/src/views/RestoreView.vue",
   "apps/client/src/game/clientGame.ts",
   "apps/client/src/game/gameSetup.ts",
   "apps/client/src/session/gamePresenter.ts",

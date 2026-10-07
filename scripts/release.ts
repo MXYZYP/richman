@@ -119,6 +119,23 @@ export async function createRelease(options: CreateReleaseOptions): Promise<stri
   return version;
 }
 
+/**
+ * 统一的 git 调用出口。
+ *
+ * 必须显式给出 `stdio: ['ignore', 'pipe', 'pipe']`：用 `'pipe'` / `encoding` 这类简写形式，
+ * libuv 会在部分 Windows 文件系统上尝试重叠 I/O 并以 `EBUSY` 失败（拿不到 exit code、
+ * stderr 也是undefined）。对零输出的探测命令（如 `cat-file -e`）这种失败尤其致命 ——
+ * 「对象存在」会被误判成「CI 历史不完整」。数组形式各平台语义一致：
+ * stdin 丢弃、stdout/stderr 走管道。
+ */
+function execGit(rootDir: string, args: readonly string[]): string {
+  return execFileSync('git', args, {
+    cwd: rootDir,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
 export async function checkPreviousRelease(
   rootDir: string,
   current: ReleaseCatalog,
@@ -130,29 +147,24 @@ export async function checkPreviousRelease(
   if (previousSha === ZERO_SHA) return;
 
   try {
-    execFileSync('git', ['cat-file', '-e', `${previousSha}^{commit}`], { cwd: rootDir, stdio: 'pipe' });
+    execGit(rootDir, ['cat-file', '-e', `${previousSha}^{commit}`]);
   } catch {
     throw new Error(`无法读取上一提交 ${previousSha}；CI checkout 必须包含完整历史`);
   }
 
-  const changedPaths = execFileSync('git', ['diff', '--name-only', previousSha, 'HEAD'], {
-    cwd: rootDir,
-    encoding: 'utf8',
-  }).split('\n').filter(Boolean);
+  const changedPaths = execGit(rootDir, ['diff', '--name-only', previousSha, 'HEAD'])
+    .split('\n').filter(Boolean);
 
   let hasPreviousCatalog = true;
   try {
-    execFileSync('git', ['cat-file', '-e', `${previousSha}:${RELEASE_FILE}`], { cwd: rootDir, stdio: 'pipe' });
+    execGit(rootDir, ['cat-file', '-e', `${previousSha}:${RELEASE_FILE}`]);
   } catch {
     hasPreviousCatalog = false;
   }
 
   let previous: ReleaseCatalog | null = null;
   if (hasPreviousCatalog) {
-    const previousText = execFileSync('git', ['show', `${previousSha}:${RELEASE_FILE}`], {
-      cwd: rootDir,
-      encoding: 'utf8',
-    });
+    const previousText = execGit(rootDir, ['show', `${previousSha}:${RELEASE_FILE}`]);
     try {
       previous = parseReleaseCatalog(JSON.parse(previousText));
     } catch (error) {

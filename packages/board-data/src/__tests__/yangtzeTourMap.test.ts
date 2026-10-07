@@ -243,7 +243,7 @@ describe('yangtze-tour@1 approved source data', () => {
   it('locks the owner-approved game config with maxHouseLevel 5', () => {
     expect(readMapJson('game-config.json')).toEqual({
       initialCash: 15000,
-      passStartSalary: 2000,
+      passStartSalary: 1600,
       maxHouseLevel: 5,
       sellHouseRefundRate: 0.5,
       sellLandRate: 0.5,
@@ -296,7 +296,7 @@ describe('yangtze-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(yangtzeTourMap, [coreModule, yangtzeFerryModule])).not.toThrow();
     expect(computeContentHash(yangtzeTourMap)).toBe(yangtzeTourMap.ref.contentHash);
     expect(yangtzeTourMap.ref.contentHash)
-      .toBe('fd44de6931fb54f7367ccb2f14fbfe7e9df00280b4d045bbe59087fa6f8443f5');
+      .toBe('132cb7a7ff09aad74c8998dcf0d58e5e60e7fda72f7f6d6ba7abfac13f4d6398');
     expect(Object.isFrozen(yangtzeTourMap)).toBe(true);
     expect(Object.isFrozen(yangtzeTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(yangtzeTourMap.game.cards.destiny[2]!.effect)).toBe(true);

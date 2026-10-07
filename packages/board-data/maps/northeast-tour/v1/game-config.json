@@ -18,5 +18,5 @@
   "diceMode": "two_dice",
   "airportBranchDice": 1,
   "jailEnabled": true,
-  "jailBailCost": 1500
+  "jailBailCost": 2500
 }

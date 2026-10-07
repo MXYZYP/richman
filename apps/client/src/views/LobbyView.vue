@@ -881,10 +881,17 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .lobby-shell {
+  /* 与首页同处理：dvh 跟随地址栏伸缩，100vh 仅作老浏览器兜底（写在前面）。
+     四边让出安全区——index.html 开了 viewport-fit=cover。 */
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: start center;
-  padding: 18px;
+  padding:
+    max(18px, env(safe-area-inset-top))
+    max(18px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-bottom))
+    max(18px, env(safe-area-inset-left));
 }
 
 .lobby-card {
@@ -893,7 +900,7 @@ onBeforeUnmount(() => {
   gap: 18px;
   padding: clamp(20px, 4vw, 34px);
   border: 1px solid var(--color-border);
-  border-radius: 28px;
+  border-radius: var(--radius-card);
   background:
     var(--surface-card),
     var(--board-surface);
@@ -1264,9 +1271,14 @@ onBeforeUnmount(() => {
   to { transform: rotate(360deg); }
 }
 
-@media (max-width: 767px) {
+/* 阈值与首页 / GameView 统一到 1024px（折叠屏内屏、小平板竖屏常落在 768–1024）。 */
+@media (max-width: 1024px) {
   .lobby-shell {
-    padding: 10px;
+    padding:
+      max(10px, env(safe-area-inset-top))
+      max(10px, env(safe-area-inset-right))
+      max(10px, env(safe-area-inset-bottom))
+      max(10px, env(safe-area-inset-left));
   }
 }
 
@@ -1304,7 +1316,9 @@ onBeforeUnmount(() => {
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  background: #c0392b;
+  /* 与 GameView 的聊天未读徽标同语义：「需要注意」而非主题色，
+     故取跨主题稳定的 --color-pay，不写死 #c0392b。 */
+  background: var(--color-pay);
   color: #fff;
   font-size: 11px;
   line-height: 18px;

@@ -1567,9 +1567,11 @@ function inspectFinalBoard() {
   display: none;
 }
 
-/* 投降按钮：与离开/托管按钮同尺寸同位置，仅以危险色（红）区分语义。 */
+/* 投降按钮：与离开/托管按钮同尺寸同位置，仅以危险色（红）区分语义。
+   取 --color-pay 而非主题主色：投降是危险操作，必须在 5 套皮肤与深浅两色下都保持
+   「危险红」，且该变量被 darkMode.css 刻意保留为跨主题稳定语义色。 */
 .surrender-button {
-  --surrender: #c0392b;
+  --surrender: var(--color-pay);
   border-color: color-mix(in srgb, var(--surrender) 42%, var(--color-border));
   color: var(--surrender);
 }
@@ -1897,7 +1899,9 @@ function inspectFinalBoard() {
   .players {
     flex: 0 0 auto;
     padding: 0 7px;
-    background: #e5e7dc;
+    /* 此前写死 #e5e7dc，5 套皮肤与深色模式都盖不住它（暗夜皮肤下会出现深底 + 浅绿条）。
+       接入 --game-panel —— 它是「对局面板底色」的既定变量，玩家条正是面板。 */
+    background: var(--game-panel);
   }
 
   .board-stage {
@@ -1986,7 +1990,8 @@ function inspectFinalBoard() {
     min-height: 50px;
     padding: 2px 12px 3px;
     border-top: 1px solid var(--color-border);
-    background: #e4e8d9;
+    /* 同 .players：写死的 #e4e8d9 换成本皮肤的面板底色。 */
+    background: var(--game-panel);
   }
 
   .dock-entry {
@@ -2150,7 +2155,9 @@ function inspectFinalBoard() {
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  background: #c0392b;
+  /* 未读提示属「需要注意」而非主题色：与投降按钮同用 --color-pay，
+     保证在 5 套皮肤与深色模式下都醒目（写死 #c0392b 时 ocean/forest 皮肤下会与整体色调脱节）。 */
+  background: var(--color-pay);
   color: #fff;
   font-size: 11px;
   line-height: 18px;

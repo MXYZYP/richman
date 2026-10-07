@@ -468,8 +468,12 @@ function diePips(value: number): number[] {
   animation: total-settle calc(300ms * var(--game-motion-pace, 1)) cubic-bezier(.22, 1, .36, 1) calc(150ms * var(--game-motion-pace, 1)) both;
 }
 
+/* 装饰性单位标签（骰子总和旁的「点」字）。此前 8px 虽靠 900 字重与 0.1em 字距
+   勉强可辨，但在中文下实际字面高度已接近不可读，且这是全站唯一的 8px。
+   上调到 10px 与同组件的 .event-ribbon span 对齐；正文尺寸（card-rule 13px /
+   card-title 14px）本就合理，不动。 */
 .roll-total small {
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.1em;

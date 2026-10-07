@@ -410,7 +410,9 @@ const graphics = computed<CellGraphic[]>(() => {
 /* 两套几何只在各自的断点里出现，viewBox 始终与卡片实际比例一致。 */
 .cell-graphic-mobile { display: none; }
 
-@media (max-width: 767px) {
+/* 阈值与 GameBoard.vue / GameView.vue 的紧凑布局（1024px）一致，
+   避免 768–1024px 下外壳已竖排而格子图形仍停在桌面版。 */
+@media (max-width: 1024px) {
   .cell-graphic-desktop { display: none; }
   .cell-graphic-mobile { display: block; }
 }

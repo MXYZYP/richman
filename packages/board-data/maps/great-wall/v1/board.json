@@ -72,8 +72,8 @@
       "cellType": "beacon",
       "name": "烽火台·肃州",
       "payload": {
-        "claimCost": 600,
-        "toll": 300
+        "claimCost": 500,
+        "toll": 200
       }
     },
     {
@@ -170,8 +170,8 @@
       "cellType": "beacon",
       "name": "烽火台·焉支",
       "payload": {
-        "claimCost": 600,
-        "toll": 300
+        "claimCost": 700,
+        "toll": 350
       }
     },
     {
@@ -280,8 +280,8 @@
       "cellType": "beacon",
       "name": "烽火台·索桥",
       "payload": {
-        "claimCost": 800,
-        "toll": 400
+        "claimCost": 900,
+        "toll": 540
       }
     },
     {
@@ -377,8 +377,8 @@
       "cellType": "beacon",
       "name": "烽火台·花马池",
       "payload": {
-        "claimCost": 800,
-        "toll": 400
+        "claimCost": 1200,
+        "toll": 840
       }
     },
     {
@@ -470,8 +470,8 @@
       "cellType": "beacon",
       "name": "烽火台·府谷",
       "payload": {
-        "claimCost": 1000,
-        "toll": 500
+        "claimCost": 1500,
+        "toll": 1200
       }
     },
     {
@@ -580,8 +580,8 @@
       "cellType": "beacon",
       "name": "烽火台·居庸",
       "payload": {
-        "claimCost": 1000,
-        "toll": 500
+        "claimCost": 2000,
+        "toll": 1800
       }
     },
     {

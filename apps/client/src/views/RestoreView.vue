@@ -47,10 +47,16 @@ const emit = defineEmits<{
 
 <style scoped>
 .restore-shell {
+  /* 与首页 / 大厅同处理：dvh 跟随地址栏伸缩，100vh 为老浏览器兜底；四边让出安全区。 */
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 18px;
+  padding:
+    max(18px, env(safe-area-inset-top))
+    max(18px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-bottom))
+    max(18px, env(safe-area-inset-left));
 }
 
 .restore-card {
@@ -59,9 +65,9 @@ const emit = defineEmits<{
   gap: 16px;
   padding: clamp(20px, 4vw, 34px);
   border: 1px solid var(--color-border);
-  border-radius: 28px;
+  border-radius: var(--radius-card);
   background:
-    linear-gradient(180deg, rgb(255 255 255 / 94%), rgb(247 243 234 / 84%)),
+    var(--surface-card),
     var(--board-surface);
   box-shadow: 0 18px 48px rgb(53 39 20 / 14%);
   text-align: left;
@@ -95,7 +101,7 @@ const emit = defineEmits<{
 .restore-status--failed {
   padding: 10px 12px;
   border-radius: 12px;
-  background: #ffe1d8;
+  background: var(--color-error-bg);
   color: var(--color-primary);
 }
 
@@ -158,14 +164,27 @@ const emit = defineEmits<{
   }
 }
 
-@media (max-width: 767px) {
+/* 阈值与首页 / 大厅 / GameView 统一到 1024px。 */
+@media (max-width: 1024px) {
   .restore-shell {
-    padding: 10px;
+    /* 移动形态顶部对齐：失败态文案较长，居中会同时裁掉上下两端。 */
+    padding:
+      max(10px, env(safe-area-inset-top))
+      max(10px, env(safe-area-inset-right))
+      max(10px, env(safe-area-inset-bottom))
+      max(10px, env(safe-area-inset-left));
     place-items: start center;
   }
 
   .restore-actions {
     grid-template-columns: 1fr;
+  }
+}
+
+/* 矮视口一律顶部对齐，避免居中裁切。 */
+@media (max-height: 620px) {
+  .restore-shell {
+    place-items: start center;
   }
 }
 </style>

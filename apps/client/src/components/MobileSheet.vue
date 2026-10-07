@@ -175,7 +175,11 @@ function closeFromBackdrop(event: MouseEvent): void {
   -webkit-overflow-scrolling: touch;
 }
 
-@media (min-width: 768px) {
+/* 阈值从 768px 抬到 1024px，与 GameView 外壳的 isMobileLayout（max-width:1024px）一致。
+   此前 768–1024px 区间里外壳认为是移动端（竖排 + 底部操作坞 + .sheet display:block），
+   本组件却认为该走桌面分支（inline 摊平 / modal 居中弹窗），导致设置面板在竖排布局里
+   弹出居中 modal 而非底部抽屉，与外壳形态不自洽。 */
+@media (min-width: 1025px) {
   /* inline 变体：桌面端把抽屉外壳摊平成透明分组容器，内容直接流进宿主容器。 */
   .mobile-sheet[data-variant='inline'] .mobile-sheet-panel,
   .mobile-sheet[data-variant='inline'] .mobile-sheet-body {
@@ -205,7 +209,9 @@ function closeFromBackdrop(event: MouseEvent): void {
   }
 }
 
-@media (max-width: 767px) and (prefers-reduced-motion: no-preference) {
+/* 抽屉上滑进场：服务于「底部抽屉」形态，因此阈值必须与上面的形态分界（1025px）互为补集。
+   768–1024px 仍是底部抽屉，若这里留在 767px，该区间就会失去进场与遮罩淡入。 */
+@media (max-width: 1024px) and (prefers-reduced-motion: no-preference) {
   .mobile-sheet {
     translate: 0 24px;
     opacity: 0;

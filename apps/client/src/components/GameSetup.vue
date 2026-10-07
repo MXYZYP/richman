@@ -499,7 +499,9 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
   cursor: not-allowed;
 }
 
-@media (max-width: 767px) {
+/* 阈值与首页 / GameView 统一到 1024px：折叠屏内屏与小平板竖屏常落在 768–1024，
+   用 767 会让它们拿到桌面版的多列布局，选项与规则卡被挤成窄条。 */
+@media (max-width: 1024px) {
   .setup-shell {
     padding: 10px;
     place-items: start center;
