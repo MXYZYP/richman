@@ -178,8 +178,16 @@ describe('generic map Vue rendering', () => {
       render: () => h(GameView, { session }),
     }));
 
-    // 桌面侧栏的设置按钮（此前桌面完全没有设置入口，设置行直接摊在侧栏里）。
-    expect(html).toContain('settings-open-button');
+    // 桌面侧栏的次级操作组：离开 / 设置并排一组，视觉上退到主操作面板之下。
+    expect(html).toContain('side-utility');
+    expect(html).toContain('utility-button');
+    // 每个次级按钮都带一个线性图标，扫一眼就能区分。
+    expect(html).toContain('utility-icon');
+    // 投降是破坏性操作：桌面侧栏不再放它，入口在设置面板的「对局操作」组里。
+    expect(html).not.toContain('surrender-button');
+    // ...而它必须仍然可达：设置面板在两端都渲染「对局操作」组，投降按钮就在其中。
+    // show-session-actions 曾被绑到 isMobileLayout，桌面因此拿不到入口；现在两端都渲染。
+    expect(html).toContain('settings-session-button--danger');
     // 设置弹窗用 modal 变体，桌面保持居中弹窗而不是摊平进侧栏。
     expect(html).toContain('data-variant="modal"');
     for (const group of ['外观', '声音', '对局操作', '规则说明', '应用']) {

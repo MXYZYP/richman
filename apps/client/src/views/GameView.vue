@@ -981,21 +981,35 @@ function inspectFinalBoard() {
         />
       </div>
       <aside class="side-panel">
-        <button type="button" class="restart-button restart-desktop" @click="requestExit">{{ exitLabel }}</button>
-        <button
-          v-if="canSurrender"
-          type="button"
-          class="restart-button restart-desktop surrender-button"
-          @click="requestSurrender"
-        >投降</button>
-        <button
-          ref="settingsTrigger"
-          type="button"
-          class="restart-button restart-desktop settings-open-button"
-          aria-haspopup="dialog"
-          :aria-expanded="settingsOpen"
-          @click="settingsOpen = true"
-        >设置</button>
+        <!-- 次级操作组：离开 / 设置。投降是破坏性操作，与悔棋一样收在设置面板里
+             （SettingsDialog 的「对局操作」组已带 --danger 样式与二次确认），
+             侧栏只留中频与低频操作，让主操作面板独占视觉重心。 -->
+        <div class="side-utility">
+          <button
+            type="button"
+            class="utility-button"
+            @click="requestExit"
+          >
+            <svg class="utility-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 8l-4 4 4 4M6 12h10" />
+            </svg>
+            <span>{{ exitLabel }}</span>
+          </button>
+          <button
+            ref="settingsTrigger"
+            type="button"
+            class="utility-button"
+            aria-haspopup="dialog"
+            :aria-expanded="settingsOpen"
+            @click="settingsOpen = true"
+          >
+            <svg class="utility-icon utility-icon--gear" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6M18.4 18.4l-1.6-1.6M7.2 7.2 5.6 5.6" />
+            </svg>
+            <span>设置</span>
+          </button>
+        </div>
         <ActionPanel
           compact-purchase
           :actions="availableActions"
@@ -1199,7 +1213,7 @@ function inspectFinalBoard() {
           :map-id="state?.mapRef.id ?? null"
           :exit-label="exitLabel"
           :can-surrender="canSurrender"
-          :show-session-actions="isMobileLayout"
+          :show-session-actions="true"
           @update:open="settingsOpen = $event"
           @undo="undoMove"
           @replay="replayGame"
@@ -1560,41 +1574,87 @@ function inspectFinalBoard() {
   background: var(--button-disabled-bg);
 }
 
-.restart-button,
+/* ---- 次级操作组（离开 / 设置）----
+   设计意图：主操作（掷骰 / 买地 / 谈判）由 ActionPanel 承担，视觉重心必须留在那里。
+   这两个是低频操作，因此排成两组描边按钮并压到面板下方 —— 不再和主操作抢黄金位。
+   投降是破坏性操作，已移入设置面板（那里本就有 --danger 样式 + 二次确认）。 */
+.side-utility {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.utility-button {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--game-radius-control, 10px);
+  background: var(--board-surface);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.utility-button:hover {
+  border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--board-surface));
+  color: var(--color-text);
+}
+
+.utility-button:active {
+  transform: translateY(1px);
+}
+
+.utility-button:focus-visible {
+  outline: 2px solid var(--game-focus, var(--color-accent));
+  outline-offset: 2px;
+}
+
+/* 线性图标：描边沿用 currentColor 自动跟随按钮文字色，跨5 套皮肤都不用改。 */
+.utility-icon {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+
+/* 齿轮齿数多，1.7 描边会糊成一团，单独收细并略微放大。 */
+.utility-icon--gear {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.4;
+}
+
+/* 移动端底部操作坞已有「资产 / 战报 / 设置 / 聊天」标签，不再重复这一组。 */
+@media (max-width: 1024px) {
+  .side-utility {
+    display: none;
+  }
+}
+
 .takeover-button {
   min-height: 44px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
   font-weight: 700;
   cursor: pointer;
-}
-
-.restart-button {
-  background: var(--board-surface);
-  color: var(--color-primary);
-}
-
-.restart-mobile {
-  display: none;
-}
-
-/* 投降按钮：与离开/托管按钮同尺寸同位置，仅以危险色（红）区分语义。
-   取 --color-pay 而非主题主色：投降是危险操作，必须在 5 套皮肤与深浅两色下都保持
-   「危险红」，且该变量被 darkMode.css 刻意保留为跨主题稳定语义色。 */
-.surrender-button {
-  --surrender: var(--color-pay);
-  border-color: color-mix(in srgb, var(--surrender) 42%, var(--color-border));
-  color: var(--surrender);
-}
-
-.surrender-button:hover {
-  background: color-mix(in srgb, var(--surrender) 10%, var(--board-surface));
-}
-
-@media (hover: none) {
-  .surrender-button:active {
-    background: color-mix(in srgb, var(--surrender) 14%, var(--board-surface));
-  }
 }
 
 /* 联机悔棋面板（#101）：排在操作面板下方，与它同宽同层——不挤动上面那排按钮。 */
@@ -1827,7 +1887,6 @@ function inspectFinalBoard() {
    不触发重排重绘，动效灵动但几乎不影响性能。 */
 .dock-entry,
 .log-toggle,
-.restart-button,
 .takeover-button,
 .location-card,
 .banner-retry,
@@ -1848,12 +1907,10 @@ function inspectFinalBoard() {
   transform: scale(0.96);
 }
 
-.restart-button:hover,
 .takeover-button:hover {
   box-shadow: 0 2px 0 color-mix(in srgb, var(--center-border) 55%, transparent);
 }
 
-.restart-button:active,
 .takeover-button:active,
 .log-toggle:active {
   transform: translateY(1px);
@@ -1867,7 +1924,6 @@ function inspectFinalBoard() {
 @media (prefers-reduced-motion: reduce) {
   .dock-entry,
   .log-toggle,
-  .restart-button,
   .takeover-button,
   .location-card,
   .banner-retry,
@@ -1956,15 +2012,6 @@ function inspectFinalBoard() {
     margin: 0;
     padding: 0 0 env(safe-area-inset-bottom);
     background: transparent;
-  }
-
-  .restart-desktop {
-    display: none;
-  }
-
-  .restart-mobile {
-    display: block;
-    width: 100%;
   }
 
   /* Debt stays on screen even with every sheet closed: an always-visible strip in the dock
