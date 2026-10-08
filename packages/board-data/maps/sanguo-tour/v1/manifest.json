@@ -1,0 +1,441 @@
+{
+  "ref": {
+    "id": "sanguo-tour",
+    "version": 1,
+    "contentHash": "fbde93bafe149dfa6fac5cfbdc52481949473d30ff7fdc35c0f882e4a62664bd"
+  },
+  "metadata": {
+    "title": "三国风云",
+    "description": "28 格四方闭环：四角大格各据一方，每边 6 格小格。自起兵而西，过下邳、陈留、洛阳至长安，再折南入蜀经成都、井津南下襄阳，东返建业、吴地，复经招兵买马与锦囊妙计两处牌局回到起点。战场屯粮草、功德祠祈福，沿途十四座城池皆可建兵营筑城。"
+  },
+  "requiredRuleModules": [
+    {
+      "id": "core",
+      "version": 1
+    },
+    {
+      "id": "sanguo",
+      "version": 1
+    }
+  ],
+  "presentation": {
+    "canvas": {
+      "size": 100
+    },
+    "cells": {
+      "0": {
+        "x": 2,
+        "y": 83,
+        "width": 15,
+        "height": 15,
+        "shortLabel": "起兵",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "start"
+        }
+      },
+      "1": {
+        "x": 17,
+        "y": 87,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "寿春",
+        "propertyBand": "band:shouchun"
+      },
+      "2": {
+        "x": 28,
+        "y": 87,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "锦囊",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "3": {
+        "x": 39,
+        "y": 87,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "官渡",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        }
+      },
+      "4": {
+        "x": 50,
+        "y": 87,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "下邳",
+        "propertyBand": "band:jiangdong"
+      },
+      "5": {
+        "x": 61,
+        "y": 87,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "赋税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "6": {
+        "x": 72,
+        "y": 87,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "陈留",
+        "propertyBand": "band:zhongyuan"
+      },
+      "7": {
+        "x": 83,
+        "y": 83,
+        "width": 15,
+        "height": 15,
+        "shortLabel": "观火",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-moon"
+        }
+      },
+      "8": {
+        "x": 87,
+        "y": 17,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "洛阳",
+        "propertyBand": "band:zhongyuan"
+      },
+      "9": {
+        "x": 87,
+        "y": 28,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "功德祠",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        }
+      },
+      "10": {
+        "x": 87,
+        "y": 39,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "招兵",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "11": {
+        "x": 87,
+        "y": 50,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "汝南",
+        "propertyBand": "band:zhongyuan"
+      },
+      "12": {
+        "x": 87,
+        "y": 61,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "赤壁",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        }
+      },
+      "13": {
+        "x": 87,
+        "y": 72,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "长安",
+        "propertyBand": "band:shu"
+      },
+      "14": {
+        "x": 83,
+        "y": 2,
+        "width": 15,
+        "height": 15,
+        "shortLabel": "赈灾",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-food"
+        }
+      },
+      "15": {
+        "x": 17,
+        "y": 2,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "西凉",
+        "propertyBand": "band:shu"
+      },
+      "16": {
+        "x": 28,
+        "y": 2,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "成都",
+        "propertyBand": "band:shu"
+      },
+      "17": {
+        "x": 39,
+        "y": 2,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "锦囊",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "destiny"
+        }
+      },
+      "18": {
+        "x": 50,
+        "y": 2,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "义士",
+        "propertyBand": "band:jiangdong"
+      },
+      "19": {
+        "x": 61,
+        "y": 2,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "赋税",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "tax"
+        }
+      },
+      "20": {
+        "x": 72,
+        "y": 2,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "井津",
+        "propertyBand": "band:shu"
+      },
+      "21": {
+        "x": 2,
+        "y": 2,
+        "width": 15,
+        "height": 15,
+        "shortLabel": "赤壁",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "special-food"
+        }
+      },
+      "22": {
+        "x": 2,
+        "y": 17,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "建业",
+        "propertyBand": "band:jiangdong"
+      },
+      "23": {
+        "x": 2,
+        "y": 28,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "吴",
+        "propertyBand": "band:jiangdong"
+      },
+      "24": {
+        "x": 2,
+        "y": 39,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "招兵",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "chance"
+        }
+      },
+      "25": {
+        "x": 2,
+        "y": 50,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "襄阳",
+        "propertyBand": "band:jingzhou"
+      },
+      "26": {
+        "x": 2,
+        "y": 61,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "功德祠",
+        "artwork": {
+          "type": "built-in-icon",
+          "icon": "world"
+        }
+      },
+      "27": {
+        "x": 2,
+        "y": 72,
+        "width": 11,
+        "height": 11,
+        "shortLabel": "新野",
+        "propertyBand": "band:jingzhou"
+      }
+    },
+    "routes": [
+      {
+        "type": "polyline",
+        "role": "route",
+        "strokeWidth": 1.1,
+        "dashPattern": [
+          2.4,
+          2
+        ],
+        "lineCap": "round",
+        "opacity": 0.85,
+        "zIndex": 4,
+        "points": [
+          {
+            "x": 9.5,
+            "y": 90.5
+          },
+          {
+            "x": 22.5,
+            "y": 92.5
+          },
+          {
+            "x": 33.5,
+            "y": 92.5
+          },
+          {
+            "x": 44.5,
+            "y": 92.5
+          },
+          {
+            "x": 55.5,
+            "y": 92.5
+          },
+          {
+            "x": 66.5,
+            "y": 92.5
+          },
+          {
+            "x": 77.5,
+            "y": 92.5
+          },
+          {
+            "x": 90.5,
+            "y": 90.5
+          },
+          {
+            "x": 92.5,
+            "y": 22.5
+          },
+          {
+            "x": 92.5,
+            "y": 33.5
+          },
+          {
+            "x": 92.5,
+            "y": 44.5
+          },
+          {
+            "x": 92.5,
+            "y": 55.5
+          },
+          {
+            "x": 92.5,
+            "y": 66.5
+          },
+          {
+            "x": 92.5,
+            "y": 77.5
+          },
+          {
+            "x": 90.5,
+            "y": 9.5
+          },
+          {
+            "x": 22.5,
+            "y": 7.5
+          },
+          {
+            "x": 33.5,
+            "y": 7.5
+          },
+          {
+            "x": 44.5,
+            "y": 7.5
+          },
+          {
+            "x": 55.5,
+            "y": 7.5
+          },
+          {
+            "x": 66.5,
+            "y": 7.5
+          },
+          {
+            "x": 77.5,
+            "y": 7.5
+          },
+          {
+            "x": 9.5,
+            "y": 9.5
+          },
+          {
+            "x": 7.5,
+            "y": 22.5
+          },
+          {
+            "x": 7.5,
+            "y": 33.5
+          },
+          {
+            "x": 7.5,
+            "y": 44.5
+          },
+          {
+            "x": 7.5,
+            "y": 55.5
+          },
+          {
+            "x": 7.5,
+            "y": 66.5
+          },
+          {
+            "x": 7.5,
+            "y": 77.5
+          }
+        ]
+      }
+    ],
+    "center": [],
+    "theme": {
+      "colors": {
+        "board": "#F0E4D2",
+        "cell": "#FFFBF2",
+        "border": "#5A3A28",
+        "route": "#9E2B25",
+        "title": "#3B2A18",
+        "decoration": "#C9A227",
+        "center": "#F5E9D6"
+      },
+      "propertyBands": {
+        "band:zhongyuan": "#A8452F",
+        "band:shu": "#2E6B4F",
+        "band:jiangdong": "#3C6E9E",
+        "band:jingzhou": "#7A5A9E",
+        "band:shouchun": "#B07A28"
+      }
+    }
+  }
+}

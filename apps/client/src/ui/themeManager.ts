@@ -59,6 +59,8 @@ export const THEME_BY_MAP: Readonly<Record<string, ResolvedThemeId>> = {
   'northeast-tour': 'forest',
   // 运城之旅是黄河金三角的赭金盐土气质（运城盐湖、解州关帝庙、鹳雀楼），与黄河之旅同归「沙」。
   'yuncheng-tour': 'sand',
+  // 三国风云是竹简帛书的暖褐底色，与运城同归「沙」。
+  'sanguo-tour': 'sand',
 };
 
 /** 地图推荐皮肤；未知 / 空 id 回落 'classic'。纯函数，供 UI 说明文案与解析共用。 */

@@ -32,6 +32,10 @@ import {
   validateRiverTidePublicModuleState,
   RIVER_TIDE_MODULE_KEY,
 } from './riverTideModule';
+import {
+  validateSanguoPublicModuleState,
+  SANGUO_MODULE_KEY,
+} from './sanguoModule';
 
 /**
  * 「无公共状态」的新模块（#23）：它们从不往 publicRuleState.modules 写键，
@@ -431,6 +435,10 @@ function validatePublicRuleState(
     // 黄河水位：必须是 [0, 10] 内的整数（倍率表按这两个阈值分档，越界会让租金倍率失控）。
     if (key === RIVER_TIDE_MODULE_KEY
       && !validateRiverTidePublicModuleState(moduleState, state.players)) return false;
+    // 三国风云：粮草 / 免战 / 香火钱三张计数表的键必须是存活玩家，值不得超过模块上限
+    //（否则损坏存档里的天文数字会让每次落战场格都派发巨额香火钱，等于毁掉整局）。
+    if (key === SANGUO_MODULE_KEY
+      && !validateSanguoPublicModuleState(moduleState, state.players)) return false;
   }
 
   const optionIds = new Set<string>();

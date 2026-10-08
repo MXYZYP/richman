@@ -69,6 +69,7 @@ describe('map thumbnail model', () => {
       'shanxi-tour': 'grid',
       'northeast-tour': 'grid',
       'yuncheng-tour': 'grid',
+      'sanguo-tour': 'ring',
     });
   });
 
@@ -97,6 +98,7 @@ describe('map thumbnail model', () => {
       'shanxi-tour': '蛇形网格',
       'northeast-tour': '蛇形网格',
       'yuncheng-tour': '蛇形网格',
+      'sanguo-tour': '环形棋路',
     });
   });
 

@@ -178,6 +178,11 @@ $files = @(
   "packages/engine/src/oasisCampModule.ts",
   "packages/engine/src/yangtzeFerryModule.ts",
   "packages/engine/src/riverTideModule.ts",
+  # sanguo@1 (roadmap: the Sanguo Fengyun map). Battle cells (tunbin / upgrade / skirmish)
+  # and shrine cells (incense). Same hazard as prisonModule.ts above: moduleRegistry.ts
+  # imports it, so a stale or missing copy makes the server fail while building the
+  # default registry.
+  "packages/engine/src/sanguoModule.ts",
   # ---------- Engine tests (keep the server copies current with the 2.x registry API) ----------
   "packages/engine/src/__tests__/moduleEnvelope.test.ts",
   "packages/engine/src/__tests__/moduleRegistry.test.ts",
@@ -279,6 +284,13 @@ $files = @(
   "packages/board-data/maps/yuncheng-tour/v1/game-config.json",
   "packages/board-data/maps/yuncheng-tour/v1/manifest.json",
   "packages/board-data/src/yunchengTourMap.ts",
+  "packages/board-data/maps/sanguo-tour/v1/board.json",
+  "packages/board-data/maps/sanguo-tour/v1/cards.json",
+  "packages/board-data/maps/sanguo-tour/v1/game-config.json",
+  "packages/board-data/maps/sanguo-tour/v1/manifest.json",
+  "packages/board-data/src/sanguoTourMap.ts",
+  "packages/board-data/src/__tests__/sanguoTourMap.test.ts",
+  "packages/engine/src/__tests__/sanguoModule.test.ts",
   "packages/board-data/src/northeastTourMap.ts",
   "packages/board-data/src/__tests__/northeastTourMap.test.ts",
   "packages/board-data/src/__tests__/yunchengTourMap.test.ts",

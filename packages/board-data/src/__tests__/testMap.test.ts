@@ -75,6 +75,7 @@ describe('permanent test-only map fixture', () => {
       'shanxi-tour',
       'northeast-tour',
       'yuncheng-tour',
+      'sanguo-tour',
     ]);
     expect(listActiveMaps().some((entry) => entry.ref.id === testMap.ref.id)).toBe(false);
   });

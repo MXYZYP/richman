@@ -26,6 +26,7 @@ const MODULE_LABELS: Readonly<Record<string, string>> = {
   'oasis-camp': '绿洲营地',
   'yangtze-ferry': '长江渡轮',
   'river-tide': '黄河汛期',
+  'sanguo': '三国风云',
 };
 
 /** 只有这些模块需要一句额外的玩法提示；纯 core 的地图不该多出任何一句话。 */
@@ -50,6 +51,10 @@ const MODULE_NOTES: Readonly<Record<string, string>> = {
     + '或免费逆流回到上一个渡口；一回合只能换乘一次，抵达的渡口不再结算落点。',
   'river-tide': '黄河水位全场共享、每回合随机涨落：水位 ≥ 8 时全场过路费 ×1.5，≤ 2 时 ×0.6；'
     + '落在河工段可付 1000 元修堤把水位压低 2 格。修堤的人自己掏钱、受益的是所有地主。',
+  'sanguo': '落在战场可花 2000 两屯兵换一份粮草（最多 12 份），也可花两份粮草免费升级自己一座城池，'
+    + '或直接出阵厮杀（胜得 2000 两、负付 1000 两，带免战时不出这个选项）。'
+    + '身上带着粮草时，每次交过路费都能减免一成（单次最多 300 两）。'
+    + '功德祠花 800 两上一炷香（每人一次），此后每次踏上战场额外得 300 两香火钱。',
 };
 
 /**
@@ -68,6 +73,8 @@ const MODULE_CELL_TYPE_FACTS: Readonly<Record<string, { readonly label: string; 
   'oasis': { label: '绿洲营地', summary: '扎营后每次经过自己的营地都能领补给' },
   'ferry': { label: '渡轮停靠点', summary: '付费顺流直达下一渡口，或免费逆流回到上一渡口' },
   'river-works': { label: '河工段', summary: '出钱修堤压低水位，水位高低改变全场过路费' },
+  'battle': { label: '战场', summary: '屯兵换粮草、犒军升级城池，也可出阵厮杀' },
+  'shrine': { label: '功德祠', summary: '上一炷香，此后每次踏上战场都领香火钱' },
 };
 
 export interface MapRuleFact {

@@ -21,6 +21,7 @@ import { oasisCampRuleModuleDefinition } from './oasisCampModule';
 import { railHubRuleModuleDefinition } from './railHubModule';
 import { landmarkPassportRuleModuleDefinition } from './landmarkPassportModule';
 import { riverTideRuleModuleDefinition } from './riverTideModule';
+import { sanguoRuleModuleDefinition } from './sanguoModule';
 
 type ReadonlyCell = DeepReadonly<Cell>;
 
@@ -534,4 +535,6 @@ export const defaultRuleModuleRegistry = createRuleModuleRegistry([
   railHubRuleModuleDefinition,
   riverTideRuleModuleDefinition,
   yangtzeFerryRuleModuleDefinition,
+  // 三国风云：粮草换升级、战场厮杀、功德祠香火钱（按 ref.id 字典序排在 river-tide 之后）。
+  sanguoRuleModuleDefinition,
 ]);

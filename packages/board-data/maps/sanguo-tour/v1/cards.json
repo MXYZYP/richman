@@ -1,0 +1,317 @@
+{
+  "chance": [
+    {
+      "id": "sg-c01",
+      "text": "赵云：常山赵子龙单骑救主，赏银 2000 两",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "sanguo",
+          "version": 1
+        },
+        "effectType": "sanguo-grant",
+        "payload": {
+          "amount": 2000,
+          "kind": "reward"
+        }
+      }
+    },
+    {
+      "id": "sg-c02",
+      "text": "华佗：青囊书换来一剂千金方，赏银 1200 两",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "sanguo",
+          "version": 1
+        },
+        "effectType": "sanguo-grant",
+        "payload": {
+          "amount": 1200,
+          "kind": "reward"
+        }
+      }
+    },
+    {
+      "id": "sg-c03",
+      "text": "诸葛亮：锦囊妙计抽一张",
+      "effect": {
+        "type": "draw_card",
+        "deck": "destiny"
+      }
+    },
+    {
+      "id": "sg-c04",
+      "text": "吕布：虎牢关无人能挡，免二场厮杀并得一座城池",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "sanguo",
+          "version": 1
+        },
+        "effectType": "sanguo-shield",
+        "payload": {
+          "battles": 2
+        }
+      }
+    },
+    {
+      "id": "sg-c05",
+      "text": "徐庶：徐庶进曹营一言不发，与最远的一路换换位置",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "sanguo",
+          "version": 1
+        },
+        "effectType": "sanguo-swap",
+        "payload": {}
+      }
+    },
+    {
+      "id": "sg-c06",
+      "text": "关羽：过五关斩六将，赏银 2000 两",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "sanguo",
+          "version": 1
+        },
+        "effectType": "sanguo-grant",
+        "payload": {
+          "amount": 2000,
+          "kind": "reward"
+        }
+      }
+    },
+    {
+      "id": "sg-c07",
+      "text": "孙策：江东小霸王自带一座新城",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "sanguo",
+          "version": 1
+        },
+        "effectType": "sanguo-fortify",
+        "payload": {}
+      }
+    },
+    {
+      "id": "sg-c08",
+      "text": "貂蝉：连环计美人计，暂停一次",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "sanguo",
+          "version": 1
+        },
+        "effectType": "sanguo-freeze",
+        "payload": {}
+      }
+    },
+    {
+      "id": "sg-c09",
+      "text": "马谡：失街亭被挥泪斩，罚银 3000 两",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "sanguo",
+          "version": 1
+        },
+        "effectType": "sanguo-grant",
+        "payload": {
+          "amount": 3000,
+          "kind": "penalty"
+        }
+      }
+    },
+    {
+      "id": "sg-c10",
+      "text": "张飞：长坂桥一声吼，罚银 2000 两",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "sanguo",
+          "version": 1
+        },
+        "effectType": "sanguo-grant",
+        "payload": {
+          "amount": 2000,
+          "kind": "penalty"
+        }
+      }
+    },
+    {
+      "id": "sg-c11",
+      "text": "周瑜：赤壁借东风，送你一座新城",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "sanguo",
+          "version": 1
+        },
+        "effectType": "sanguo-fortify",
+        "payload": {}
+      }
+    },
+    {
+      "id": "sg-c12",
+      "text": "蒋干：偷书献连环计，白得粮草两份",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "sanguo",
+          "version": 1
+        },
+        "effectType": "sanguo-supply",
+        "payload": {
+          "supply": 2
+        }
+      }
+    }
+  ],
+  "destiny": [
+    {
+      "id": "sg-d01",
+      "text": "舌战群儒：得银 3000 两",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 3000
+      }
+    },
+    {
+      "id": "sg-d02",
+      "text": "火烧新野：赔银 1500 两",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 1500
+      }
+    },
+    {
+      "id": "sg-d03",
+      "text": "草船借箭：向前三步",
+      "effect": {
+        "type": "move_steps",
+        "steps": 3
+      }
+    },
+    {
+      "id": "sg-d04",
+      "text": "空城计：司马懿疑而不敢进，暂停一次",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 1
+      }
+    },
+    {
+      "id": "sg-d05",
+      "text": "桃园结义：可再翻一张招兵买马",
+      "effect": {
+        "type": "draw_card",
+        "deck": "chance"
+      }
+    },
+    {
+      "id": "sg-d06",
+      "text": "倾国倾城：每位对手各进 1200 两",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 1200
+      }
+    },
+    {
+      "id": "sg-d07",
+      "text": "挟天子以令诸侯：每位对手各出 1000 两",
+      "effect": {
+        "type": "pay_each_player",
+        "amount": 1000
+      }
+    },
+    {
+      "id": "sg-d08",
+      "text": "屯田实边：白得粮草三份",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "sanguo",
+          "version": 1
+        },
+        "effectType": "sanguo-supply",
+        "payload": {
+          "supply": 3
+        }
+      }
+    },
+    {
+      "id": "sg-d09",
+      "text": "犒军三军：白得粮草两份",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "sanguo",
+          "version": 1
+        },
+        "effectType": "sanguo-supply",
+        "payload": {
+          "supply": 2
+        }
+      }
+    },
+    {
+      "id": "sg-d10",
+      "text": "诈降之策：免一场厮杀",
+      "effect": {
+        "type": "module",
+        "module": {
+          "id": "sanguo",
+          "version": 1
+        },
+        "effectType": "sanguo-shield",
+        "payload": {
+          "battles": 1
+        }
+      }
+    },
+    {
+      "id": "sg-d11",
+      "text": "坚壁清野：得银 1800 两",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1800
+      }
+    },
+    {
+      "id": "sg-d12",
+      "text": "苦肉之计：赔银 2000 两",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 2000
+      }
+    },
+    {
+      "id": "sg-d13",
+      "text": "七擒七纵：向后两步",
+      "effect": {
+        "type": "move_steps",
+        "steps": -2
+      }
+    },
+    {
+      "id": "sg-d14",
+      "text": "望梅止渴：得银 2200 两",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2200
+      }
+    },
+    {
+      "id": "sg-d15",
+      "text": "无中生有：得银 2600 两",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2600
+      }
+    }
+  ]
+}

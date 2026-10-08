@@ -126,6 +126,7 @@ function assertEffect(
       assertWorldTourEffectPayload(effect, path);
       assertGreatWallEffectPayload(effect, path);
       assertPrisonEffectPayload(effect, path);
+      assertSanguoEffectPayload(effect, path);
       break;
     case 'move_to':
       if (!Number.isSafeInteger(effect.cellId) || !cellIds.has(effect.cellId!)) {
@@ -388,6 +389,16 @@ const SIMPLE_MODULE_CELL_TYPES: ReadonlyMap<string, string> = new Map([
   ['river-tide@1', 'river-works'],
 ]);
 
+/**
+ * 少数模块有**两种** cellType（sanguo@1 的战场 / 功德祠）。
+ *
+ * 与上面的单值映射分开声明，而不是把既有 8 个模块的「一模块一格型」约束放宽成集合 ——
+ * 那会让所有历史模块突然接受任意拼错的 cellType，失去这道防「落上去完全没反应」的校验。
+ */
+const MULTI_MODULE_CELL_TYPES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ['sanguo@1', new Set(['battle', 'shrine'])],
+]);
+
 function assertSimpleModuleCellPayloadShape(
   ref: unknown,
   cellType: string,
@@ -396,10 +407,19 @@ function assertSimpleModuleCellPayloadShape(
 ): void {
   if (ref === null || typeof ref !== 'object') return;
   const moduleRef = ref as RuleModuleRef;
-  const expected = SIMPLE_MODULE_CELL_TYPES.get(`${moduleRef.id}@${moduleRef.version}`);
+  const key = `${moduleRef.id}@${moduleRef.version}`;
+  const allowed = MULTI_MODULE_CELL_TYPES.get(key);
+  if (allowed !== undefined) {
+    if (!allowed.has(cellType)) {
+      fail(path, `cellType must be one of ${[...allowed].join(', ')} for ${key}`);
+    }
+    assertEmptyPayload(payload, path);
+    return;
+  }
+  const expected = SIMPLE_MODULE_CELL_TYPES.get(key);
   if (expected === undefined) return;
   if (cellType !== expected) {
-    fail(path, `cellType must be ${expected} for ${moduleRef.id}@${moduleRef.version}`);
+    fail(path, `cellType must be ${expected} for ${key}`);
   }
   assertEmptyPayload(payload, path);
 }
@@ -425,6 +445,58 @@ function assertPrisonEffectPayload(effect: any, path: string): void {
       return;
     default:
       fail(`${path}.effectType`, 'is not supported by prison@1');
+  }
+}
+
+function isSanguoModule(ref: unknown): boolean {
+  return ref !== null
+    && typeof ref === 'object'
+    && (ref as RuleModuleRef).id === 'sanguo'
+    && (ref as RuleModuleRef).version === 1;
+}
+
+/**
+ * sanguo@1 的卡面效果 payload。
+ *
+ * 卡面效果分两类：**core 效果**（付/收/移动/暂停/再抽）与**模块效果**（6 个 effectType）。
+ * 模块效果只允许下列 6 种，且 payload 逐个锁键 —— 写错的表现是「抽到这张卡什么都不发生」，
+ * 属于最难在运行期发现的一类地图错误，所以在校验期就拦住。
+ */
+function assertSanguoEffectPayload(effect: any, path: string): void {
+  if (!isSanguoModule(effect.module)) return;
+
+  const payloadPath = `${path}.payload`;
+  switch (effect.effectType) {
+    case 'sanguo-grant':
+      // 收支方向由 kind 区分：reward 进钱、penalty 出钱（现金不足时差额进 core 债务队列）。
+      assertExactKeys(effect.payload, ['amount', 'kind'], payloadPath);
+      if (!Number.isSafeInteger(effect.payload.amount) || effect.payload.amount <= 0) {
+        fail(`${payloadPath}.amount`, 'must be a positive safe integer');
+      }
+      if (effect.payload.kind !== 'reward' && effect.payload.kind !== 'penalty') {
+        fail(`${payloadPath}.kind`, 'must be reward or penalty');
+      }
+      return;
+    case 'sanguo-shield':
+      assertExactKeys(effect.payload, ['battles'], payloadPath);
+      if (!Number.isSafeInteger(effect.payload.battles) || effect.payload.battles <= 0) {
+        fail(`${payloadPath}.battles`, 'must be a positive safe integer');
+      }
+      return;
+    case 'sanguo-supply':
+      assertExactKeys(effect.payload, ['supply'], payloadPath);
+      if (!Number.isSafeInteger(effect.payload.supply) || effect.payload.supply <= 0) {
+        fail(`${payloadPath}.supply`, 'must be a positive safe integer');
+      }
+      return;
+    // 以下三个不带参数（徐庶换位 / 孙策周瑜建城 / 貂蝉暂停），引擎按模块常量执行。
+    case 'sanguo-swap':
+    case 'sanguo-fortify':
+    case 'sanguo-freeze':
+      assertEmptyPayload(effect.payload, payloadPath);
+      return;
+    default:
+      fail(`${path}.effectType`, 'is not supported by sanguo@1');
   }
 }
 

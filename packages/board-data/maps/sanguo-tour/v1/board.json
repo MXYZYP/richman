@@ -1,0 +1,325 @@
+{
+  "boardName": "大富翁·三国风云",
+  "direction": "clockwise",
+  "cells": [
+    {
+      "id": 0,
+      "name": "起兵",
+      "type": "start"
+    },
+    {
+      "id": 1,
+      "name": "寿春",
+      "subtype": "normal",
+      "price": 1400,
+      "houseCost": 1500,
+      "rents": [
+        180,
+        900,
+        2500,
+        7000
+      ],
+      "mortgageValue": 1100,
+      "type": "property"
+    },
+    {
+      "id": 2,
+      "name": "锦囊妙计",
+      "type": "destiny"
+    },
+    {
+      "id": 3,
+      "name": "官渡之战",
+      "type": "module",
+      "module": {
+        "id": "sanguo",
+        "version": 1
+      },
+      "cellType": "battle",
+      "payload": {}
+    },
+    {
+      "id": 4,
+      "name": "下邳",
+      "subtype": "normal",
+      "price": 2200,
+      "houseCost": 1000,
+      "rents": [
+        100,
+        500,
+        1500,
+        4500
+      ],
+      "mortgageValue": 700,
+      "type": "property"
+    },
+    {
+      "id": 5,
+      "name": "赋税",
+      "type": "tax",
+      "amount": 700
+    },
+    {
+      "id": 6,
+      "name": "陈留",
+      "subtype": "normal",
+      "price": 3200,
+      "houseCost": 2000,
+      "rents": [
+        300,
+        1500,
+        4400,
+        9800
+      ],
+      "mortgageValue": 1500,
+      "type": "property"
+    },
+    {
+      "id": 7,
+      "name": "隔岸观火",
+      "type": "special",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 1
+      }
+    },
+    {
+      "id": 8,
+      "name": "洛阳",
+      "subtype": "normal",
+      "price": 3600,
+      "houseCost": 2000,
+      "rents": [
+        400,
+        1800,
+        5000,
+        11000
+      ],
+      "mortgageValue": 1800,
+      "type": "property"
+    },
+    {
+      "id": 9,
+      "name": "功德祠",
+      "type": "module",
+      "module": {
+        "id": "sanguo",
+        "version": 1
+      },
+      "cellType": "shrine",
+      "payload": {}
+    },
+    {
+      "id": 10,
+      "name": "招兵买马",
+      "type": "chance"
+    },
+    {
+      "id": 11,
+      "name": "汝南",
+      "subtype": "normal",
+      "price": 3000,
+      "houseCost": 2000,
+      "rents": [
+        300,
+        1300,
+        3900,
+        9000
+      ],
+      "mortgageValue": 1500,
+      "type": "property"
+    },
+    {
+      "id": 12,
+      "name": "赤壁之战",
+      "type": "module",
+      "module": {
+        "id": "sanguo",
+        "version": 1
+      },
+      "cellType": "battle",
+      "payload": {}
+    },
+    {
+      "id": 13,
+      "name": "长安",
+      "subtype": "normal",
+      "price": 2400,
+      "houseCost": 2000,
+      "rents": [
+        1500,
+        4500,
+        10000,
+        20000
+      ],
+      "mortgageValue": 1600,
+      "type": "property"
+    },
+    {
+      "id": 14,
+      "name": "开仓赈灾",
+      "type": "special",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 2000
+      }
+    },
+    {
+      "id": 15,
+      "name": "西凉",
+      "subtype": "normal",
+      "price": 2200,
+      "houseCost": 1000,
+      "rents": [
+        200,
+        800,
+        2200,
+        6000
+      ],
+      "mortgageValue": 1000,
+      "type": "property"
+    },
+    {
+      "id": 16,
+      "name": "成都",
+      "subtype": "normal",
+      "price": 2600,
+      "houseCost": 2000,
+      "rents": [
+        300,
+        1300,
+        3900,
+        9000
+      ],
+      "mortgageValue": 1500,
+      "type": "property"
+    },
+    {
+      "id": 17,
+      "name": "锦囊妙计",
+      "type": "destiny"
+    },
+    {
+      "id": 18,
+      "name": "义士",
+      "subtype": "normal",
+      "price": 2400,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        900,
+        2500,
+        7000
+      ],
+      "mortgageValue": 1100,
+      "type": "property"
+    },
+    {
+      "id": 19,
+      "name": "赋税",
+      "type": "tax",
+      "amount": 700
+    },
+    {
+      "id": 20,
+      "name": "井津",
+      "subtype": "normal",
+      "price": 2200,
+      "houseCost": 1000,
+      "rents": [
+        200,
+        800,
+        2200,
+        6000
+      ],
+      "mortgageValue": 1000,
+      "type": "property"
+    },
+    {
+      "id": 21,
+      "name": "三国赤壁",
+      "type": "special",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 1000
+      }
+    },
+    {
+      "id": 22,
+      "name": "建业",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1500,
+      "rents": [
+        300,
+        1100,
+        3300,
+        8000
+      ],
+      "mortgageValue": 1300,
+      "type": "property"
+    },
+    {
+      "id": 23,
+      "name": "吴",
+      "subtype": "normal",
+      "price": 1000,
+      "houseCost": 500,
+      "rents": [
+        200,
+        300,
+        900,
+        2700
+      ],
+      "mortgageValue": 500,
+      "type": "property"
+    },
+    {
+      "id": 24,
+      "name": "招兵买马",
+      "type": "chance"
+    },
+    {
+      "id": 25,
+      "name": "襄阳",
+      "subtype": "normal",
+      "price": 1600,
+      "houseCost": 1000,
+      "rents": [
+        200,
+        600,
+        1800,
+        5000
+      ],
+      "mortgageValue": 800,
+      "type": "property"
+    },
+    {
+      "id": 26,
+      "name": "功德祠",
+      "type": "module",
+      "module": {
+        "id": "sanguo",
+        "version": 1
+      },
+      "cellType": "shrine",
+      "payload": {}
+    },
+    {
+      "id": 27,
+      "name": "新野",
+      "subtype": "normal",
+      "price": 2000,
+      "houseCost": 1500,
+      "rents": [
+        200,
+        900,
+        2500,
+        7000
+      ],
+      "mortgageValue": 1100,
+      "type": "property",
+      "nextId": 0
+    }
+  ]
+}

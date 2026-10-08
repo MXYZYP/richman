@@ -329,6 +329,9 @@ const MODULE_CELL_TYPE_LABELS: Readonly<Record<string, string>> = {
   'oasis': '绿洲营地',
   'ferry': '渡口',
   'river-works': '河工段',
+  // 三国风云：sanguo@1 有两种格子，战场与功德祠各自登记。
+  'battle': '战场',
+  'shrine': '功德祠',
 };
 
 function nonPropertyTypeLabel(cell: Exclude<Cell, PropertyCell>): string {
@@ -432,6 +435,12 @@ function describeModuleCell(cell: Extract<Cell, { type: 'module' }>, state: Game
     case 'river-tide':
       return '停在河工段可出钱修堤、把黄河水位压低；水位高时全场过路费上浮，'
         + '水位低时全场过路费缩水（修堤的人自己掏钱，受益的是所有地主）。';
+    case 'sanguo':
+      if (cell.cellType === 'shrine') {
+        return '停在功德祠可花银两上一炷香，此后每次踏上战场都能领一笔香火钱（每人只可上一炷）。';
+      }
+      return '停在战场可屯兵换粮草、犒军升级己方城池，也可出阵厮杀；'
+        + '身上带着粮草时，每次交过路费都能减免一部分。';
     default:
       break;
   }
@@ -1060,6 +1069,80 @@ function formatWorldTourModuleEvent(state: GameState | RenderableGameState, even
           return null;
       }
 
+    case 'sanguo':
+      if (event.module.version !== 1) return null;
+      switch (event.eventType) {
+        case 'sanguo_battle_landed':
+          return `${actor} 抵达战场`;
+        case 'sanguo_battle_waited':
+          return `${actor} 按兵不动`;
+        case 'sanguo_tunbinned': {
+          const supply = payloadAmount(payload, 'supply');
+          return `${actor} 屯兵粮草，现有粮草 ${supply ?? 0} 份`;
+        }
+        case 'sanguo_upgraded': {
+          const level = payloadAmount(payload, 'level');
+          return `${actor} 犒军升级${cellId === null ? '' : ` ${cellName(state, cellId)}`}`
+            + `至 ${level ?? 1} 级`;
+        }
+        case 'sanguo_skirmish_draw':
+          return `${actor} 出阵厮杀，胜负未分`;
+        case 'sanguo_skirmished': {
+          const amount = payloadAmount(payload, 'amount');
+          const won = payload.won === true;
+          return `${actor} 出阵厮杀${won ? '得胜' : '失利'}`
+            + `${amount === null ? '' : `，${won ? '赢得' : '赔上'} ${money(amount)}`}`;
+        }
+        case 'sanguo_shielded': {
+          const battles = payloadAmount(payload, 'battles');
+          return `${actor} 免战${battles === null ? '' : ` ${battles} 场`}厮杀`;
+        }
+        case 'sanguo_shrine_landed':
+          return `${actor} 抵达功德祠`;
+        case 'sanguo_saluted':
+          return `${actor} 上香祈福`;
+        case 'sanguo_incensed':
+          return `${actor} 上香祈福，此后每次踏上战场都有香火钱`;
+        case 'sanguo_incense_paid': {
+          const amount = payloadAmount(payload, 'amount');
+          return `${actor} 领到香火钱${amount === null ? '' : ` ${money(amount)}`}`;
+        }
+        case 'sanguo_granted': {
+          const amount = payloadAmount(payload, 'amount');
+          return `${actor} 获得赏银${amount === null ? '' : ` ${money(amount)}`}`;
+        }
+        case 'sanguo_penalized': {
+          const amount = payloadAmount(payload, 'amount');
+          return `${actor} 赔付银两${amount === null ? '' : ` ${money(amount)}`}`;
+        }
+        case 'sanguo_swapped': {
+          const counterpart = typeof payload.counterpartId === 'string'
+            ? playerName(state, payload.counterpartId)
+            : '对手';
+          return `${actor} 与 ${counterpart} 交换位置`;
+        }
+        case 'sanguo_swap_skipped':
+          return `${actor} 无处换位，徐庶之计落空`;
+        case 'sanguo_fortified': {
+          const level = payloadAmount(payload, 'level');
+          return `${actor} 白得一座城池${cellId === null ? '' : `（${cellName(state, cellId)} ${level ?? 1} 级）`}`;
+        }
+        case 'sanguo_fortify_skipped':
+          return `${actor} 无城可建`;
+        case 'sanguo_frozen':
+          return `${actor} 被暂停一回合`;
+        case 'sanguo_supply_gained': {
+          const supply = payloadAmount(payload, 'supply');
+          return `${actor} 获得粮草，现有 ${supply ?? 0} 份`;
+        }
+        case 'sanguo_relief_applied': {
+          const relief = payloadAmount(payload, 'relief');
+          return `${actor} 以粮草抵减过路费 ${money(relief ?? 0)}`;
+        }
+        default:
+          return null;
+      }
+
     default:
       return null;
   }
@@ -1082,6 +1165,7 @@ function moduleCellTypeHint(moduleId: string): string {
     case 'oasis-camp': return 'oasis';
     case 'yangtze-ferry': return 'ferry';
     case 'river-tide': return 'river-works';
+    case 'sanguo': return 'battle';
     case 'great-wall': return 'beacon';
     case 'prison': return 'goto-jail';
     default: return '';

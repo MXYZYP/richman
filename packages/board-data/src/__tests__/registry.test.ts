@@ -13,6 +13,7 @@ import { worldTourMap } from '../worldTourMap';
 import { xinjiangTourMap } from '../xinjiangTourMap';
 import { yangtzeTourMap } from '../yangtzeTourMap';
 import { yunchengTourMap } from '../yunchengTourMap';
+import { sanguoTourMap } from '../sanguoTourMap';
 import { yellowRiverMap } from '../yellowRiverMap';
 import {
   createMapRegistry,
@@ -51,7 +52,7 @@ function createRegistry(activeMapRefs: readonly MapRef[], assets: readonly {
 }
 
 describe('production map registry', () => {
-  it('按批准顺序公开并精确解析十二张正式地图', async () => {
+  it('按批准顺序公开并精确解析十三张正式地图', async () => {
     expect(listActiveMaps()).toEqual([
       {
         ref: chinaTourMap.ref,
@@ -113,6 +114,11 @@ describe('production map registry', () => {
         title: yunchengTourMap.metadata.title,
         description: yunchengTourMap.metadata.description,
       },
+      {
+        ref: sanguoTourMap.ref,
+        title: sanguoTourMap.metadata.title,
+        description: sanguoTourMap.metadata.description,
+      },
     ]);
     expect(getActiveMapPack('china-tour')).toBe(getMapPack(chinaTourMap.ref));
     expect(getMapPack(chinaTourMap.ref)).toEqual(chinaTourMap);
@@ -138,6 +144,8 @@ describe('production map registry', () => {
     expect(getMapPack(northeastTourMap.ref)).toEqual(northeastTourMap);
     expect(getActiveMapPack('yuncheng-tour')).toBe(getMapPack(yunchengTourMap.ref));
     expect(getMapPack(yunchengTourMap.ref)).toEqual(yunchengTourMap);
+    expect(getActiveMapPack('sanguo-tour')).toBe(getMapPack(sanguoTourMap.ref));
+    expect(getMapPack(sanguoTourMap.ref)).toEqual(sanguoTourMap);
     expect(() => getMapPack({ ...worldTourMap.ref, contentHash: 'f'.repeat(64) }))
       .toThrow(/hash mismatch.*world-tour@1/i);
 
@@ -155,7 +163,7 @@ describe('production map registry', () => {
       { id: 'world-tour', version: 1 },
       { id: 'great-wall', version: 1 },
       { id: 'prison', version: 1 },
-      // #23「每张地图都要有规则」：8 张纯 core 地图各配一个模块，白名单同步扩到 12 项。
+      // #23「每张地图都要有规则」：8 张纯 core 地图各配一个模块；三国风云再加 sanguo@1，共 13 项。
       { id: 'caravan-market', version: 1 },
       { id: 'landmark-passport', version: 1 },
       { id: 'oasis-camp', version: 1 },
@@ -164,6 +172,7 @@ describe('production map registry', () => {
       { id: 'rail-hub', version: 1 },
       { id: 'river-tide', version: 1 },
       { id: 'yangtze-ferry', version: 1 },
+      { id: 'sanguo', version: 1 },
     ]);
     expect(publicApi).not.toHaveProperty('registerMapPack');
 
@@ -186,7 +195,7 @@ describe('production map registry', () => {
     expect(listActiveMaps().map((entry) => entry.ref.id)).toEqual([
       'china-tour', 'world-tour', 'classic-tour', 'silk-road', 'great-wall',
       'yellow-river', 'yangtze-tour', 'pearl-tour', 'xinjiang-tour', 'shanxi-tour',
-      'northeast-tour', 'yuncheng-tour',
+      'northeast-tour', 'yuncheng-tour', 'sanguo-tour',
     ]);
   });
 

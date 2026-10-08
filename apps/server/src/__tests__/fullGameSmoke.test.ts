@@ -207,8 +207,10 @@ describe('服务端整局冒烟：真实网关 + 真实地图', () => {
   //                   掷骰出狱 / 出狱许可证 / 保释金，托管玩家必须能自己走出监狱）
   //   yuncheng-tour → 48 格 6×8 蛇形网格 + piaohao@1（第 12 张图：黄河金三角主题，
   //                   票号格 3 处，是运城「河东票号」文化在玩法上的落点）。
-  // 十二张正式地图在此清单里各跑一局：新增地图时务必加进来，否则它会「能选但从没被整局跑过」。
-  for (const mapId of ['china-tour', 'world-tour', 'classic-tour', 'great-wall', 'silk-road', 'yellow-river', 'yangtze-tour', 'pearl-tour', 'xinjiang-tour', 'shanxi-tour', 'northeast-tour', 'yuncheng-tour'] as const) {
+  //   sanguo-tour → 28 格四角闭环 + sanguo@1（第 13 张图：战场屯粮草 / 犒军升级 /
+  //                   出阵厮杀、功德祠上香领香火钱，两处牌局回原路；粮草还能抵减过路费）。
+  // 十三张正式地图在此清单里各跑一局：新增地图时务必加进来，否则它会「能选但从没被整局跑过」。
+  for (const mapId of ['china-tour', 'world-tour', 'classic-tour', 'great-wall', 'silk-road', 'yellow-river', 'yangtze-tour', 'pearl-tour', 'xinjiang-tour', 'shanxi-tour', 'northeast-tour', 'yuncheng-tour', 'sanguo-tour'] as const) {
     test(
       `${mapId}：自动化托管把一整局推进到 game_over，且服务端零错误、全程不卡死`,
       () => {

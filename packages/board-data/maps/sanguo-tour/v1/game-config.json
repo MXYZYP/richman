@@ -1,0 +1,21 @@
+{
+  "initialCash": 2000,
+  "passStartSalary": 2000,
+  "maxHouseLevel": 3,
+  "sellHouseRefundRate": 0.5,
+  "sellLandRate": 0.5,
+  "mortgageInterestRate": 0.1,
+  "utilityMultipliers": [
+    10,
+    100
+  ],
+  "jailExitMinRoll": 10,
+  "jailMaxAttempts": 3,
+  "cashGoalPresets": [
+    8000,
+    16000
+  ],
+  "diceMode": "two_dice",
+  "airportBranchDice": 1,
+  "jailEnabled": false
+}

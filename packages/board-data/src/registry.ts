@@ -13,6 +13,7 @@ import { xinjiangTourMap } from './xinjiangTourMap';
 import { shanxiTourMap } from './shanxiTourMap';
 import { northeastTourMap } from './northeastTourMap';
 import { yunchengTourMap } from './yunchengTourMap';
+import { sanguoTourMap } from './sanguoTourMap';
 
 interface AssetAllowlistEntry {
   readonly ref: MapRef;
@@ -44,6 +45,8 @@ export const PRODUCTION_RULE_MODULES: readonly RuleModuleRef[] = [
   { id: 'rail-hub', version: 1 },
   { id: 'river-tide', version: 1 },
   { id: 'yangtze-ferry', version: 1 },
+  // 三国风云：战场屯粮草 / 功德祠祈福, 配招兵买马与锦囊妙计两处牌局。
+  { id: 'sanguo', version: 1 },
 ];
 
 export interface MapRegistry {
@@ -177,6 +180,7 @@ const productionRegistry = createMapRegistry({
     shanxiTourMap.ref,
     northeastTourMap.ref,
     yunchengTourMap.ref,
+    sanguoTourMap.ref,
   ],
   knownRuleModules: PRODUCTION_RULE_MODULES,
   assetAllowlist: [
@@ -192,6 +196,7 @@ const productionRegistry = createMapRegistry({
     { ref: shanxiTourMap.ref, paths: [] },
     { ref: northeastTourMap.ref, paths: [] },
     { ref: yunchengTourMap.ref, paths: [] },
+    { ref: sanguoTourMap.ref, paths: [] },
   ],
 });
 
@@ -207,6 +212,7 @@ productionRegistry.registerMapPack(xinjiangTourMap);
 productionRegistry.registerMapPack(shanxiTourMap);
 productionRegistry.registerMapPack(northeastTourMap);
 productionRegistry.registerMapPack(yunchengTourMap);
+productionRegistry.registerMapPack(sanguoTourMap);
 
 export function listActiveMaps(): readonly MapCatalogEntry[] {
   return productionRegistry.listActiveMaps();

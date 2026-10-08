@@ -73,6 +73,7 @@ try {
     { id: 'rail-hub', version: 1 },
     { id: 'river-tide', version: 1 },
     { id: 'yangtze-ferry', version: 1 },
+    { id: 'sanguo', version: 1 },
   ];
   for (const pack of formalPacks) assertValidMapPack(pack, knownModules, []);
   const registeredChinaPack = formalPacks[0];
