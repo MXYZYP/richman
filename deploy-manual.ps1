@@ -367,7 +367,12 @@ $files = @(
   "apps/client/src/components/PlayerRail.test.ts",
   "apps/client/src/ui/debtPillLayout.test.ts",
   "apps/client/src/views/LobbyView.test.ts",
+  "apps/client/src/game/settlement.ts",
   "apps/client/src/game/settlement.test.ts",
+  # Guards the settlement dialog exit wiring (stacking level, primary-button label,
+  # whether the board can be inspected). A missing copy means the server runs a suite
+  # that no longer pins the game_over exit path.
+  "apps/client/src/game/settlementExitWiring.test.ts",
   "apps/client/src/ui/cashFeedback.test.ts",
   "apps/client/src/views/localDeleteConfirmation.test.ts",
   "apps/client/src/components/ReleaseNotesDialog.test.ts",

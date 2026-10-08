@@ -370,11 +370,43 @@ describe('sanguo-tour@1 approved source data', () => {
     expect(manifest.presentation.cells[1].propertyBand).toBe('band:shouchun');
   });
 
+  it('separates 赤壁之战 (battle) from 三国赤壁 (tribute)', () => {
+    const placements = sanguoTourMap.presentation.cells;
+    expect(placements[12]!.shortLabel).toBe('赤壁');
+    expect(placements[21]!.shortLabel).toBe('大战');
+    // board data keeps the historical names untouched.
+    const nameOf = (id: number) => sanguoTourMap.game.board.cells
+      .find((cell) => cell.id === id)?.name;
+    expect(nameOf(12)).toBe('赤壁之战');
+    expect(nameOf(21)).toBe('三国赤壁');
+  });
+
+  // Two distinct properties rendering the same text are indistinguishable on the board:
+  // shortLabel overrides cell.name (clientGame.ts), so the collision is player-visible.
+  // Repeating a non-property KIND (机会 / 命运 / 赋税 / 功德祠) is the design, so only
+  // property cells must be unique.
+  it('renders every property under a label no other property shares', () => {
+    const placements = sanguoTourMap.presentation.cells;
+    const seen = new Map<string, { id: number; name: string }>();
+    for (const cell of sanguoTourMap.game.board.cells) {
+      if (cell.type !== 'property') continue;
+      const placement = placements[cell.id]!;
+      const shown = placement.compactLabel ?? placement.shortLabel;
+      const previous = seen.get(shown);
+      expect(
+        previous,
+        `cells ${previous?.id} (${previous?.name}) and ${cell.id} (${cell.name}) both render "${shown}"`,
+      ).toBeUndefined();
+      seen.set(shown, { id: cell.id, name: cell.name });
+    }
+    expect(seen.size).toBeGreaterThan(0);
+  });
+
   it('is a deeply frozen valid immutable map pack whose hash matches its own bytes', () => {
     expect(() => assertValidMapPack(sanguoTourMap, [coreModule, sanguoModule])).not.toThrow();
     expect(computeContentHash(sanguoTourMap)).toBe(sanguoTourMap.ref.contentHash);
     expect(sanguoTourMap.ref.contentHash)
-      .toBe('fbde93bafe149dfa6fac5cfbdc52481949473d30ff7fdc35c0f882e4a62664bd');
+      .toBe('c1e6092a59a122cf170460d454730456ab1af54e6dc54a364184d57ec4e76189');
     expect(Object.isFrozen(sanguoTourMap)).toBe(true);
     expect(Object.isFrozen(sanguoTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(sanguoTourMap.game.cards.chance[0]!.effect)).toBe(true);

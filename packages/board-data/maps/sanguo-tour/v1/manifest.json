@@ -2,7 +2,7 @@
   "ref": {
     "id": "sanguo-tour",
     "version": 1,
-    "contentHash": "fbde93bafe149dfa6fac5cfbdc52481949473d30ff7fdc35c0f882e4a62664bd"
+    "contentHash": "c1e6092a59a122cf170460d454730456ab1af54e6dc54a364184d57ec4e76189"
   },
   "metadata": {
     "title": "三国风云",
@@ -229,7 +229,7 @@
         "y": 2,
         "width": 15,
         "height": 15,
-        "shortLabel": "赤壁",
+        "shortLabel": "大战",
         "artwork": {
           "type": "built-in-icon",
           "icon": "special-food"

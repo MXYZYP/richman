@@ -2,7 +2,7 @@
   "ref": {
     "id": "shanxi-tour",
     "version": 1,
-    "contentHash": "1a89ee4d317d3322589d4109290d9914327f1668770c9a863d2d6bda6b924485"
+    "contentHash": "454d4825bfa1b77070641fcf07fca006107132b156e68ff22fe16888b6a07a12"
   },
   "metadata": {
     "title": "山西之旅",
@@ -91,6 +91,7 @@
         "width": 13,
         "height": 10,
         "shortLabel": "应县木塔",
+        "compactLabel": "木塔",
         "artwork": {
           "type": "built-in-icon",
           "icon": "special-food"
@@ -118,6 +119,7 @@
         "width": 13,
         "height": 10,
         "shortLabel": "云冈石窟",
+        "compactLabel": "石窟",
         "propertyBand": "band:north"
       },
       "11": {
@@ -355,6 +357,7 @@
         "width": 13,
         "height": 10,
         "shortLabel": "吉县壶口",
+        "compactLabel": "壶口",
         "propertyBand": "band:linfen"
       },
       "38": {

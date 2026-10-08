@@ -16,6 +16,7 @@ import SettingsDialog from '../components/SettingsDialog.vue';
 import ReplayDialog from '../components/ReplayDialog.vue';
 import { formatRecentLogEvent, canProposeTrade, getAssetRows, getAuctionDisplay, getCellDetail, getOwnTradableCells, getPendingCardChoice, getPendingPurchaseOffer, getPlayerAssetDialogModel, getTradeDisplay, getTradeProposalOptions, type ClientAction } from '../game/clientGame';
 import { formatCashAnnouncement, formatMoney } from '../ui/format';
+import { canInspectFinalBoard, getSettlementExitDecision } from '../game/settlement';
 import type { CashNotice, GameSession, ReplayExportOutcome } from '../session/gameSession';
 import type { CreateLocalSessionOptions } from '../session/localSession';
 import { paceMultiplier } from '../session/playbackPace';
@@ -569,7 +570,16 @@ const exitLabel = computed(() => {
   if (props.session.isPlayback === true) return '退出复盘';
   return props.session.mode === 'local' ? '保存并返回首页' : '离开房间';
 });
-const settlementPrimaryLabel = computed(() => (props.session.mode === 'local' ? '再开一局' : '离开房间'));
+const settlementPrimaryLabel = computed(() => getSettlementExitDecision({
+  mode: props.session.mode,
+  isPlayback: props.session.isPlayback === true,
+}).label);
+// 「查看棋盘」只在真的有会话可看时才给：结算弹窗是 game_over 下唯一的退出入口，
+// 把它关掉却没有棋盘可看，玩家就被困在这一屏了。
+const settlementCanInspectBoard = computed(() => canInspectFinalBoard({
+  hasSession: state.value !== null,
+  isPlayback: props.session.isPlayback === true,
+}));
 // A connected exit leaves gracefully over the socket (progress stays in the room); a severed
 // connection can only abandon locally, discarding the stored session — the dialog says so.
 const canNotifyRoom = computed(() => props.session.connectionStatus.value === 'connected');
@@ -1276,6 +1286,7 @@ function inspectFinalBoard() {
       v-if="shouldShowSettlement && state"
       :state="state"
       :primary-label="settlementPrimaryLabel"
+      :can-inspect-board="settlementCanInspectBoard"
       :inert="isConfirmingLeave"
       @restart="requestExit"
       @close="inspectFinalBoard"
@@ -1752,7 +1763,12 @@ function inspectFinalBoard() {
   place-items: center;
   padding: 18px;
   background: var(--overlay-scrim);
-  z-index: 20;
+  /* Must sit ABOVE .settlement-backdrop. The settlement dialog is mounted earlier in
+     the DOM, so an equal stacking level leaves the leave-confirm panel behind it — the
+     player taps the settlement primary button and nothing appears to happen.
+     (Do not quote the sibling's numeric value here: this file's own guard test greps
+     for the first z-index token in this rule and would read the comment instead.) */
+  z-index: 30;
 }
 
 .confirm-dialog {

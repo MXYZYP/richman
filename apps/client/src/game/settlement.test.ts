@@ -3,7 +3,7 @@ import { getActiveMapPack } from '@richman/board-data';
 import { createGame, type GameState, type PlayerState } from '@richman/engine';
 import type { RenderableGameState } from '../session/gameSession';
 import { resolveLocalGameState } from './mapResolver';
-import { getSettlementSummary } from './settlement';
+import { canInspectFinalBoard, getSettlementExitDecision, getSettlementSummary } from './settlement';
 
 const chinaMap = getActiveMapPack('china-tour');
 
@@ -170,5 +170,60 @@ describe('getSettlementSummary', () => {
     const summary = getSettlementSummary(makeState({ winnerId: null }));
 
     expect(summary.title).toBe('本局结束');
+  });
+});
+
+// Regression: the settlement dialog's primary button used to read 「再开一局」 in local
+// mode while wired to the exit path — tapping it silently dropped the player on the home
+// screen, which read as a dead button. And its secondary 「查看棋盘」 could dismiss the
+// only exit surface, stranding a player with nothing to fall back to.
+describe('getSettlementExitDecision', () => {
+  it('never promises a restart: every mode leaves the board', () => {
+    expect(getSettlementExitDecision({ mode: 'local', isPlayback: false })).toEqual({
+      kind: 'home',
+      label: '保存并返回首页',
+      actionable: true,
+      disabledReason: null,
+    });
+    expect(getSettlementExitDecision({ mode: 'online', isPlayback: false })).toEqual({
+      kind: 'home',
+      label: '离开房间',
+      actionable: true,
+      disabledReason: null,
+    });
+    expect(getSettlementExitDecision({ mode: 'online', isPlayback: true })).toEqual({
+      kind: 'home',
+      label: '退出复盘',
+      actionable: true,
+      disabledReason: null,
+    });
+  });
+
+  it('uses the replay wording even in local mode (playback overrides the transport)', () => {
+    expect(getSettlementExitDecision({ mode: 'local', isPlayback: true }).label).toBe('退出复盘');
+  });
+
+  it('never renders a 「再开一局」 label, in any mode', () => {
+    for (const mode of ['local', 'online'] as const) {
+      for (const isPlayback of [false, true]) {
+        expect(getSettlementExitDecision({ mode, isPlayback }).label).not.toContain('再开一局');
+      }
+    }
+  });
+});
+
+describe('canInspectFinalBoard', () => {
+  it('allows dismissing while a real session is mounted', () => {
+    expect(canInspectFinalBoard({ hasSession: true, isPlayback: false })).toBe(true);
+  });
+
+  it('refuses to dismiss when there is no board to fall back to', () => {
+    // Dismissing here would leave the settlement dialog as the only exit surface,
+    // and it is already the only one — so hiding 「查看棋盘」 is the fix.
+    expect(canInspectFinalBoard({ hasSession: false, isPlayback: false })).toBe(false);
+  });
+
+  it('refuses to dismiss during playback (the banner is the exit path there)', () => {
+    expect(canInspectFinalBoard({ hasSession: true, isPlayback: true })).toBe(false);
   });
 });

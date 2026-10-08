@@ -197,6 +197,41 @@ describe('great-wall@1 approved source data', () => {
     expect(manifest.presentation.center).toEqual([]);
   });
 
+  it('gives each of the six beacon towers and both water wheels its own label', () => {
+    const placements = greatWallMap.presentation.cells;
+    expect(['肃州', '焉支', '索桥', '花马', '府谷', '居庸'])
+      .toEqual([5, 13, 21, 29, 36, 44].map((id) => placements[id]!.compactLabel));
+    expect(placements[10]!.shortLabel).toBe('黑河');
+    expect(placements[26]!.shortLabel).toBe('黄河');
+    // The deed names survive; only the rendered short form changed.
+    const nameOf = (id: number) => greatWallMap.game.board.cells
+      .find((cell) => cell.id === id)?.name;
+    expect(nameOf(5)).toBe('烽火台·肃州');
+    expect(nameOf(10)).toBe('黑河水车');
+    expect(nameOf(26)).toBe('黄河水车');
+  });
+
+  // Two distinct properties rendering the same text are indistinguishable on the board:
+  // shortLabel overrides cell.name (clientGame.ts), so the collision is player-visible.
+  // Repeating a non-property KIND (机会 / 命运 / 赋税 / 功德祠) is the design, so only
+  // property cells must be unique.
+  it('renders every property under a label no other property shares', () => {
+    const placements = greatWallMap.presentation.cells;
+    const seen = new Map<string, { id: number; name: string }>();
+    for (const cell of greatWallMap.game.board.cells) {
+      if (cell.type !== 'property') continue;
+      const placement = placements[cell.id]!;
+      const shown = placement.compactLabel ?? placement.shortLabel;
+      const previous = seen.get(shown);
+      expect(
+        previous,
+        `cells ${previous?.id} (${previous?.name}) and ${cell.id} (${cell.name}) both render "${shown}"`,
+      ).toBeUndefined();
+      seen.set(shown, { id: cell.id, name: cell.name });
+    }
+    expect(seen.size).toBeGreaterThan(0);
+  });
+
   it('is a deeply frozen valid immutable map pack whose hash matches its own bytes', () => {
     expect(() => assertValidMapPack(greatWallMap, [coreModule, greatWallModule])).not.toThrow();
     expect(computeContentHash(greatWallMap)).toBe(greatWallMap.ref.contentHash);

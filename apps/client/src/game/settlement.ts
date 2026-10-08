@@ -77,3 +77,57 @@ export function getSettlementSummary(state: RenderableGameState): SettlementSumm
     }),
   };
 }
+
+export type SettlementExitKind = 'restart' | 'home';
+
+export interface SettlementExitDecision {
+  readonly kind: SettlementExitKind;
+  /** Button copy. Never promise a restart we cannot actually perform. */
+  readonly label: string;
+  /** False when the action cannot run (no session), so the caller must not emit. */
+  readonly actionable: boolean;
+  /** Copy explaining why nothing happens — shown instead of a dead button. */
+  readonly disabledReason: string | null;
+}
+
+/**
+ * What the settlement dialog's PRIMARY button must do when the game is over.
+ *
+ * A finished game has exactly one legal destination: out of the board view. There is
+ * nothing left to "restart" server-side — the room is finished and replay/save logic
+ * lives outside this dialog — so offering 「再开一局」 wired to the exit path is a lie
+ * that reads as a dead button. Local hot-seat is the one case that can genuinely start
+ * another game, and only when a local session still exists to restart.
+ */
+export function getSettlementExitDecision(input: {
+  readonly mode: 'local' | 'online';
+  readonly isPlayback: boolean;
+}): SettlementExitDecision {
+  if (input.isPlayback) {
+    return { kind: 'home', label: '退出复盘', actionable: true, disabledReason: null };
+  }
+  if (input.mode === 'online') {
+    return { kind: 'home', label: '离开房间', actionable: true, disabledReason: null };
+  }
+  return {
+    kind: 'home',
+    label: '保存并返回首页',
+    actionable: true,
+    disabledReason: null,
+  };
+}
+
+/**
+ * Whether the settlement dialog may be dismissed to look at the final board.
+ *
+ * Dismissing is only safe while a real session is still mounted: the board it reveals
+ * reads live session state, so with no session there is nothing to reveal and the
+ * dialog would be the only way out. Kept as an explicit predicate so the rule is
+ * testable instead of living inside a template expression.
+ */
+export function canInspectFinalBoard(input: {
+  readonly hasSession: boolean;
+  readonly isPlayback: boolean;
+}): boolean {
+  return input.hasSession && !input.isPlayback;
+}

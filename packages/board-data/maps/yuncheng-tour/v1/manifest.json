@@ -2,7 +2,7 @@
   "ref": {
     "id": "yuncheng-tour",
     "version": 1,
-    "contentHash": "24aec483a20c2f8d93dd38bff4ed867e8b64c94388f2371c2b5dd8f5dd4fcd25"
+    "contentHash": "8bf6c93ebc2d1ee33b31d87e0d30303ff0683b6327de3c096794ad0e2bd45b1c"
   },
   "metadata": {
     "title": "运城之旅",
@@ -175,6 +175,7 @@
         "width": 13,
         "height": 10,
         "shortLabel": "运城盐池",
+        "compactLabel": "盐池",
         "propertyBand": "band:utility"
       },
       "17": {
@@ -210,6 +211,7 @@
         "width": 13,
         "height": 10,
         "shortLabel": "普救寺戏台",
+        "compactLabel": "普救寺",
         "artwork": {
           "type": "built-in-icon",
           "icon": "special-food"
@@ -221,6 +223,7 @@
         "width": 13,
         "height": 10,
         "shortLabel": "芮城永乐宫",
+        "compactLabel": "永乐宫",
         "propertyBand": "band:luyinchuan"
       },
       "22": {
@@ -228,7 +231,8 @@
         "y": 38.75,
         "width": 13,
         "height": 10,
-        "shortLabel": "关卡盘查"
+        "shortLabel": "关卡盘查",
+        "compactLabel": "关卡"
       },
       "23": {
         "x": 4.75,
@@ -244,6 +248,7 @@
         "width": 13,
         "height": 10,
         "shortLabel": "黄河金三角",
+        "compactLabel": "金三角",
         "propertyBand": "band:utility"
       },
       "25": {
@@ -263,6 +268,7 @@
         "width": 13,
         "height": 10,
         "shortLabel": "河津龙门",
+        "compactLabel": "河津",
         "propertyBand": "band:hetao"
       },
       "27": {
@@ -313,7 +319,8 @@
         "y": 63.75,
         "width": 13,
         "height": 10,
-        "shortLabel": "汾河秋汛"
+        "shortLabel": "汾河秋汛",
+        "compactLabel": "秋汛"
       },
       "33": {
         "x": 35.75,
@@ -394,6 +401,7 @@
         "width": 13,
         "height": 10,
         "shortLabel": "司马光祠",
+        "compactLabel": "司马祠",
         "propertyBand": "band:fenhe"
       },
       "42": {
@@ -410,6 +418,7 @@
         "width": 13,
         "height": 10,
         "shortLabel": "永乐宫壁画",
+        "compactLabel": "壁画",
         "propertyBand": "band:luyinchuan"
       },
       "44": {
@@ -418,6 +427,7 @@
         "width": 13,
         "height": 10,
         "shortLabel": "解州关帝",
+        "compactLabel": "解州",
         "propertyBand": "band:yuejin"
       },
       "45": {
@@ -437,6 +447,7 @@
         "width": 13,
         "height": 10,
         "shortLabel": "关帝祖庙税",
+        "compactLabel": "祖庙税",
         "artwork": {
           "type": "built-in-icon",
           "icon": "tax"
@@ -448,6 +459,7 @@
         "width": 13,
         "height": 10,
         "shortLabel": "运城盐湖",
+        "compactLabel": "盐湖",
         "propertyBand": "band:yuncheng"
       }
     },

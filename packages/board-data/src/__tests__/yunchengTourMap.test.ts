@@ -358,11 +358,37 @@ describe('yuncheng-tour@1 approved source data', () => {
     );
   });
 
+  // A 13x10 tile cannot hold a 5-character CJK label legibly: the text either
+  // overflows the tile or squeezes its neighbours. boardLayout.ts renders
+  // `compactLabel` whenever it exists, so every label longer than 4 characters needs one.
+  it('gives every label longer than 4 characters a compactLabel that is strictly shorter', () => {
+    const placements = yunchengTourMap.presentation.cells;
+    const compact: ReadonlyArray<readonly [number, string, string]> = Object.entries(placements)
+      .filter(([, placement]) => placement.compactLabel !== undefined)
+      .map(([id, placement]) => [Number(id), String(placement.shortLabel), String(placement.compactLabel)]);
+
+    expect(compact.length).toBeGreaterThanOrEqual(12);
+    for (const [id, full, label] of compact) {
+      expect(label.length, `cell ${id}: "${label}" must be shorter than "${full}"`).toBeLessThan(full.length);
+    }
+    // The abbreviations must actually disambiguate: no two cells may collapse to one label.
+    const labels = compact.map(([, , label]) => label);
+    expect(new Set(labels).size).toBe(labels.length);
+
+    // Spot-lock the longest names, which are the ones that actually broke.
+    expect(placements['20'].compactLabel).toBe('普救寺');
+    expect(placements['21'].compactLabel).toBe('永乐宫');
+    expect(placements['24'].compactLabel).toBe('金三角');
+    expect(placements['46'].compactLabel).toBe('祖庙税');
+    // A 4-character label that is already short enough stays unabridged.
+    expect(placements['6'].compactLabel).toBeUndefined();
+  });
+
   it('is a deeply frozen valid immutable map pack whose hash matches its own bytes', () => {
     expect(() => assertValidMapPack(yunchengTourMap, [coreModule, piaohaoModule])).not.toThrow();
     expect(computeContentHash(yunchengTourMap)).toBe(yunchengTourMap.ref.contentHash);
     expect(yunchengTourMap.ref.contentHash)
-      .toBe('24aec483a20c2f8d93dd38bff4ed867e8b64c94388f2371c2b5dd8f5dd4fcd25');
+      .toBe('8bf6c93ebc2d1ee33b31d87e0d30303ff0683b6327de3c096794ad0e2bd45b1c');
     expect(Object.isFrozen(yunchengTourMap)).toBe(true);
     expect(Object.isFrozen(yunchengTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(yunchengTourMap.game.cards.destiny[2]!.effect)).toBe(true);

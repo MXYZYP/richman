@@ -312,11 +312,26 @@ describe('shanxi-tour@1 approved source data', () => {
     ]);
   });
 
+  // Same 13x10 tile as yuncheng-tour: long landmarks need a compactLabel too.
+  it('abbreviates every long landmark so it fits the shared 13x10 tile', () => {
+    const placements = shanxiTourMap.presentation.cells;
+    expect(placements['7'].compactLabel).toBe('木塔');
+    expect(placements['10'].compactLabel).toBe('石窟');
+    expect(placements['37'].compactLabel).toBe('壶口');
+    for (const [id, placement] of Object.entries(placements)) {
+      if (placement.compactLabel === undefined) continue;
+      expect(
+        placement.compactLabel.length,
+        `cell ${id}`,
+      ).toBeLessThan(placement.shortLabel.length);
+    }
+  });
+
   it('is a deeply frozen valid immutable map pack whose hash matches its own bytes', () => {
     expect(() => assertValidMapPack(shanxiTourMap, [coreModule, piaohaoModule])).not.toThrow();
     expect(computeContentHash(shanxiTourMap)).toBe(shanxiTourMap.ref.contentHash);
     expect(shanxiTourMap.ref.contentHash)
-      .toBe('1a89ee4d317d3322589d4109290d9914327f1668770c9a863d2d6bda6b924485');
+      .toBe('454d4825bfa1b77070641fcf07fca006107132b156e68ff22fe16888b6a07a12');
     expect(Object.isFrozen(shanxiTourMap)).toBe(true);
     expect(Object.isFrozen(shanxiTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(shanxiTourMap.game.cards.destiny[2]!.effect)).toBe(true);

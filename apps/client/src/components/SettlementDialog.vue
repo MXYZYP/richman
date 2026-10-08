@@ -7,8 +7,11 @@ import { formatMoney } from '../ui/format';
 const props = withDefaults(defineProps<{
   state: RenderableGameState;
   primaryLabel?: string;
+  /** Whether "查看棋盘" is offered. False hides the button entirely. */
+  canInspectBoard?: boolean;
 }>(), {
-  primaryLabel: '再开一局',
+  primaryLabel: '返回首页',
+  canInspectBoard: true,
 });
 
 const emit = defineEmits<{
@@ -26,7 +29,9 @@ function formatPropertySummary(propertyNames: string[]): string {
 }
 
 function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') emit('close');
+  // Escape may only dismiss when there is something to fall back to; otherwise the
+  // dialog would close onto a board-less screen with no way out.
+  if (event.key === 'Escape' && props.canInspectBoard) emit('close');
 }
 
 onMounted(() => {
@@ -76,7 +81,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
 
       <div class="settlement-actions">
         <button ref="primaryAction" type="button" class="primary" @click="emit('restart')">{{ props.primaryLabel }}</button>
-        <button type="button" class="secondary" @click="emit('close')">查看棋盘</button>
+        <button v-if="props.canInspectBoard" type="button" class="secondary" @click="emit('close')">查看棋盘</button>
       </div>
     </section>
   </div>
