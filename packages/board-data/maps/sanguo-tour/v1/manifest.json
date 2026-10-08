@@ -2,7 +2,7 @@
   "ref": {
     "id": "sanguo-tour",
     "version": 1,
-    "contentHash": "c1e6092a59a122cf170460d454730456ab1af54e6dc54a364184d57ec4e76189"
+    "contentHash": "52974371912680b4759e146a797a035f72b191897156fd7f5410b29750596d1d"
   },
   "metadata": {
     "title": "三国风云",
@@ -418,7 +418,40 @@
         ]
       }
     ],
-    "center": [],
+    "center": [
+      {
+        "type": "panel",
+        "x": 24,
+        "y": 24,
+        "width": 52,
+        "height": 52,
+        "role": "center",
+        "zIndex": 1,
+        "mobile": {
+          "x": 30,
+          "y": 30,
+          "width": 40,
+          "height": 40
+        }
+      },
+      {
+        "type": "text",
+        "x": 33,
+        "y": 44,
+        "width": 34,
+        "height": 9,
+        "role": "title",
+        "text": "三国风云",
+        "zIndex": 6,
+        "mobile": {
+          "x": 33,
+          "y": 45,
+          "width": 34,
+          "height": 9
+        },
+        "fitContent": true
+      }
+    ],
     "theme": {
       "colors": {
         "board": "#F0E4D2",

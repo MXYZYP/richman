@@ -388,6 +388,10 @@ $files = @(
   "apps/client/src/session/sessionStorage.test.ts",
   "apps/client/src/ui/mapThumbnail.test.ts",
   "apps/client/src/components/MapThumbnail.test.ts",
+  # Pins the board layer stack: the route must sit above the tiles (it is drawn through
+  # tile centres) and below the centre art. Without it, a z-index slip hides every map's
+  # track behind its own tiles and only fragments show in the gaps.
+  "apps/client/src/components/boardRouteLayer.test.ts",
   "apps/client/src/components/SettingsDialog.test.ts",
   "apps/client/src/ui/mapRules.test.ts",
   "apps/client/src/audio/sfx.test.ts",

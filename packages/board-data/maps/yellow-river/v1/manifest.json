@@ -2,7 +2,7 @@
   "ref": {
     "id": "yellow-river",
     "version": 1,
-    "contentHash": "4bfca93325c43b6ecf3bc0fb2dc8cb66b504f62c49ae2b1e1f3f7f9ee832d169"
+    "contentHash": "50e622a50d07212dc13b889a3d6734185d00bd75cae13e73e4a4304886c1a316"
   },
   "metadata": {
     "title": "黄河之旅",
@@ -595,7 +595,7 @@
         ],
         "lineCap": "round",
         "opacity": 0.9,
-        "zIndex": 0,
+        "zIndex": 4,
         "points": [
           {
             "x": 8,
@@ -856,7 +856,40 @@
         ]
       }
     ],
-    "center": [],
+    "center": [
+      {
+        "type": "panel",
+        "x": 24,
+        "y": 24,
+        "width": 52,
+        "height": 52,
+        "role": "center",
+        "zIndex": 1,
+        "mobile": {
+          "x": 30,
+          "y": 30,
+          "width": 40,
+          "height": 40
+        }
+      },
+      {
+        "type": "text",
+        "x": 33,
+        "y": 44,
+        "width": 34,
+        "height": 9,
+        "role": "title",
+        "text": "黄河之旅",
+        "zIndex": 6,
+        "mobile": {
+          "x": 33,
+          "y": 45,
+          "width": 34,
+          "height": 9
+        },
+        "fitContent": true
+      }
+    ],
     "theme": {
       "colors": {
         "board": "#E8DCC0",

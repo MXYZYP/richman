@@ -2,7 +2,7 @@
   "ref": {
     "id": "xinjiang-tour",
     "version": 1,
-    "contentHash": "7acab933e05dd10c34f1fc3aefbb6acbb3aad78ab192bbe6d94c9f5136bc251e"
+    "contentHash": "1805bcccc32b23cb33170c373a40a56e8cf477000d6a95536d1958def59e1b2a"
   },
   "metadata": {
     "title": "新疆之旅",
@@ -452,7 +452,7 @@
         ],
         "lineCap": "round",
         "opacity": 0.9,
-        "zIndex": 0,
+        "zIndex": 4,
         "points": [
           {
             "x": 4.9,
@@ -630,7 +630,7 @@
         ],
         "lineCap": "round",
         "opacity": 0.9,
-        "zIndex": 1,
+        "zIndex": 4,
         "points": [
           {
             "x": 4.9,
@@ -667,7 +667,40 @@
         ]
       }
     ],
-    "center": [],
+    "center": [
+      {
+        "type": "panel",
+        "x": 24,
+        "y": 24,
+        "width": 52,
+        "height": 52,
+        "role": "center",
+        "zIndex": 1,
+        "mobile": {
+          "x": 30,
+          "y": 30,
+          "width": 40,
+          "height": 40
+        }
+      },
+      {
+        "type": "text",
+        "x": 33,
+        "y": 44,
+        "width": 34,
+        "height": 9,
+        "role": "title",
+        "text": "新疆之旅",
+        "zIndex": 6,
+        "mobile": {
+          "x": 33,
+          "y": 45,
+          "width": 34,
+          "height": 9
+        },
+        "fitContent": true
+      }
+    ],
     "theme": {
       "colors": {
         "board": "#EFE3CB",

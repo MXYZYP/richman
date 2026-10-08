@@ -286,40 +286,33 @@ describe('northeast-tour@1 approved source data', () => {
     });
   });
 
-  it('declares core@1 + prison@1, one presentation per cell and a 48-point serpentine route', () => {
+  // An empty centre left the middle of the board bare, which is what made every board
+  // read as loose tiles on a table. The centre now carries a panel plus the map name.
+  it('fills the centre with a panel and the map name', () => {
     const manifest = readMapJson('manifest.json');
-    const board = readMapJson('board.json');
-    const route = manifest.presentation.routes.find((entry: any) => entry.role === 'route');
-
-    expect(manifest.ref.id).toBe('northeast-tour');
-    expect(manifest.ref.version).toBe(1);
-    expect(manifest.ref.contentHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(manifest.metadata.title).toBe('东北之旅');
-    // 全仓第二张 core@1 之外还依赖模块的地图（第一张是 great-wall）；jailEnabled 必须与 prison@1 同步打开。
-    expect(manifest.requiredRuleModules).toEqual([CORE_MODULE, PRISON_MODULE]);
-    expect(Object.keys(manifest.presentation.cells).map(Number).sort((a, b) => a - b)).toEqual(
-      board.cells.map((cell: { id: number }) => cell.id).sort((a: number, b: number) => a - b),
-    );
-    expect(route.type).toBe('polyline');
-    // 折线约定：一格一个点、不为「末格 → 起点」补第 49 个点。
-    expect(route.points).toHaveLength(board.cells.length);
-    expect(manifest.presentation.center).toEqual([]);
-    expect(Object.keys(manifest.presentation.theme.propertyBands)).toEqual([
-      'band:liaoning',
-      'band:jilin',
-      'band:heilongjiang',
-      'band:inner-mongolia',
-      'band:station',
-      'band:utility',
-      'band:jail',
-    ]);
+    const center = manifest.presentation.center;
+    const panel = center.find((decoration: { type: string }) => decoration.type === 'panel');
+    const titleNode = center.find((decoration: { type: string }) => decoration.type === 'text');
+    expect(panel).toBeDefined();
+    expect(titleNode).toBeDefined();
+    expect(panel!.role).toBe('center');
+    expect(titleNode!.role).toBe('title');
+    expect(titleNode!.text).toBe('东北之旅');
+    // Both must sit inside the canvas, and the title must paint above the panel.
+    expect(panel!.x).toBeGreaterThanOrEqual(0);
+    expect(panel!.y).toBeGreaterThanOrEqual(0);
+    expect(panel!.x + panel!.width).toBeLessThanOrEqual(100);
+    expect(panel!.y + panel!.height).toBeLessThanOrEqual(100);
+    expect(titleNode!.zIndex).toBeGreaterThan(panel!.zIndex);
+    // The title is centred horizontally on the board.
+    expect(titleNode!.x + titleNode!.width / 2).toBeCloseTo(50, 3);
   });
 
   it('is a deeply frozen valid immutable map pack whose hash matches its own bytes', () => {
     expect(() => assertValidMapPack(northeastTourMap, [CORE_MODULE, PRISON_MODULE])).not.toThrow();
     expect(computeContentHash(northeastTourMap)).toBe(northeastTourMap.ref.contentHash);
     expect(northeastTourMap.ref.contentHash)
-      .toBe('3b12b6defceedf085f3619f2edb15d38236213b8cce1d1843c3272ed2ca2ca17');
+      .toBe('cd5cb6b546b0399168a11eb0df869152f1f7d6d1e4f28d4f56dcdaeffd0250ff');
     expect(Object.isFrozen(northeastTourMap)).toBe(true);
     expect(Object.isFrozen(northeastTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(northeastTourMap.game.cards.chance[10]!.effect)).toBe(true);

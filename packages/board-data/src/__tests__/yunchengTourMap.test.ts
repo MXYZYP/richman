@@ -293,46 +293,26 @@ describe('yuncheng-tour@1 approved source data', () => {
     });
   });
 
-  it('stays on core@1 + piaohao@1, with one presentation per cell and a single 48-point snake route', () => {
+  // An empty centre left the middle of the board bare, which is what made every board
+  // read as loose tiles on a table. The centre now carries a panel plus the map name.
+  it('fills the centre with a panel and the map name', () => {
     const manifest = readMapJson('manifest.json');
-    const board = readMapJson('board.json');
-    const routes = manifest.presentation.routes;
-
-    expect(manifest.ref.id).toBe('yuncheng-tour');
-    expect(manifest.ref.version).toBe(1);
-    expect(manifest.ref.contentHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(manifest.metadata.title).toBe('运城之旅');
-    expect(manifest.metadata.description).toContain('蛇形');
-    // 三处票号由 piaohao@1 结算；蛇形网格本身仍没有机场与支线。
-    expect(manifest.requiredRuleModules).toEqual([coreModule, piaohaoModule]);
-    expect(Object.keys(manifest.presentation.cells).map(Number).sort((a, b) => a - b)).toEqual(
-      board.cells.map((cell: { id: number }) => cell.id).sort((a: number, b: number) => a - b),
-    );
-    expect(routes).toHaveLength(1);
-    expect(routes[0]).toMatchObject({ type: 'polyline', role: 'route' });
-    // 折线一格一个点，共 48 点；首点落在起点格中心，末点落在末格中心。
-    // 故意不闭合（不追加回起点的第 49 点）：47 → 0 是一次横跨 7 行的长跳接，连出来会纵穿棋盘，
-    // 与《山西之旅》48 点蛇形折线保持同一约定。
-    expect(routes[0].points).toHaveLength(48);
-    expect(routes[0].points[0]).toEqual({
-      x: round(colX(0) + CELL_WIDTH / 2),
-      y: round(rowY(0) + CELL_HEIGHT / 2),
-    });
-    expect(routes[0].points[47]).toEqual({
-      x: round(colX(0) + CELL_WIDTH / 2),
-      y: round(rowY(7) + CELL_HEIGHT / 2),
-    });
-    expect(routes[0].points[0]).not.toEqual(routes[0].points[47]);
-    expect(manifest.presentation.center).toHaveLength(0);
-    expect(Object.keys(manifest.presentation.theme.propertyBands)).toEqual([
-      'band:yuncheng',
-      'band:yongji',
-      'band:yuejin',
-      'band:hetao',
-      'band:fenhe',
-      'band:luyinchuan',
-      'band:utility',
-    ]);
+    const center = manifest.presentation.center;
+    const panel = center.find((decoration: { type: string }) => decoration.type === 'panel');
+    const titleNode = center.find((decoration: { type: string }) => decoration.type === 'text');
+    expect(panel).toBeDefined();
+    expect(titleNode).toBeDefined();
+    expect(panel!.role).toBe('center');
+    expect(titleNode!.role).toBe('title');
+    expect(titleNode!.text).toBe('运城之旅');
+    // Both must sit inside the canvas, and the title must paint above the panel.
+    expect(panel!.x).toBeGreaterThanOrEqual(0);
+    expect(panel!.y).toBeGreaterThanOrEqual(0);
+    expect(panel!.x + panel!.width).toBeLessThanOrEqual(100);
+    expect(panel!.y + panel!.height).toBeLessThanOrEqual(100);
+    expect(titleNode!.zIndex).toBeGreaterThan(panel!.zIndex);
+    // The title is centred horizontally on the board.
+    expect(titleNode!.x + titleNode!.width / 2).toBeCloseTo(50, 3);
   });
 
   it('gives every declared band a cell and never reuses one hex across two bands', () => {
@@ -388,7 +368,7 @@ describe('yuncheng-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(yunchengTourMap, [coreModule, piaohaoModule])).not.toThrow();
     expect(computeContentHash(yunchengTourMap)).toBe(yunchengTourMap.ref.contentHash);
     expect(yunchengTourMap.ref.contentHash)
-      .toBe('8bf6c93ebc2d1ee33b31d87e0d30303ff0683b6327de3c096794ad0e2bd45b1c');
+      .toBe('17345a339e0fe2420d6982b96c1369ae6a8360af27917f79fb5b089def985e4b');
     expect(Object.isFrozen(yunchengTourMap)).toBe(true);
     expect(Object.isFrozen(yunchengTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(yunchengTourMap.game.cards.destiny[2]!.effect)).toBe(true);

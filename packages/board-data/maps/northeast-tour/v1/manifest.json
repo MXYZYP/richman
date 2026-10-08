@@ -2,7 +2,7 @@
   "ref": {
     "id": "northeast-tour",
     "version": 1,
-    "contentHash": "3b12b6defceedf085f3619f2edb15d38236213b8cce1d1843c3272ed2ca2ca17"
+    "contentHash": "cd5cb6b546b0399168a11eb0df869152f1f7d6d1e4f28d4f56dcdaeffd0250ff"
   },
   "metadata": {
     "title": "东北之旅",
@@ -457,7 +457,7 @@
         ],
         "lineCap": "round",
         "opacity": 0.9,
-        "zIndex": 0,
+        "zIndex": 4,
         "points": [
           {
             "x": 11.25,
@@ -654,7 +654,40 @@
         ]
       }
     ],
-    "center": [],
+    "center": [
+      {
+        "type": "panel",
+        "x": 24,
+        "y": 24,
+        "width": 52,
+        "height": 52,
+        "role": "center",
+        "zIndex": 1,
+        "mobile": {
+          "x": 30,
+          "y": 30,
+          "width": 40,
+          "height": 40
+        }
+      },
+      {
+        "type": "text",
+        "x": 33,
+        "y": 44,
+        "width": 34,
+        "height": 9,
+        "role": "title",
+        "text": "东北之旅",
+        "zIndex": 6,
+        "mobile": {
+          "x": 33,
+          "y": 45,
+          "width": 34,
+          "height": 9
+        },
+        "fitContent": true
+      }
+    ],
     "theme": {
       "colors": {
         "board": "#E7EDF2",

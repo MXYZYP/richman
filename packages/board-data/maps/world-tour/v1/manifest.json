@@ -2,7 +2,7 @@
   "ref": {
     "id": "world-tour",
     "version": 1,
-    "contentHash": "90edf1d23b99d021d2c5ef34f18b489c9ee2ce02d7a4d5672fb1fed0d8605ba8"
+    "contentHash": "d87898bf70d30eb13f312c52e86f0f94513293d0cc3436809fa806fa732ec57a"
   },
   "metadata": {
     "title": "世界之旅",
@@ -571,7 +571,7 @@
         ],
         "lineCap": "round",
         "opacity": 0.8,
-        "zIndex": 0,
+        "zIndex": 4,
         "points": [
           {
             "x": 6.8,
@@ -618,15 +618,30 @@
     ],
     "center": [
       {
+        "type": "panel",
+        "x": 24,
+        "y": 24,
+        "width": 52,
+        "height": 52,
+        "role": "center",
+        "zIndex": 1,
+        "mobile": {
+          "x": 30,
+          "y": 30,
+          "width": 40,
+          "height": 40
+        }
+      },
+      {
         "type": "text",
         "x": 30.8,
         "y": 43.28,
         "width": 38.4,
         "height": 13.44,
-        "role": "center",
+        "role": "title",
         "text": "世界之旅",
         "fitContent": true,
-        "zIndex": -1
+        "zIndex": 6
       }
     ],
     "theme": {

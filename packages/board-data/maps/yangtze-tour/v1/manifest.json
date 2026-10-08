@@ -2,7 +2,7 @@
   "ref": {
     "id": "yangtze-tour",
     "version": 1,
-    "contentHash": "132cb7a7ff09aad74c8998dcf0d58e5e60e7fda72f7f6d6ba7abfac13f4d6398"
+    "contentHash": "ce26cddcf3ef48182a4f8a50efcea5f89360a1f2d98d37aded11e2f89e94f090"
   },
   "metadata": {
     "title": "长江之旅",
@@ -515,7 +515,7 @@
         ],
         "lineCap": "round",
         "opacity": 0.9,
-        "zIndex": 0,
+        "zIndex": 4,
         "points": [
           {
             "x": 10,
@@ -736,7 +736,40 @@
         ]
       }
     ],
-    "center": [],
+    "center": [
+      {
+        "type": "panel",
+        "x": 24,
+        "y": 24,
+        "width": 52,
+        "height": 52,
+        "role": "center",
+        "zIndex": 1,
+        "mobile": {
+          "x": 30,
+          "y": 30,
+          "width": 40,
+          "height": 40
+        }
+      },
+      {
+        "type": "text",
+        "x": 33,
+        "y": 44,
+        "width": 34,
+        "height": 9,
+        "role": "title",
+        "text": "长江之旅",
+        "zIndex": 6,
+        "mobile": {
+          "x": 33,
+          "y": 45,
+          "width": 34,
+          "height": 9
+        },
+        "fitContent": true
+      }
+    ],
     "theme": {
       "colors": {
         "board": "#E4EEF2",

@@ -2,7 +2,7 @@
   "ref": {
     "id": "great-wall",
     "version": 1,
-    "contentHash": "b9e8da9f809b441faa223e6488dbaa399b947fd4a061808c8ee8f92c325e9f8d"
+    "contentHash": "c7af6064562814984fc73ef71ab63748006c5b8b29a011bb35ba9e7bc95966bd"
   },
   "metadata": {
     "title": "长城之旅",
@@ -461,7 +461,7 @@
         ],
         "lineCap": "round",
         "opacity": 0.9,
-        "zIndex": 0,
+        "zIndex": 4,
         "points": [
           {
             "x": 7.5,
@@ -534,7 +534,40 @@
         }
       }
     ],
-    "center": [],
+    "center": [
+      {
+        "type": "panel",
+        "x": 24,
+        "y": 24,
+        "width": 52,
+        "height": 52,
+        "role": "center",
+        "zIndex": 1,
+        "mobile": {
+          "x": 30,
+          "y": 30,
+          "width": 40,
+          "height": 40
+        }
+      },
+      {
+        "type": "text",
+        "x": 33,
+        "y": 44,
+        "width": 34,
+        "height": 9,
+        "role": "title",
+        "text": "万里长城",
+        "zIndex": 6,
+        "mobile": {
+          "x": 33,
+          "y": 45,
+          "width": 34,
+          "height": 9
+        },
+        "fitContent": true
+      }
+    ],
     "theme": {
       "colors": {
         "board": "#E8DCC8",

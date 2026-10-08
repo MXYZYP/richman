@@ -2,7 +2,7 @@
   "ref": {
     "id": "yuncheng-tour",
     "version": 1,
-    "contentHash": "8bf6c93ebc2d1ee33b31d87e0d30303ff0683b6327de3c096794ad0e2bd45b1c"
+    "contentHash": "17345a339e0fe2420d6982b96c1369ae6a8360af27917f79fb5b089def985e4b"
   },
   "metadata": {
     "title": "运城之旅",
@@ -474,7 +474,7 @@
         ],
         "lineCap": "round",
         "opacity": 0.9,
-        "zIndex": 0,
+        "zIndex": 4,
         "points": [
           {
             "x": 11.25,
@@ -671,7 +671,40 @@
         ]
       }
     ],
-    "center": [],
+    "center": [
+      {
+        "type": "panel",
+        "x": 24,
+        "y": 24,
+        "width": 52,
+        "height": 52,
+        "role": "center",
+        "zIndex": 1,
+        "mobile": {
+          "x": 30,
+          "y": 30,
+          "width": 40,
+          "height": 40
+        }
+      },
+      {
+        "type": "text",
+        "x": 33,
+        "y": 44,
+        "width": 34,
+        "height": 9,
+        "role": "title",
+        "text": "运城之旅",
+        "zIndex": 6,
+        "mobile": {
+          "x": 33,
+          "y": 45,
+          "width": 34,
+          "height": 9
+        },
+        "fitContent": true
+      }
+    ],
     "theme": {
       "colors": {
         "board": "#EDE3D0",

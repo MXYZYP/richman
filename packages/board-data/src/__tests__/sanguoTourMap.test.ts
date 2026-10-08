@@ -290,35 +290,26 @@ describe('sanguo-tour@1 approved source data', () => {
     });
   });
 
-  it('stays on core@1 + sanguo@1, with one placement per cell and a single 28-point ring route', () => {
+  // An empty centre left the middle of the board bare, which is what made every board
+  // read as loose tiles on a table. The centre now carries a panel plus the map name.
+  it('fills the centre with a panel and the map name', () => {
     const manifest = readMapJson('manifest.json');
-    const board = readMapJson('board.json');
-    const routes = manifest.presentation.routes;
-
-    expect(manifest.ref.id).toBe('sanguo-tour');
-    expect(manifest.ref.version).toBe(1);
-    expect(manifest.ref.contentHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(manifest.metadata.title).toBe('三国风云');
-    expect(manifest.metadata.description).toContain('28 格');
-    expect(manifest.requiredRuleModules).toEqual([coreModule, sanguoModule]);
-    expect(Object.keys(manifest.presentation.cells).map(Number).sort((a, b) => a - b)).toEqual(
-      board.cells.map((cell: { id: number }) => cell.id).sort((a: number, b: number) => a - b),
-    );
-    expect(routes).toHaveLength(1);
-    expect(routes[0]).toMatchObject({ type: 'polyline', role: 'route' });
-    // 折线一格一个点，共 28 点；首点落在起点格心，末点落在末格心。
-    // 故意不闭合（不追加回起点的第 29 点），与其他环形图保持同一约定。
-    expect(routes[0].points).toHaveLength(28);
-    expect(routes[0].points[0]).toEqual({
-      x: round(layout[0]!.x + CORNER / 2),
-      y: round(layout[0]!.y + CORNER / 2),
-    });
-    expect(routes[0].points[27]).toEqual({
-      x: round(layout[27]!.x + SMALL / 2),
-      y: round(layout[27]!.y + SMALL / 2),
-    });
-    expect(routes[0].points[0]).not.toEqual(routes[0].points[27]);
-    expect(manifest.presentation.center).toHaveLength(0);
+    const center = manifest.presentation.center;
+    const panel = center.find((decoration: { type: string }) => decoration.type === 'panel');
+    const titleNode = center.find((decoration: { type: string }) => decoration.type === 'text');
+    expect(panel).toBeDefined();
+    expect(titleNode).toBeDefined();
+    expect(panel!.role).toBe('center');
+    expect(titleNode!.role).toBe('title');
+    expect(titleNode!.text).toBe('三国风云');
+    // Both must sit inside the canvas, and the title must paint above the panel.
+    expect(panel!.x).toBeGreaterThanOrEqual(0);
+    expect(panel!.y).toBeGreaterThanOrEqual(0);
+    expect(panel!.x + panel!.width).toBeLessThanOrEqual(100);
+    expect(panel!.y + panel!.height).toBeLessThanOrEqual(100);
+    expect(titleNode!.zIndex).toBeGreaterThan(panel!.zIndex);
+    // The title is centred horizontally on the board.
+    expect(titleNode!.x + titleNode!.width / 2).toBeCloseTo(50, 3);
   });
 
   it('reuses only built-in icons, because BUILT_IN_ICONS has no 三国-specific entry', () => {
@@ -406,7 +397,7 @@ describe('sanguo-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(sanguoTourMap, [coreModule, sanguoModule])).not.toThrow();
     expect(computeContentHash(sanguoTourMap)).toBe(sanguoTourMap.ref.contentHash);
     expect(sanguoTourMap.ref.contentHash)
-      .toBe('c1e6092a59a122cf170460d454730456ab1af54e6dc54a364184d57ec4e76189');
+      .toBe('52974371912680b4759e146a797a035f72b191897156fd7f5410b29750596d1d');
     expect(Object.isFrozen(sanguoTourMap)).toBe(true);
     expect(Object.isFrozen(sanguoTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(sanguoTourMap.game.cards.chance[0]!.effect)).toBe(true);

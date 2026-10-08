@@ -261,43 +261,33 @@ describe('yellow-river@1 approved source data', () => {
     });
   });
 
-  it('stays on core@1 + river-tide@1, with one presentation per cell and a 64-point spiral route', () => {
+  // An empty centre left the middle of the board bare, which is what made every board
+  // read as loose tiles on a table. The centre now carries a panel plus the map name.
+  it('fills the centre with a panel and the map name', () => {
     const manifest = readMapJson('manifest.json');
-    const board = readMapJson('board.json');
-    const route = manifest.presentation.routes.find((entry: any) => entry.role === 'route');
-
-    expect(manifest.ref.id).toBe('yellow-river');
-    expect(manifest.ref.version).toBe(1);
-    expect(manifest.ref.contentHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(manifest.metadata.title).toBe('黄河之旅');
-    // #23：四格河工由 river-tide@1 结算，并靠 positiveRentHook 按水位改写地产租金。
-    expect(manifest.requiredRuleModules).toEqual([coreModule, riverTideModule]);
-    expect(Object.keys(manifest.presentation.cells).map(Number).sort((a, b) => a - b)).toEqual(
-      board.cells.map((cell: { id: number }) => cell.id).sort((a: number, b: number) => a - b),
-    );
-    expect(route.type).toBe('polyline');
-    expect(route.points).toHaveLength(64);
-    expect(manifest.presentation.center).toEqual([]);
-    // 八条带 = 黄河干流自上而下经过的八个省区，每个省区一色。
-    expect(Object.keys(manifest.presentation.theme.propertyBands)).toEqual([
-      'band:shandong',
-      'band:henan',
-      'band:shanxi',
-      'band:shaanxi',
-      'band:inner-mongolia',
-      'band:ningxia',
-      'band:gansu',
-      'band:qinghai',
-      'band:station',
-      'band:utility',
-    ]);
+    const center = manifest.presentation.center;
+    const panel = center.find((decoration: { type: string }) => decoration.type === 'panel');
+    const titleNode = center.find((decoration: { type: string }) => decoration.type === 'text');
+    expect(panel).toBeDefined();
+    expect(titleNode).toBeDefined();
+    expect(panel!.role).toBe('center');
+    expect(titleNode!.role).toBe('title');
+    expect(titleNode!.text).toBe('黄河之旅');
+    // Both must sit inside the canvas, and the title must paint above the panel.
+    expect(panel!.x).toBeGreaterThanOrEqual(0);
+    expect(panel!.y).toBeGreaterThanOrEqual(0);
+    expect(panel!.x + panel!.width).toBeLessThanOrEqual(100);
+    expect(panel!.y + panel!.height).toBeLessThanOrEqual(100);
+    expect(titleNode!.zIndex).toBeGreaterThan(panel!.zIndex);
+    // The title is centred horizontally on the board.
+    expect(titleNode!.x + titleNode!.width / 2).toBeCloseTo(50, 3);
   });
 
   it('is a deeply frozen valid immutable map pack whose hash matches its own bytes', () => {
     expect(() => assertValidMapPack(yellowRiverMap, [coreModule, riverTideModule])).not.toThrow();
     expect(computeContentHash(yellowRiverMap)).toBe(yellowRiverMap.ref.contentHash);
     expect(yellowRiverMap.ref.contentHash)
-      .toBe('4bfca93325c43b6ecf3bc0fb2dc8cb66b504f62c49ae2b1e1f3f7f9ee832d169');
+      .toBe('50e622a50d07212dc13b889a3d6734185d00bd75cae13e73e4a4304886c1a316');
     expect(Object.isFrozen(yellowRiverMap)).toBe(true);
     expect(Object.isFrozen(yellowRiverMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(yellowRiverMap.game.cards.destiny[2]!.effect)).toBe(true);

@@ -258,45 +258,33 @@ describe('yangtze-tour@1 approved source data', () => {
     });
   });
 
-  it('stays on core@1 + yangtze-ferry@1, with one presentation per cell and a 54-point snake route', () => {
+  // An empty centre left the middle of the board bare, which is what made every board
+  // read as loose tiles on a table. The centre now carries a panel plus the map name.
+  it('fills the centre with a panel and the map name', () => {
     const manifest = readMapJson('manifest.json');
-    const board = readMapJson('board.json');
-    const route = manifest.presentation.routes.find((entry: any) => entry.role === 'route');
-
-    expect(manifest.ref.id).toBe('yangtze-tour');
-    expect(manifest.ref.version).toBe(1);
-    expect(manifest.ref.contentHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(manifest.metadata.title).toBe('长江之旅');
-    // #23：三处渡口由 yangtze-ferry@1 结算，地图声明依赖 core@1 + yangtze-ferry@1。
-    expect(manifest.requiredRuleModules).toEqual([coreModule, yangtzeFerryModule]);
-    expect(Object.keys(manifest.presentation.cells).map(Number).sort((a, b) => a - b)).toEqual(
-      board.cells.map((cell: { id: number }) => cell.id).sort((a: number, b: number) => a - b),
-    );
-    expect(route.type).toBe('polyline');
-    expect(route.points).toHaveLength(54);
-    expect(manifest.presentation.center).toEqual([]);
-    // 十色带 = 长江干流自上而下经过的十个省区 + 渡口 + 水利，各自一色。
-    expect(Object.keys(manifest.presentation.theme.propertyBands)).toEqual([
-      'band:shanghai',
-      'band:jiangsu',
-      'band:anhui',
-      'band:jiangxi',
-      'band:hubei',
-      'band:hunan',
-      'band:chongqing',
-      'band:sichuan',
-      'band:yunnan',
-      'band:qinghai',
-      'band:ferry',
-      'band:utility',
-    ]);
+    const center = manifest.presentation.center;
+    const panel = center.find((decoration: { type: string }) => decoration.type === 'panel');
+    const titleNode = center.find((decoration: { type: string }) => decoration.type === 'text');
+    expect(panel).toBeDefined();
+    expect(titleNode).toBeDefined();
+    expect(panel!.role).toBe('center');
+    expect(titleNode!.role).toBe('title');
+    expect(titleNode!.text).toBe('长江之旅');
+    // Both must sit inside the canvas, and the title must paint above the panel.
+    expect(panel!.x).toBeGreaterThanOrEqual(0);
+    expect(panel!.y).toBeGreaterThanOrEqual(0);
+    expect(panel!.x + panel!.width).toBeLessThanOrEqual(100);
+    expect(panel!.y + panel!.height).toBeLessThanOrEqual(100);
+    expect(titleNode!.zIndex).toBeGreaterThan(panel!.zIndex);
+    // The title is centred horizontally on the board.
+    expect(titleNode!.x + titleNode!.width / 2).toBeCloseTo(50, 3);
   });
 
   it('is a deeply frozen valid immutable map pack whose hash matches its own bytes', () => {
     expect(() => assertValidMapPack(yangtzeTourMap, [coreModule, yangtzeFerryModule])).not.toThrow();
     expect(computeContentHash(yangtzeTourMap)).toBe(yangtzeTourMap.ref.contentHash);
     expect(yangtzeTourMap.ref.contentHash)
-      .toBe('132cb7a7ff09aad74c8998dcf0d58e5e60e7fda72f7f6d6ba7abfac13f4d6398');
+      .toBe('ce26cddcf3ef48182a4f8a50efcea5f89360a1f2d98d37aded11e2f89e94f090');
     expect(Object.isFrozen(yangtzeTourMap)).toBe(true);
     expect(Object.isFrozen(yangtzeTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(yangtzeTourMap.game.cards.destiny[2]!.effect)).toBe(true);

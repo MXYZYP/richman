@@ -2,7 +2,7 @@
   "ref": {
     "id": "silk-road",
     "version": 1,
-    "contentHash": "2a4b32bd210af28b5d9a8e5fdf68383ce736ebb126554ce9d716265c48dd77cc"
+    "contentHash": "96b01ddf1de9d42f8a2567dd0002e7b05771e1a63687f3142b4a5c1662b1060a"
   },
   "metadata": {
     "title": "丝路之旅",
@@ -560,7 +560,7 @@
         ],
         "lineCap": "round",
         "opacity": 0.8,
-        "zIndex": 0,
+        "zIndex": 4,
         "points": [
           {
             "x": 93.68,
@@ -594,7 +594,7 @@
         ],
         "lineCap": "round",
         "opacity": 0.8,
-        "zIndex": 0,
+        "zIndex": 4,
         "points": [
           {
             "x": 65.84,
@@ -667,7 +667,7 @@
         "width": 24.96,
         "height": 11.52,
         "role": "center",
-        "zIndex": -1
+        "zIndex": 1
       },
       {
         "type": "text",
@@ -675,10 +675,10 @@
         "y": 43.28,
         "width": 24.96,
         "height": 11.52,
-        "role": "center",
+        "role": "title",
         "text": "丝路之旅",
         "fitContent": true,
-        "zIndex": -1
+        "zIndex": 6
       },
       {
         "type": "text",
@@ -686,10 +686,10 @@
         "y": 74.96,
         "width": 65.28,
         "height": 8.64,
-        "role": "decoration",
+        "role": "title",
         "text": "外环 · 陆上丝路　　内环 · 海上丝路",
         "fitContent": true,
-        "zIndex": -1
+        "zIndex": 6
       }
     ],
     "theme": {

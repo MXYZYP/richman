@@ -270,46 +270,26 @@ describe('shanxi-tour@1 approved source data', () => {
     });
   });
 
-  it('stays on core@1 + piaohao@1, with one presentation per cell and a single 48-point snake route', () => {
+  // An empty centre left the middle of the board bare, which is what made every board
+  // read as loose tiles on a table. The centre now carries a panel plus the map name.
+  it('fills the centre with a panel and the map name', () => {
     const manifest = readMapJson('manifest.json');
-    const board = readMapJson('board.json');
-    const routes = manifest.presentation.routes;
-
-    expect(manifest.ref.id).toBe('shanxi-tour');
-    expect(manifest.ref.version).toBe(1);
-    expect(manifest.ref.contentHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(manifest.metadata.title).toBe('山西之旅');
-    expect(manifest.metadata.description).toContain('蛇形');
-    // #23：两座晋商票号由 piaohao@1 结算；蛇形网格本身仍没有机场与支线。
-    expect(manifest.requiredRuleModules).toEqual([coreModule, piaohaoModule]);
-    expect(Object.keys(manifest.presentation.cells).map(Number).sort((a, b) => a - b)).toEqual(
-      board.cells.map((cell: { id: number }) => cell.id).sort((a: number, b: number) => a - b),
-    );
-    expect(routes).toHaveLength(1);
-    expect(routes[0]).toMatchObject({ type: 'polyline', role: 'route' });
-    // 折线一格一个点，共 48 点；首点落在起点格中心，末点落在末格中心。
-    // 故意不闭合（不追加回起点的第 49 点）：47 → 0 是一次横跨 7 行的长跳接，连出来会纵穿棋盘，
-    // 与《长江之旅》54 点蛇形折线保持同一约定。
-    expect(routes[0].points).toHaveLength(48);
-    expect(routes[0].points[0]).toEqual({
-      x: round(colX(0) + CELL_WIDTH / 2),
-      y: round(rowY(0) + CELL_HEIGHT / 2),
-    });
-    expect(routes[0].points[47]).toEqual({
-      x: round(colX(0) + CELL_WIDTH / 2),
-      y: round(rowY(7) + CELL_HEIGHT / 2),
-    });
-    expect(routes[0].points[0]).not.toEqual(routes[0].points[47]);
-    expect(manifest.presentation.center).toHaveLength(0);
-    expect(Object.keys(manifest.presentation.theme.propertyBands)).toEqual([
-      'band:north',
-      'band:central',
-      'band:lvliang',
-      'band:linfen',
-      'band:yuncheng',
-      'band:gate',
-      'band:utility',
-    ]);
+    const center = manifest.presentation.center;
+    const panel = center.find((decoration: { type: string }) => decoration.type === 'panel');
+    const titleNode = center.find((decoration: { type: string }) => decoration.type === 'text');
+    expect(panel).toBeDefined();
+    expect(titleNode).toBeDefined();
+    expect(panel!.role).toBe('center');
+    expect(titleNode!.role).toBe('title');
+    expect(titleNode!.text).toBe('山西之旅');
+    // Both must sit inside the canvas, and the title must paint above the panel.
+    expect(panel!.x).toBeGreaterThanOrEqual(0);
+    expect(panel!.y).toBeGreaterThanOrEqual(0);
+    expect(panel!.x + panel!.width).toBeLessThanOrEqual(100);
+    expect(panel!.y + panel!.height).toBeLessThanOrEqual(100);
+    expect(titleNode!.zIndex).toBeGreaterThan(panel!.zIndex);
+    // The title is centred horizontally on the board.
+    expect(titleNode!.x + titleNode!.width / 2).toBeCloseTo(50, 3);
   });
 
   // Same 13x10 tile as yuncheng-tour: long landmarks need a compactLabel too.
@@ -331,7 +311,7 @@ describe('shanxi-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(shanxiTourMap, [coreModule, piaohaoModule])).not.toThrow();
     expect(computeContentHash(shanxiTourMap)).toBe(shanxiTourMap.ref.contentHash);
     expect(shanxiTourMap.ref.contentHash)
-      .toBe('454d4825bfa1b77070641fcf07fca006107132b156e68ff22fe16888b6a07a12');
+      .toBe('2213cc4fca910544592c9a6b3099b9118b79fbb728746696ead7ca1d736d3ed0');
     expect(Object.isFrozen(shanxiTourMap)).toBe(true);
     expect(Object.isFrozen(shanxiTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(shanxiTourMap.game.cards.destiny[2]!.effect)).toBe(true);

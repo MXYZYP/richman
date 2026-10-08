@@ -185,16 +185,26 @@ describe('great-wall@1 approved source data', () => {
     ).toBe(true);
   });
 
-  it('publishes a route polyline that threads every one of the six wall segments', () => {
+  // An empty centre left the middle of the board bare, which is what made every board
+  // read as loose tiles on a table. The centre now carries a panel plus the map name.
+  it('fills the centre with a panel and the map name', () => {
     const manifest = readMapJson('manifest.json');
-    const routes = manifest.presentation.routes;
-    const route = routes.find((entry: any) => entry.role === 'route');
-
-    expect(route.type).toBe('polyline');
-    // 六段城墙 = 六个 y 高度，每段两个端点。
-    expect(route.points).toHaveLength(12);
-    expect([...new Set(route.points.map((point: any) => point.y))]).toEqual([10, 30, 50, 70, 90, 110]);
-    expect(manifest.presentation.center).toEqual([]);
+    const center = manifest.presentation.center;
+    const panel = center.find((decoration: { type: string }) => decoration.type === 'panel');
+    const titleNode = center.find((decoration: { type: string }) => decoration.type === 'text');
+    expect(panel).toBeDefined();
+    expect(titleNode).toBeDefined();
+    expect(panel!.role).toBe('center');
+    expect(titleNode!.role).toBe('title');
+    expect(titleNode!.text).toBe('万里长城');
+    // Both must sit inside the canvas, and the title must paint above the panel.
+    expect(panel!.x).toBeGreaterThanOrEqual(0);
+    expect(panel!.y).toBeGreaterThanOrEqual(0);
+    expect(panel!.x + panel!.width).toBeLessThanOrEqual(100);
+    expect(panel!.y + panel!.height).toBeLessThanOrEqual(100);
+    expect(titleNode!.zIndex).toBeGreaterThan(panel!.zIndex);
+    // The title is centred horizontally on the board.
+    expect(titleNode!.x + titleNode!.width / 2).toBeCloseTo(50, 3);
   });
 
   it('gives each of the six beacon towers and both water wheels its own label', () => {

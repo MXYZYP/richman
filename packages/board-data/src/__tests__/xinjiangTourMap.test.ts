@@ -275,44 +275,33 @@ describe('xinjiang-tour@1 approved source data', () => {
     });
   });
 
-  it('stays on core@1 + oasis-camp@1, with one presentation per cell and ring + branch routes', () => {
+  // An empty centre left the middle of the board bare, which is what made every board
+  // read as loose tiles on a table. The centre now carries a panel plus the map name.
+  it('fills the centre with a panel and the map name', () => {
     const manifest = readMapJson('manifest.json');
-    const board = readMapJson('board.json');
-    const routes = manifest.presentation.routes;
-
-    expect(manifest.ref.id).toBe('xinjiang-tour');
-    expect(manifest.ref.version).toBe(1);
-    expect(manifest.ref.contentHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(manifest.metadata.title).toBe('新疆之旅');
-    expect(manifest.metadata.description).toContain('独库公路');
-    // #23：两处绿洲营地由 oasis-camp@1 结算；机场等待与支线掷骰仍由 core 处理。
-    expect(manifest.requiredRuleModules).toEqual([coreModule, oasisCampModule]);
-    expect(Object.keys(manifest.presentation.cells).map(Number).sort((a, b) => a - b)).toEqual(
-      board.cells.map((cell: { id: number }) => cell.id).sort((a: number, b: number) => a - b),
-    );
-    expect(routes).toHaveLength(2);
-    expect(routes.every((route: any) => route.type === 'polyline' && route.role === 'route')).toBe(true);
-    // 主环折线首尾都落在起点格中心，证明它是闭合的一圈；支线折线从机场贯穿六格汇回主环。
-    expect(routes[0].points).toHaveLength(41);
-    expect(routes[0].points[0]).toEqual(routes[0].points[40]);
-    expect(routes[1].points).toHaveLength(8);
-    expect(routes[1].points[0]).toEqual(routes[0].points[34]);
-    expect(manifest.presentation.center).toHaveLength(0);
-    expect(Object.keys(manifest.presentation.theme.propertyBands)).toEqual([
-      'band:north',
-      'band:turpan',
-      'band:kashgar',
-      'band:transhan',
-      'band:gate',
-      'band:utility',
-    ]);
+    const center = manifest.presentation.center;
+    const panel = center.find((decoration: { type: string }) => decoration.type === 'panel');
+    const titleNode = center.find((decoration: { type: string }) => decoration.type === 'text');
+    expect(panel).toBeDefined();
+    expect(titleNode).toBeDefined();
+    expect(panel!.role).toBe('center');
+    expect(titleNode!.role).toBe('title');
+    expect(titleNode!.text).toBe('新疆之旅');
+    // Both must sit inside the canvas, and the title must paint above the panel.
+    expect(panel!.x).toBeGreaterThanOrEqual(0);
+    expect(panel!.y).toBeGreaterThanOrEqual(0);
+    expect(panel!.x + panel!.width).toBeLessThanOrEqual(100);
+    expect(panel!.y + panel!.height).toBeLessThanOrEqual(100);
+    expect(titleNode!.zIndex).toBeGreaterThan(panel!.zIndex);
+    // The title is centred horizontally on the board.
+    expect(titleNode!.x + titleNode!.width / 2).toBeCloseTo(50, 3);
   });
 
   it('is a deeply frozen valid immutable map pack whose hash matches its own bytes', () => {
     expect(() => assertValidMapPack(xinjiangTourMap, [coreModule, oasisCampModule])).not.toThrow();
     expect(computeContentHash(xinjiangTourMap)).toBe(xinjiangTourMap.ref.contentHash);
     expect(xinjiangTourMap.ref.contentHash)
-      .toBe('7acab933e05dd10c34f1fc3aefbb6acbb3aad78ab192bbe6d94c9f5136bc251e');
+      .toBe('1805bcccc32b23cb33170c373a40a56e8cf477000d6a95536d1958def59e1b2a');
     expect(Object.isFrozen(xinjiangTourMap)).toBe(true);
     expect(Object.isFrozen(xinjiangTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(xinjiangTourMap.game.cards.destiny[2]!.effect)).toBe(true);

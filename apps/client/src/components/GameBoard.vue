@@ -120,17 +120,17 @@ const playerTokens = computed(() => {
           <line
             v-if="route.type === 'line' && route.line"
             :x1="route.line.x1" :y1="route.line.y1" :x2="route.line.x2" :y2="route.line.y2"
-            :style="[route.style, { stroke: 'var(--color-text)', strokeWidth: 0.45, strokeDasharray: '1.2 1', opacity: 0.55 }]"
+            :style="[route.style]"
           />
           <polyline
             v-else-if="route.type === 'polyline'"
             :points="route.points ?? undefined"
-            :style="[route.style, { stroke: 'var(--color-text)', strokeWidth: 0.45, strokeDasharray: '1.2 1', opacity: 0.55 }]"
+            :style="[route.style]"
           />
           <path
             v-else-if="route.type === 'path'"
             :d="route.path ?? undefined"
-            :style="[route.style, { stroke: 'var(--color-text)', strokeWidth: 0.45, strokeDasharray: '1.2 1', opacity: 0.55 }]"
+            :style="[route.style]"
           />
         </svg>
 
@@ -250,12 +250,22 @@ const playerTokens = computed(() => {
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: 2; /* 原型里航线压在中心面板上、又被棋格盖住 */
+  /* Per-route z-index comes from map data (boardLayout.getRouteDecorationModel reads
+     route.zIndex) and is applied as an inline style, so this is only the fallback for
+     maps that declare none. It must sit ABOVE .map-cell (z-index: 3): the route is drawn
+     through the tile centres, so any lower layer hides it behind every tile and only
+     fragments show in the gaps — which reads as scattered dashes, not a board track.
+     Below .center-decoration (z-index: 4) so a map's centre art still sits on top. */
+  z-index: 4;
   pointer-events: none;
 }
 
 .center-decoration {
   position: absolute;
+  /* Above .map-route (z-index: 4). Centre art is the map's focal decoration and must
+     not be crossed by the track; without an explicit level it would default to auto
+     (0) and end up UNDER the route. */
+  z-index: 5;
   pointer-events: none;
   box-sizing: border-box;
 }
