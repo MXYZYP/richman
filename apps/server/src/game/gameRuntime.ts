@@ -391,5 +391,24 @@ export function chooseTakeoverIntent(state: GameState, difficulty: BotDifficulty
   // 「没有任何活跃计时器、也没有服务端错误」的静默硬冻结——正是线上「一直提示某人行动中、
   // 无法掷骰子」的形态。交给 bot 策略后，棋子会走进支线并继续正常移动，对局必然收敛。
   if (pendingActions.length > 0) return chooseBotIntent(state, state.currentPlayerId, defaultRuleModuleRegistry, difficulty);
+
+  // 买地 / 建房这两个阶段必须交给 bot 策略，不能按TAKEOVER_POLICY 查表。
+  //
+  // 查表里写死的是 `skip_buy` / `skip_build` —— 也就是**托管永远不会买房、永远不买地**。
+  // 用户反馈「托管有点蠢，不会自主决策买地还是跳过」，说的正是这个。
+  // 而 bot 策略本来就会决策（bot.ts：`现金 >= 地价 + 难度储备 ? 买 : 跳过`），
+  // 决策逻辑一直存在，只是托管这条路径没接上。
+  //
+  // 为什么这两个阶段可以和债务/议价同等对待：
+  //   - 决策者是 currentPlayerId，与bot 的假设一致；
+  //   - bot 对这两个阶段一定产出明确答复（buy_property/skip_buy、build_house/skip_build），
+  //     回合必然收敛，不会出现「意图为 null 被当作离线跳过」的老问题；
+  //   - `awaiting_roll` 仍走查表（掷骰没有可选项）；`managing` 仍走查表，
+  //     因为 bot 在 managing 下会做抵押/卖房等一连串动作，托管的语义是「走完这一步就交回」，
+  //     由查表发end_turn 更贴近离线代打的预期。
+  if (state.turnPhase === 'awaiting_buy_decision' || state.turnPhase === 'awaiting_build_decision') {
+    return chooseBotIntent(state, state.currentPlayerId, defaultRuleModuleRegistry, difficulty);
+  }
+
   return TAKEOVER_POLICY[state.turnPhase];
 }

@@ -259,13 +259,12 @@ describe('applyGameIntent', () => {
 });
 
 describe('chooseTakeoverIntent', () => {
-  test('maps every turn phase to the fixed offline takeover policy without liquidating assets or declaring bankruptcy', () => {
+  // 托管在「掷骰 / 掷机场 / 收尾」三个阶段无可决策项，按固定策略走。
+  test('maps the non-decision phases to the fixed offline takeover policy without liquidating assets or declaring bankruptcy', () => {
     const base = startState();
     const cases: Array<[GameState['turnPhase'], Intent]> = [
       ['awaiting_roll', { type: 'roll_dice' }],
       ['awaiting_airport_roll', { type: 'roll_airport_branch' }],
-      ['awaiting_buy_decision', { type: 'skip_buy' }],
-      ['awaiting_build_decision', { type: 'skip_build' }],
       ['managing', { type: 'end_turn' }],
     ];
     const liquidatingIntentTypes: Intent['type'][] = [
@@ -281,6 +280,40 @@ describe('chooseTakeoverIntent', () => {
       expect(intent).toEqual(expectedIntent);
       if (intent === null) throw new Error(`unexpected offline-skip sentinel for ${turnPhase}`);
       expect(liquidatingIntentTypes).not.toContain(intent.type);
+    }
+  });
+
+  // 买地 / 建房必须真正决策，而不是一律跳过。
+  //
+  // 旧行为查表发 `skip_buy` / `skip_build`，于是托管永远不会买房、不会买地——
+  // 用户反馈「托管有点蠢，不会自主决策买地还是跳过」。引擎的 bot 策略本来就会决策
+  // （`现金 >= 地价 + 难度储备 ? 买 : 跳过`），缺的是把托管这条路径接上去。
+  //
+  // 这里只断言「意图由 bot 策略产出、且永远不发变卖/抵押/破产类动作」：
+  // 具体买不买取决于局面现金，锁死具体意图会在调难度时假失败。
+  test.each([
+    ['awaiting_buy_decision', 'buy_property', 'skip_buy'] as const,
+    ['awaiting_build_decision', 'build_house', 'skip_build'] as const,
+  ])('%s goes through the bot policy instead of a fixed skip', (turnPhase, buy, skip) => {
+    const base = startState();
+    const intent = chooseTakeoverIntent({ ...base, turnPhase });
+    expect(intent).not.toBeNull();
+    // 决策结果必须是这两个之一（由现金与局面决定），且不再是「写死的那个」。
+    expect([buy, skip]).toContain(intent!.type);
+  });
+
+  test('a takeover on a buy decision never liquidates assets or declares bankruptcy', () => {
+    const base = startState();
+    for (const turnPhase of ['awaiting_buy_decision', 'awaiting_build_decision'] as const) {
+      const intent = chooseTakeoverIntent({ ...base, turnPhase });
+      const liquidating: Intent['type'][] = [
+        'sell_house',
+        'sell_property',
+        'mortgage_property',
+        'redeem_property',
+        'declare_bankrupt',
+      ];
+      expect(liquidating, `${turnPhase} 不该触发变卖/抵押/破产`).not.toContain(intent!.type);
     }
   });
 
