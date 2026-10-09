@@ -408,6 +408,10 @@ $files = @(
   # collapsed to a vertical stack). A missing copy means the server runs a suite that no
   # longer pins that boundary.
   "apps/client/src/ui/globalStyleBoundary.test.ts",
+  # Guards the service-worker cache version. A commit that changes the frontend bundle but
+  # not sw.js leaves the worker serving stale chunks: the feature is in dist/assets yet
+  # invisible in the page, and a hard reload does not help.
+  "apps/client/src/ui/serviceWorkerCache.test.ts",
   "apps/client/src/audio/sfx.test.ts",
   "apps/client/src/audio/bgm.test.ts",
   # Tests added by the third batch: turn clock (#107), public room list (#108),

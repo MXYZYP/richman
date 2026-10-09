@@ -1,9 +1,16 @@
-// P2-11 PWA service worker（离线壳缓存，v2）。
+// P2-11 PWA service worker（离线壳缓存，v3）。
 // 策略：安装时预缓存应用壳 + 解析 index.html 中的带 hash 静态资源（JS/CSS）一并预缓存，
 //       保证「首次离线」即可加载完整首页（v1 仅缓存壳，离线首访因 JS/CSS 未缓存而空白）。
 //       导航请求网络优先（失败回退缓存首页）；同源静态资源 stale-while-revalidate。
-// 缓存版本号：发布重大静态结构变更时 +1 以清空旧缓存。
-const CACHE = 'richman-v2';
+//
+// ★ 版本号规则（务必遵守）：**任何改动前端静态产物的提交都要 +1**。
+//   静态资源的文件名带内容 hash，改代码必然换 hash；而 SW 认为自己的 CACHE 名还是
+//   「最新版」，就不会触发 activate 去删旧缓存 ⇒ 浏览器继续跑旧 chunk。
+//   实测症状：服务器上产物已含新代码（grep 得到 GameView-*.js:1），但页面上看不到新功能，
+//   且 Ctrl+Shift+R 也无效 —— 强刷只绕过 HTTP 缓存，绕不过 Service Worker。
+//   绕过办法（临时救急）：DevTools → Application → Service Workers → Unregister，
+//   或勾选 Network 面板的 "Disable cache"。
+const CACHE = 'richman-v3';
 const SHELL = [
   '/index.html',
   '/manifest.webmanifest',
