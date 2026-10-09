@@ -398,6 +398,12 @@ $files = @(
   "apps/client/src/components/boardRouteLayer.test.ts",
   "apps/client/src/components/SettingsDialog.test.ts",
   "apps/client/src/ui/mapRules.test.ts",
+  # Guards the global/scoped CSS boundary: importing a global stylesheet from a
+  # <style scoped> component made plugin-vue cross-product its selectors (8.2 MB artifact,
+  # 36,608 unmatchable rules, .game-shell{display:grid} among them -> desktop layout
+  # collapsed to a vertical stack). A missing copy means the server runs a suite that no
+  # longer pins that boundary.
+  "apps/client/src/ui/globalStyleBoundary.test.ts",
   "apps/client/src/audio/sfx.test.ts",
   "apps/client/src/audio/bgm.test.ts",
   # Tests added by the third batch: turn clock (#107), public room list (#108),

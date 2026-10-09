@@ -27,7 +27,9 @@ import { browserStorage, recordGameResult } from '../session/playerStats';
 import type { Intent } from '@richman/engine';
 import { playSfx } from '../audio/sfx';
 import { isBgmEnabled, startBgm, stopBgm, armBgmAutoStart } from '../audio/bgm';
-import '../ui/gameTheme.css';
+// 对局皮肤改到 src/main.ts 全局引入了——见那里的说明。此处import 曾让
+// @vitejs/plugin-vue 把主题选择器与本组件的 scoped 规则做笛卡尔积，
+// 产出一批永不匹配的规则，连带 .game-shell{display:grid} 也失效、桌面布局塌掉。
 
 // One shared board for both local hot-seat and online play. Every mode difference is resolved
 // by the pure interaction selector below — this view never branches on game rules or transport.

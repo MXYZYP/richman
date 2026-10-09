@@ -3,6 +3,13 @@ import { createPinia } from 'pinia';
 import App from './App.vue';
 import './style.css';
 import './ui/darkMode.css';
+// 对局皮肤必须在这里全局引入，绝不能留在 GameView.vue 里 import。
+// GameView 是 <style scoped> 组件，插件会把 gameTheme.css 的 16 个主题选择器当成父选择器，
+// 与GameView 的每条 scoped 规则做笛卡尔积：产物一度膨胀到 8.2 MB（其中 98% 是永不匹配的
+// 死选择器，要求 <html> 同时是 ocean+midnight+forest+sand）。
+// 那批死规则里混进了 .game-shell{display:grid} —— 浏览器匹配不到就退回 display:block，
+// 桌面整��塌成竖排（侧栏掉到棋盘下方全宽、无法上滑）。改为全局引入后产物 70 KB。
+import './ui/gameTheme.css';
 import { setupPwaInstall } from './pwaInstall';
 
 const app = createApp(App);
