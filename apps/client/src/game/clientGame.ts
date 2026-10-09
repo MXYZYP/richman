@@ -138,6 +138,29 @@ export interface CellDetailCurrentRent {
   note: string;
 }
 
+/**
+ * The second line under the current-tile card: ownership / type, plus level and rent.
+ *
+ * Returns an EMPTY STRING when it would only repeat the tile name. The start tile is the
+ * real case: its `name` is 「起点」 and `nonPropertyTypeLabel` also returns 「起点」, so
+ * rendering both produced a visible 「起点 起点」 on the card. Same for 税格-type tiles whose
+ * name equals their type label.
+ *
+ * Pure so the rule is unit-testable — the view has no component-mount harness.
+ */
+export function getCellDetailSubtitle(
+  detail: Pick<CellDetail, 'name' | 'typeLabel' | 'ownerName' | 'price' | 'levelLabel'>,
+  rent: { readonly label: string; readonly amount: number } | null,
+): string {
+  const lead = detail.ownerName ?? (detail.price !== null ? '无主地产' : detail.typeLabel);
+  // The tile name already says this — repeating it reads as a rendering bug.
+  if (lead === detail.name) return '';
+  const parts = [lead];
+  if (detail.levelLabel !== null) parts.push(detail.levelLabel);
+  if (rent !== null) parts.push(`${rent.label} ¥${rent.amount}`);
+  return parts.join(' · ');
+}
+
 export interface CellDetail {
   cellId: number;
   name: string;

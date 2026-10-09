@@ -14,7 +14,7 @@ import ChatPanel from '../components/ChatPanel.vue';
 import TurnCountdown from '../components/TurnCountdown.vue';
 import SettingsDialog from '../components/SettingsDialog.vue';
 import ReplayDialog from '../components/ReplayDialog.vue';
-import { formatRecentLogEvent, canProposeTrade, getAssetRows, getAuctionDisplay, getCellDetail, getOwnTradableCells, getPendingCardChoice, getPendingPurchaseOffer, getPlayerAssetDialogModel, getTradeDisplay, getTradeProposalOptions, type ClientAction } from '../game/clientGame';
+import { formatRecentLogEvent, canProposeTrade, getAssetRows, getAuctionDisplay, getCellDetail, getCellDetailSubtitle, getOwnTradableCells, getPendingCardChoice, getPendingPurchaseOffer, getPlayerAssetDialogModel, getTradeDisplay, getTradeProposalOptions, type ClientAction } from '../game/clientGame';
 import { formatCashAnnouncement, formatMoney } from '../ui/format';
 import { canInspectFinalBoard, getSettlementExitDecision } from '../game/settlement';
 import type { CashNotice, GameSession, ReplayExportOutcome } from '../session/gameSession';
@@ -494,6 +494,13 @@ const locationRent = computed(() => {
   if (base) return { label: '基础租金', amount: base.amount };
   const amount = detail.currentRent?.amount;
   return amount === null || amount === undefined ? null : { label: '当前租金', amount };
+});
+// 位置卡的第二行。与格名相同的类型标签不再重复渲染 —— 起点格的 name 与typeLabel
+// 都是「起点」，两者都渲染会在卡片上出现「起点 起点」。
+const locationSubtitle = computed(() => {
+  const detail = currentCellDetail.value;
+  if (!detail) return '';
+  return getCellDetailSubtitle(detail, locationRent.value);
 });
 const actionPanelEventMessage = computed(() => {
   const current = state.value;
@@ -990,7 +997,8 @@ function inspectFinalBoard() {
             class="utility-button"
             @click="requestExit"
           >
-            <svg class="utility-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <svg class="utility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 8l-4 4 4 4M6 12h10" />
             </svg>
             <span>{{ exitLabel }}</span>
@@ -1003,7 +1011,8 @@ function inspectFinalBoard() {
             :aria-expanded="settingsOpen"
             @click="settingsOpen = true"
           >
-            <svg class="utility-icon utility-icon--gear" viewBox="0 0 24 24" aria-hidden="true">
+            <svg class="utility-icon utility-icon--gear" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="3" />
               <path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6M18.4 18.4l-1.6-1.6M7.2 7.2 5.6 5.6" />
             </svg>
@@ -1093,15 +1102,7 @@ function inspectFinalBoard() {
             <b v-if="currentCellDetail.price !== null" class="location-price">¥{{ formatMoney(currentCellDetail.price) }}</b>
           </span>
           <span class="location-details">
-            <span>
-              {{ currentCellDetail.ownerName ?? (currentCellDetail.price !== null ? '无主地产' : currentCellDetail.typeLabel) }}
-              <template v-if="currentCellDetail.levelLabel !== null">
-                · {{ currentCellDetail.levelLabel }}
-              </template>
-              <template v-if="locationRent">
-                · {{ locationRent.label }} ¥{{ formatMoney(locationRent.amount) }}
-              </template>
-            </span>
+            <span v-if="locationSubtitle">{{ locationSubtitle }}</span>
             <b v-if="activeActorCash !== null">可用现金 ¥{{ formatMoney(activeActorCash) }}</b>
           </span>
         </button>
@@ -1442,10 +1443,14 @@ function inspectFinalBoard() {
   grid-column: 1 / -1;
 }
 
+/* 对局信息条：地图名 + 模式/房间号/时长。
+   此前是单行 flex + space-between，两侧都不换行 —— 手机上房间号与时长被挤出屏幕，
+   顶部还压成一条。现在允许换行，并把三个标签合成一个可换行的胶囊组。 */
 .game-meta {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 12px;
+  gap: 4px 12px;
   min-height: 18px;
   align-items: center;
   font-size: 11px;
@@ -1454,14 +1459,24 @@ function inspectFinalBoard() {
   color: var(--color-muted);
 }
 
+/* 窄屏上第一行（地图名 / 人数）独占一行，标签组落到第二行，避免相互挤压。 */
+.game-meta > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .game-meta-tags {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 
 .game-duration {
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .game-room-code {
@@ -1471,6 +1486,7 @@ function inspectFinalBoard() {
   color: var(--color-accent, #D9A441);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.08em;
+  white-space: nowrap;
 }
 
 /* Mobile sheets double as transparent grouping wrappers on desktop: the dialog box vanishes

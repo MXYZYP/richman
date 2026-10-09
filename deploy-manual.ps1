@@ -368,6 +368,10 @@ $files = @(
   "apps/client/src/ui/debtPillLayout.test.ts",
   "apps/client/src/views/LobbyView.test.ts",
   "apps/client/src/game/settlement.ts",
+  # Guards three mobile-layout defects: the start tile printing its name twice, the utility
+  # icons degrading into black blocks without an explicit fill, and the header strip refusing
+  # to wrap (room code and clock pushed off-screen).
+  "apps/client/src/game/cellDetailSubtitle.test.ts",
   "apps/client/src/game/settlement.test.ts",
   # Guards the settlement dialog exit wiring (stacking level, primary-button label,
   # whether the board can be inspected). A missing copy means the server runs a suite
