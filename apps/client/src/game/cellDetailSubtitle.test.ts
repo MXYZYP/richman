@@ -63,6 +63,42 @@ describe('位置卡第二行不再重复格名', () => {
   });
 });
 
+describe('AI 托管按钮在笔记本窄窗也必须可见', () => {
+  /** Body of a CSS rule, or null. Comments stripped first so a comment that quotes a
+   *  declaration is not read as the declaration. */
+  function ruleBody(selector: string): string | null {
+    const clean = view.replace(/\/\*[\s\S]*?\*\//g, '');
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const multi = new RegExp(escaped + '\\s*\\{\\s*\\n([\\s\\S]*?)\\n\\s*\\}').exec(clean);
+    if (multi !== null) return multi[1];
+    const single = new RegExp(escaped + '\\s*\\{([^{}]*)\\}').exec(clean);
+    return single !== null ? single[1] : null;
+  }
+
+  it('.side-utility 在 ≤1024px 是隐藏的（笔记本窄窗正好落在这个区间）', () => {
+    // 这条不是断言「应该隐藏」，而是把前提钉住：它解释了托管按钮为什么不能放进去。
+    expect(view).toMatch(/@media \(max-width: 1024px\)[\s\S]*?\.side-utility\s*\{[^}]*display:\s*none/);
+  });
+
+  it('托管按钮用独立的 .takeover-toggle，不挂在 .side-utility 里', () => {
+    expect(view).toContain('class="takeover-toggle"');
+    // 它必须位于 .side-utility 那个 div 的闭合标签之外。
+    const start = view.indexOf('class="side-utility"');
+    const end = view.indexOf('class="takeover-toggle"');
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const between = view.slice(start, end);
+    expect(between, '托管按钮被包在 .side-utility 里了 —— ≤1024px 会整组消失')
+      .not.toContain('takeover-toggle');
+  });
+
+  it('托管按钮的样式不挂在 .side-utility 的媒体查询里', () => {
+    const own = ruleBody('.takeover-toggle');
+    expect(own, '缺少 .takeover-toggle 的样式').not.toBeNull();
+    expect(own).toMatch(/width:\s*100%/);
+  });
+});
+
 describe('次级按钮的图标不会渲染成黑块', () => {
   const icons = [...view.matchAll(/<svg class="utility-icon[^"]*"[\s\S]*?>/g)].map((m) => m[0]);
 
@@ -74,8 +110,7 @@ describe('次级按钮的图标不会渲染成黑块', () => {
   });
 
   it.each(icons.map((svg, i) => [i, svg]))('icon #%i declares fill="none"', (_i, svg) => {
-    // The CSS rule alone is not enough: without the attribute, any failure to load or match
-    // the stylesheet turns a line icon into a filled black blob.
+    // The CSS rule alone is not enough: without the attribute, any failure to load or match    // the stylesheet turns a line icon into a filled black blob.
     expect(svg).toMatch(/\sfill="none"/);
     expect(svg).toMatch(/\sstroke="currentColor"/);
   });

@@ -1103,24 +1103,29 @@ function inspectFinalBoard() {
             </svg>
             <span>设置</span>
           </button>
-          <!-- AI 托管：把自己的每一步交给电脑，直到关掉它。30秒无操作会自动打开。
-               与上面那条「托管本回合」是不同的事：那条是房主替掉线玩家走这一步（针对别人）。 -->
-          <button
-            v-if="canUseTakeover"
-            type="button"
-            class="utility-button utility-button--takeover"
-            :class="{ 'utility-button--on': takeoverOn }"
-            :aria-pressed="takeoverOn"
-            @click="toggleTakeover"
-          >
-            <svg class="utility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="4" y="7" width="16" height="11" rx="2" />
-              <path d="M12 3v4M9 12h.01M15 12h.01M9.5 15h5" />
-            </svg>
-            <span>{{ takeoverOn ? '托管中' : 'AI 托管' }}</span>
-          </button>
         </div>
+
+        <!-- AI 托管：把自己的每一步交给电脑，直到关掉它。30 秒无操作会自动打开。
+             与上面那条「托管本回合」是不同的事：那条是房主替掉线玩家走这一步（针对别人）。
+
+             ★ 刻意放在 .side-utility 之外：那一组在 ≤1024px 是 display:none
+             （底部操作坞已提供设置/战报入口），而笔记本窄窗正好落在这个区间——
+             放进去等于「功能写了但用户永远看不到」。托管是核心功能，必须常驻可见。 -->
+        <button
+          v-if="canUseTakeover"
+          type="button"
+          class="takeover-toggle"
+          :class="{ 'takeover-toggle--on': takeoverOn }"
+          :aria-pressed="takeoverOn"
+          @click="toggleTakeover"
+        >
+          <svg class="utility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="4" y="7" width="16" height="11" rx="2" />
+            <path d="M12 3v4M9 12h.01M15 12h.01M9.5 15h5" />
+          </svg>
+          <span>{{ takeoverOn ? '托管中，点击收回' : 'AI 托管' }}</span>
+        </button>
 
         <!-- 空闲倒计时警告：只在「轮到我、但我还没动」的最后 10 秒出现，
              目的是让玩家来得及手动接管，而不是被电脑悄悄替掉一步。 -->
@@ -1704,8 +1709,7 @@ function inspectFinalBoard() {
    投降是破坏性操作，已移入设置面板（那里本就有 --danger 样式 + 二次确认）。 */
 .side-utility {
   display: grid;
-  /* 三个按钮（离开 / 设置 / AI 托管）：两列放不下第三 个，所以改成自适应列数，
-     窄一点时自动换行成两行，而不是把每个按钮压得只剩一个字。 */
+  /* 两个次级操作（离开 / 设置）。AI 托管另起一行，见 .takeover-toggle 的说明。 */
   grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
   gap: 8px;
   margin-bottom: 10px;
@@ -1775,16 +1779,56 @@ function inspectFinalBoard() {
   }
 }
 
-/* AI 托管开关：开启态用主色实底，让「电脑正在替我」一眼可见——
-   这是个会改变对局走向的状态，开着就该看得见，而不是只靠按钮文字。 */
-.utility-button--takeover.utility-button--on {
+/* AI 托管开关。
+   独立成行（width: 100%），不进 .side-utility —— 那一组在 ≤1024px 整体 display:none，
+   笔记本窄窗正好落在那个区间，放进去等于写了但永远看不到。
+   开启态用实底主色：它会改变对局走向，开着就该一眼看见，而不是只靠文字。 */
+.takeover-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--game-radius-control, 10px);
+  background: var(--board-surface);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.takeover-toggle:hover {
+  border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--board-surface));
+  color: var(--color-text);
+}
+
+.takeover-toggle:active {
+  transform: translateY(1px);
+}
+
+.takeover-toggle:focus-visible {
+  outline: 2px solid var(--game-focus, var(--color-accent));
+  outline-offset: 2px;
+}
+
+.takeover-toggle--on {
   border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 18%, var(--board-surface));
+  background: color-mix(in srgb, var(--color-accent) 20%, var(--board-surface));
   color: var(--color-accent);
   font-weight: 700;
 }
 
-/* 空闲倒计时警告：放在次级操作组正下方，动线直上直下。
+/* 空闲倒计时警告：放在托管按钮正下方，动线直上直下。
    用危险色是因为它意味着「你再不动就交给电脑了」。 */
 .takeover-warning {
   margin: 0 0 10px;
