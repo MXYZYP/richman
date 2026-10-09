@@ -189,8 +189,13 @@ function closeFromBackdrop(event: MouseEvent): void {
   .mobile-sheet[data-variant='inline'] .mobile-sheet-head {
     display: none;
   }
+}
 
-  /* modal 变体：桌面端是居中弹窗，保留头部标题与关闭按钮。 */
+/* modal 变体：居中弹窗，保留头部标题与关闭按钮。
+   断点是 768px 而非 1025px：GameView 的紧凑布局上限是 1024px，两边必须对齐。
+   此前这里挂 min-width:1025px，于是 974px 的笔记本拿不到居中形态，退回底部抽屉——
+   弹窗贴着屏幕底边、顶部却是直角（底 18px 圆角 + 上直角），看着像没做完。 */
+@media (min-width: 768px) {
   .mobile-sheet[data-variant='modal'] {
     top: 50%;
     bottom: auto;
@@ -198,21 +203,27 @@ function closeFromBackdrop(event: MouseEvent): void {
     right: auto;
     translate: -50% -50%;
     width: min(92vw, 520px);
-    max-height: min(86vh, 760px);
+    /* 居中弹窗上下都要留呼吸位：此前 88vh 在矮视口（如笔记本 974×664）下
+       几乎顶满，把内容挤成一条细长的滚动条。收到 84vh 换取上下留白。 */
+    max-height: min(84vh, 720px);
     border: 1px solid var(--center-border);
+    /* 四角都圆：底部抽屉是 18px 18px 0 0（底边贴屏幕），居中弹窗不该留直角。 */
     border-radius: 16px;
+    border-bottom: 1px solid var(--center-border);
     box-shadow: 0 24px 64px rgb(53 39 20 / 28%);
   }
 
   .mobile-sheet[data-variant='modal'] .mobile-sheet-panel {
-    max-height: min(86vh, 760px);
+    max-height: min(84vh, 720px);
   }
 }
 
-/* 抽屉上滑进场：服务于「底部抽屉」形态，因此阈值必须与上面的形态分界（1025px）互为补集。
-   768–1024px 仍是底部抽屉，若这里留在 767px，该区间就会失去进场与遮罩淡入。 */
+/* 抽屉上滑进场：服务于「底部抽屉」形态，因此阈值必须与上面的形态分界互为补集。
+ 768–1024px 的 modal变体是居中弹窗，不该被这段"上滑"位移影响——
+ 它的 translate 承担居中职责（-50% -50%），一旦被这里覆盖成 0 24px，
+ 弹窗会整体偏移到视口右下角。 */
 @media (max-width: 1024px) and (prefers-reduced-motion: no-preference) {
-  .mobile-sheet {
+  .mobile-sheet:not([data-variant='modal']) {
     translate: 0 24px;
     opacity: 0;
     transition:
@@ -222,24 +233,24 @@ function closeFromBackdrop(event: MouseEvent): void {
       overlay 180ms allow-discrete;
   }
 
-  .mobile-sheet[open] {
+  .mobile-sheet:not([data-variant='modal'])[open] {
     translate: 0 0;
     opacity: 1;
     transition-duration: 320ms;
     transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .mobile-sheet::backdrop {
+  .mobile-sheet:not([data-variant='modal'])::backdrop {
     background: transparent;
     transition: background 180ms ease, display 180ms allow-discrete, overlay 180ms allow-discrete;
   }
 
-  .mobile-sheet[open]::backdrop {
+  .mobile-sheet:not([data-variant='modal'])[open]::backdrop {
     background: var(--overlay-scrim);
   }
 
   @starting-style {
-    .mobile-sheet[open] {
+    .mobile-sheet:not([data-variant='modal'])[open] {
       translate: 0 48px;
       opacity: 0;
     }

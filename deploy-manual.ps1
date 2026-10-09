@@ -396,6 +396,10 @@ $files = @(
   # tile centres) and below the centre art. Without it, a z-index slip hides every map's
   # track behind its own tiles and only fragments show in the gaps.
   "apps/client/src/components/boardRouteLayer.test.ts",
+  # Pins the two MobileSheet shapes: the centred dialog must start at 768px (not 1025px,
+  # otherwise a 974px laptop falls back to the bottom drawer) and the slide-in animation
+  # must skip the modal variant (its translate carries the centring).
+  "apps/client/src/components/sheetVariant.test.ts",
   "apps/client/src/components/SettingsDialog.test.ts",
   "apps/client/src/ui/mapRules.test.ts",
   # Guards the global/scoped CSS boundary: importing a global stylesheet from a
