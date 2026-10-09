@@ -2143,8 +2143,15 @@ function inspectFinalBoard() {
 @media (max-width: 1024px) and (orientation: landscape) {
   .game-shell {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr);
+    /* 侧栏固定窄一些、棋盘拿走其余宽度。此前是 minmax(0,1fr) minmax(260px,1fr)——
+       两列等分，笔记本窗口（实测 974px）下侧栏直接吃掉 487px，棋盘被挤成一条，
+       侧栏内容只占上半段、下方留一大片空白。侧栏内容实测最宽约 320px 足够。 */
+    grid-template-columns: minmax(0, 1fr) clamp(260px, 34vw, 360px);
     grid-template-rows: auto minmax(0, 1fr);
+    /* 竖屏分支为了刘海屏把左右/底部 padding 清成 0；横屏没有刘海，
+       照抄会让内容贴死屏幕左右边缘（笔记本上尤其明显）。这里恢复留白与间隙。 */
+    padding: 10px;
+    gap: 10px;
   }
 
   .players {
@@ -2171,7 +2178,10 @@ function inspectFinalBoard() {
   /* 操作面板保持顶部锚定：底对齐会让按钮行随信息长度上下浮动。
      导航条改用自己的 auto 外边距留在侧栏底部。*/
   .mobile-dock-bar {
-    margin-top: auto;
+    /* 此前 margin-top:auto 把操作坞推到底部，与上方内容之间空出一大片
+       （侧栏内容只占上半段时尤其明显，看着像另一个浮层）。
+       改为紧跟内容之后：内容多时靠 overflow 滚动，视觉上是一整列连续的东西。*/
+    margin-top: 4px;
   }
 }
 

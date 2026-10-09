@@ -104,3 +104,49 @@ describe('全局样式表都在 main.ts 里按顺序引入', () => {
     expect(strays, JSON.stringify(strays)).toEqual([]);
   });
 });
+
+/**
+ * The laptop-landscape branch must not hand half the window to the sidebar.
+ *
+ * Measured in the user's browser at a 974px viewport (a normal laptop window, which lands
+ * in `@media (max-width: 1024px) and (orientation: landscape)`):
+ *   getComputedStyle(.game-shell).gridTemplateColumns = "486.8px 486.8px"
+ * The board is the main event; an even split squeezed it to 487px while the sidebar — whose
+ * content is at most ~320px wide — got the same 487px and left a large gap below itself.
+ */
+describe('笔记本横屏（≤1024px）的两列比例', () => {
+  const view = readFileSync(join(srcRoot, 'views', 'GameView.vue'), 'utf8');
+  const clean = view.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  /** Body of the `@media (max-width:1024px) and (orientation:landscape)` block. */
+  const landscapeBlock = (() => {
+    const at = clean.indexOf('@media (max-width: 1024px) and (orientation: landscape) {');
+    if (at < 0) throw new Error('landscape branch not found');
+    // The branch is flat, so the next top-level `}` closes it.
+    const end = clean.indexOf('\n}', at);
+    return clean.slice(at, end < 0 ? undefined : end);
+  })();
+
+  it('侧栏不是等分，而是 clamp 上限封顶的窄列', () => {
+    const cols = /grid-template-columns:\s*([^;]+);/.exec(landscapeBlock);
+    expect(cols).not.toBeNull();
+    expect(cols![1]).not.toMatch(/minmax\(0,\s*1fr\)\s*minmax\([^,]+,\s*1fr\)/);
+    // Must stay bounded: the sidebar never grows with the window.
+    expect(cols![1]).toMatch(/clamp\(/);
+  });
+
+  it('横屏分支恢复左右留白（竖屏为刘海清零的 padding 不该被照抄）', () => {
+    const shell = /\.game-shell\s*\{([^}]*)\}/.exec(landscapeBlock);
+    expect(shell).not.toBeNull();
+    expect(shell![1]).toMatch(/padding:\s*(?!env\()/);
+    expect(shell![1]).not.toMatch(/padding:\s*env\([^)]*\)\s*0\s+0/);
+  });
+
+  it('底部操作坞紧跟内容，不再被 margin-top:auto 推到最底', () => {
+    // Strip comments first: the rule that replaced `margin-top: auto` explains itself in a
+    // comment, and a naive regex reads that prose as the declaration it just removed.
+    const decls = view.replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(decls).not.toMatch(/\.mobile-dock-bar\s*\{[^}]*margin-top:\s*auto/);
+    expect(decls).toMatch(/\.mobile-dock-bar\s*\{[^}]*margin-top:\s*4px/);
+  });
+});
