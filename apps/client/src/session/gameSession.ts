@@ -78,6 +78,14 @@ export interface GameSession {
   sendChat(text: string): void;
   dispose(): void;
   retryResume?(): Promise<void>;
+  /**
+   * AI 托管：把自己的每一步交给电脑决策（单机与联机都提供）。
+   *
+   * 与 `skipOfflineTurn` 是两件事 —— 那个是「房主替掉线的玩家走这一步」，由服务端发起、
+   * 针对别人；这个是「我自己不想玩了，让电脑替我」，任何玩家对自己都能开，随时可关。
+   */
+  readonly isTakeoverOn?: Ref<boolean>;
+  setTakeover?(on: boolean): Promise<void>;
   /** 本地玩家是否为房主（联机有效，本地热座恒为 false/不提供）。房主可在对局中踢人。 */
   readonly isHost?: Ref<boolean>;
   /** 房主将对局中指定玩家强制出局（联机有效；本地热座不提供）。 */

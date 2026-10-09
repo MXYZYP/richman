@@ -414,6 +414,11 @@ $files = @(
   # first-run guide + chat quick phrases (#109). vue-tsc runs over the whole client package,
   # so a test file left out here is type-checked against a stale server copy.
   "apps/client/src/session/turnTimer.test.ts",
+  # AI takeover idle rules (30s auto-enable, warning in the last 10s). Pure functions,
+  # extracted so they are unit-testable: the client has no component-mount harness and
+  # all the complexity here is in "when NOT to fire".
+  "apps/client/src/session/idleTakeover.ts",
+  "apps/client/src/session/idleTakeover.test.ts",
   "apps/client/src/session/quickPhrases.test.ts",
   "apps/client/src/session/firstRunGuide.test.ts",
   "apps/client/src/components/ChatPanel.test.ts",

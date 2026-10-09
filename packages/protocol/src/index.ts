@@ -329,6 +329,8 @@ export interface ClientToServerEvents {
   'room:leave': (ack: (response: Ack<Record<string, never>>) => void) => void;
   'game:intent': (payload: { intent: Intent }, ack: (response: Ack<Record<string, never>>) => void) => void;
   'room:skip_offline_turn': (ack: (response: Ack<Record<string, never>>) => void) => void;
+  /** AI 托管开关：把自己每一步交给电脑，或收回手动控制。 */
+  'room:set_takeover': (payload: { on: boolean }, ack: (response: Ack<Record<string, never>>) => void) => void;
   'room:kick_player': (payload: { playerId: string }, ack: (response: Ack<Record<string, never>>) => void) => void;
   'room:chat_message': (payload: { text: string }, ack: (response: Ack<Record<string, never>>) => void) => void;
   /** 房主设定房间规则（#4 / #6）：仅房主、仅开局前；成功后 ack 回最新设置。 */
@@ -347,6 +349,8 @@ export interface ClientToServerEvents {
 export interface ServerToClientEvents {
   'room:state': (room: PublicRoomState) => void;
   'player:connection': (change: { playerId: string; online: boolean }) => void;
+  /** AI 托管状态变化：广播给全房间，让对手看得出「他是托管，不是挂机」。 */
+  'player:takeover': (change: { playerId: string; nickname: string; on: boolean }) => void;
   'room:closed': (payload: { reason: RoomClosedReason }) => void;
   'game:events': (payload: { events: GameEvent[] }) => void;
   'game:snapshot': (payload: { state: PublicGameSnapshot }) => void;

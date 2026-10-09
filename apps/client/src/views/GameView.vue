@@ -21,6 +21,7 @@ import type { CashNotice, GameSession, ReplayExportOutcome } from '../session/ga
 import type { CreateLocalSessionOptions } from '../session/localSession';
 import { paceMultiplier } from '../session/playbackPace';
 import { shouldShowTurnCountdown } from '../session/turnTimer';
+import { formatIdleCountdown, getIdleTakeoverRemainingMs, shouldWarnIdleTakeover } from '../session/idleTakeover';
 import { applyThemeForMap } from '../ui/themeManager';
 import { getGameInteractionState } from '../session/gameInteraction';
 import { browserStorage, recordGameResult } from '../session/playerStats';
@@ -418,8 +419,90 @@ const availableActions = computed(() => (
 
 const activeActorId = computed(() => {
   const current = state.value;
+
   return current === null ? '' : (current.debt?.debtorId ?? current.currentPlayerId);
 });
+
+// ---- AI 托管 + 空闲自动开启 ----
+// 三条规则（判断逻辑都在 idleTakeover.ts 的纯函数里，这里只负责「取时间」与「执行」）：
+//   1. 托管是**切换式**：开一次就一直由电脑走，直到玩家自己关；
+//   2. 轮到本机玩家后，30 秒内没有任何操作就自动开启托管；
+//   3. 最后 10 秒显示警告条，给玩家手动接管的机会。
+// 计时器只在「轮到我且我能操作」时存在，其他状态一律清掉 —— 否则动画/债务阶段会被算成
+// 「玩家不操作」而误开托管。
+const takeoverOn = computed(() => props.session.isTakeoverOn?.value ?? false);
+const canUseTakeover = computed(() => {
+  if (props.session.setTakeover === undefined) return false;
+  if (isSpectator.value) return false;
+  if (state.value?.phase !== 'playing') return false;
+  return props.session.localPlayerId.value !== null;
+});
+
+const idleNow = ref(Date.now());
+let idleSince = Date.now();
+let idleTimer: number | null = null;
+const idleWarningText = ref('');
+
+function stopIdleWatch(): void {
+  if (idleTimer !== null) {
+    window.clearInterval(idleTimer);
+    idleTimer = null;
+  }
+  idleWarningText.value = '';
+}
+
+async function turnTakeoverOn(): Promise<void> {
+  await props.session.setTakeover?.(true);
+}
+
+async function toggleTakeover(): Promise<void> {
+  stopIdleWatch();
+  await props.session.setTakeover?.(!takeoverOn.value);
+  // 关掉后立刻从当前时刻重新计时，而不是等到下一次自然轮到本机玩家。
+  idleSince = Date.now();
+  if (!takeoverOn.value) startIdleWatch();
+}
+
+function startIdleWatch(): void {
+  stopIdleWatch();
+  if (!canUseTakeover.value || takeoverOn.value) return;
+  idleSince = Date.now();
+  idleNow.value = idleSince;
+  idleTimer = window.setInterval(() => {
+    idleNow.value = Date.now();
+    const input = {
+      lastActionAt: idleSince,
+      now: idleNow.value,
+      takeoverOn: takeoverOn.value,
+      isTheirTurn: activeActorId.value === props.session.localPlayerId.value,
+      isPlaying: state.value?.phase === 'playing',
+      canAct: interaction.value.canSendIntent && !isBusy.value && !props.session.isAnimating.value,
+    };
+    if (getIdleTakeoverRemainingMs(input) === 0) {
+      // 到点：先自己开，不去问服务端 —— 服务端那条是给「玩家主动点」用的。
+      stopIdleWatch();
+      void turnTakeoverOn();
+      return;
+    }
+    idleWarningText.value = shouldWarnIdleTakeover(input) ? formatIdleCountdown(getIdleTakeoverRemainingMs(input)) : '';
+  }, 1000);
+}
+
+// 轮到我、且还没开托管时开始计时；其余情况（不是我走 / 已经托管 / 不能操作）一律停表。
+watch([activeActorId, canUseTakeover, takeoverOn], () => {
+  if (takeoverOn.value || !canUseTakeover.value) {
+    stopIdleWatch();
+    return;
+  }
+  startIdleWatch();
+});
+
+// 玩家一旦真的动了手，就把「上次操作时间」推到此刻，30 秒重新算。
+watch(isBusy, (busy, wasBusy) => {
+  if (wasBusy && !busy) idleSince = Date.now();
+});
+
+onBeforeUnmount(stopIdleWatch);
 const activeActor = computed(() => state.value?.players.find((player) => player.id === activeActorId.value));
 const activeActorName = computed(() => activeActor.value?.nickname ?? activeActorId.value);
 const activeDebtAmount = computed(() => state.value?.debt?.amount ?? null);
@@ -1020,7 +1103,30 @@ function inspectFinalBoard() {
             </svg>
             <span>设置</span>
           </button>
+          <!-- AI 托管：把自己的每一步交给电脑，直到关掉它。30秒无操作会自动打开。
+               与上面那条「托管本回合」是不同的事：那条是房主替掉线玩家走这一步（针对别人）。 -->
+          <button
+            v-if="canUseTakeover"
+            type="button"
+            class="utility-button utility-button--takeover"
+            :class="{ 'utility-button--on': takeoverOn }"
+            :aria-pressed="takeoverOn"
+            @click="toggleTakeover"
+          >
+            <svg class="utility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="4" y="7" width="16" height="11" rx="2" />
+              <path d="M12 3v4M9 12h.01M15 12h.01M9.5 15h5" />
+            </svg>
+            <span>{{ takeoverOn ? '托管中' : 'AI 托管' }}</span>
+          </button>
         </div>
+
+        <!-- 空闲倒计时警告：只在「轮到我、但我还没动」的最后 10 秒出现，
+             目的是让玩家来得及手动接管，而不是被电脑悄悄替掉一步。 -->
+        <p v-if="idleWarningText" class="takeover-warning" role="status">
+          {{ idleWarningText }}
+        </p>
         <ActionPanel
           compact-purchase
           :actions="availableActions"
@@ -1598,7 +1704,9 @@ function inspectFinalBoard() {
    投降是破坏性操作，已移入设置面板（那里本就有 --danger 样式 + 二次确认）。 */
 .side-utility {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* 三个按钮（离开 / 设置 / AI 托管）：两列放不下第三 个，所以改成自适应列数，
+     窄一点时自动换行成两行，而不是把每个按钮压得只剩一个字。 */
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
   gap: 8px;
   margin-bottom: 10px;
 }
@@ -1665,6 +1773,30 @@ function inspectFinalBoard() {
   .side-utility {
     display: none;
   }
+}
+
+/* AI 托管开关：开启态用主色实底，让「电脑正在替我」一眼可见——
+   这是个会改变对局走向的状态，开着就该看得见，而不是只靠按钮文字。 */
+.utility-button--takeover.utility-button--on {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 18%, var(--board-surface));
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+/* 空闲倒计时警告：放在次级操作组正下方，动线直上直下。
+   用危险色是因为它意味着「你再不动就交给电脑了」。 */
+.takeover-warning {
+  margin: 0 0 10px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-pay) 40%, var(--color-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-pay) 10%, var(--board-surface));
+  color: var(--color-pay);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .takeover-button {

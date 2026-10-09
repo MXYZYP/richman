@@ -61,7 +61,7 @@ const browserGlobals = globalThis as typeof globalThis & {
   localStorage?: StorageLike;
   location?: { origin: string };
 };
-type Operation = 'create' | 'join' | 'resume' | 'start' | 'addBot' | 'removeBot' | 'renameBot' | 'updateSettings' | 'leave' | 'intent' | 'skip' | 'kick' | 'undoRequest' | 'undoVote' | 'undoCancel';
+type Operation = 'create' | 'join' | 'resume' | 'start' | 'addBot' | 'removeBot' | 'renameBot' | 'updateSettings' | 'leave' | 'intent' | 'skip' | 'kick' | 'undoRequest' | 'undoVote' | 'undoCancel' | 'set-takeover';
 type LastErrorKind = 'derived' | 'operation' | 'blocking' | 'terminal';
 type ReconciliationMarker = {
   readonly generation: number;
@@ -101,6 +101,14 @@ export interface CreateOnlineSessionOptions {
 
 export interface OnlineGameSession extends GameSession {
   readonly mode: 'online';
+  /**
+   * 每个开了AI 托管的玩家（playerId -> 是否开启）。
+   *
+   * 用于让本机玩家看出「对手是托管在走，不是挂机」—— 否则只能看到对方不动，
+   * 分不清是托管、掉线还是放空。走独立事件而非房间投影，
+   * 与服务端的 room_settings / undo_* 同一理由（改投影形状会让全等断言集体变红）。
+   */
+  readonly takeoverOnPlayers: ComputedRef<Record<string, boolean>>;
   /**
    * How the last create/join entry failed, or null while none is staged. `definitive`
    * means a same-id retry is futile and the user should abandon; `transient` retries.
@@ -939,8 +947,13 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
       spectators: room.value.spectators.map((member) => member.id === change.playerId ? { ...member, online: change.online } : member),
     });
   };
-  const onClosed = (payload: { reason?: string }): void => {
-    if (disposed || entryAttempt !== null) return;
+  /** 托管状态：每人一个开关，一条事件只描述一个人，所以按playerId 合并进表。 */
+  const onPlayerTakeover = (change: { playerId: string; nickname: string; on: boolean }): void => {
+    if (disposed) return;
+    takeoverOnByPlayer.value = { ...takeoverOnByPlayer.value, [change.playerId]: change.on };
+  };
+
+  const onClosed = (payload: { reason?: string }): void => {    if (disposed || entryAttempt !== null) return;
     resetSession();
     const messages: Record<string, string> = {
       empty_lobby: '房间因无人而关闭',
@@ -1130,6 +1143,7 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
 
   socket.on('room:state', onRoomState);
   socket.on('player:connection', onConnection);
+  socket.on('player:takeover', onPlayerTakeover);
   socket.on('room:closed', onClosed);
   socket.on('game:events', onEvents);
   socket.on('game:snapshot', onSnapshot);
@@ -1401,6 +1415,31 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     }
     await emitAck<Record<string, never>>('skip', 'room:skip_offline_turn');
   };
+
+  /**
+   * AI 托管开关。开启后服务端会替本机玩家走完每一步，直到这里再发一次 `on: false`。
+   *
+   * 不做乐观更新：托管状态必须由服务端的 `room_state` 广播说了算，否则「我以为托管开了
+   * 但其实没开」会让玩家干等。失败时按 `lastError` 提示。
+   */
+  const setTakeover = async (on: boolean): Promise<void> => {
+    const response = await emitAck<Record<string, never>>('set-takeover', 'room:set_takeover', { on });
+    if (!response.ok) {
+      lastError.value = '切换 AI 托管失败，请重试';
+    }
+  };
+
+  /**
+   * 托管状态由服务端的 `player_takeover` 事件驱动（该玩家的最新一次开关结果），
+   * 本地不另存一份 —— 两份状态必然会在「发出去但服务端拒绝」时不一致。
+   */
+  const takeoverOnByPlayer = ref<Record<string, boolean>>({});
+  const isTakeoverOn = computed(() => {
+    const me = localPlayerId.value;
+    if (me === null) return false;
+    return takeoverOnByPlayer.value[me] === true;
+  });
+  const takeoverOnPlayers = computed(() => takeoverOnByPlayer.value);
   /**
    * 发起悔棋（#101）。**不预判**「我是不是上一手行动者」——那是服务端的判断，
    * 这里直接发；不行就由服务端回一个 `UNDO_*`，走即时提示告诉玩家为什么不行。
@@ -1465,6 +1504,7 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     inFlight.clear();
     socket.off('room:state', onRoomState);
     socket.off('player:connection', onConnection);
+  socket.off('player:takeover', onPlayerTakeover);
     socket.off('room:closed', onClosed);
     socket.off('game:events', onEvents);
     socket.off('game:snapshot', onSnapshot);
@@ -1489,7 +1529,7 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     )),
     chatLog, sendChat, create, retryPending, retryResume, deferResume, join, start, addBot, removeBot, renameBot, roomSettings, updateRoomSettings, listRooms, kickPlayer, sendIntent, skipOfflineTurn, leave, dispose,
     undoRequest, undoAvailability, canRequestUndo, canVoteUndo, isUndoRequester, requestUndo, voteUndo, cancelUndo,
-    turnDeadline,
+    turnDeadline, isTakeoverOn, takeoverOnPlayers, setTakeover,
     abortEntry, discardStoredSession, abandon, isHost, isSpectator, isLobbyCommandReady, pendingCommand, startBlockedReason,
   };
 }

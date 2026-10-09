@@ -205,6 +205,16 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
         continue;
       }
 
+      // AI 托管状态：广播给全房间，让所有人看到「XX 交给电脑了」。
+      if (event.type === 'player_takeover') {
+        io.to(event.roomCode).emit('player:takeover', {
+          playerId: event.playerId,
+          nickname: event.nickname,
+          on: event.on,
+        });
+        continue;
+      }
+
       if (event.type === 'game_events') {
         io.to(event.roomCode).emit('game:events', { events: event.events });
         continue;
@@ -680,9 +690,40 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
     }
   }
 
-  function handleGameIntent(
+  /** AI 托管开关：把自己交给电脑（或收回）。 */
+  function handleSetTakeover(
     socket: RoomSocket,
     payload: unknown,
+    ack: (response: Ack<Record<string, never>>) => void,
+  ): void {
+    const binding = socketBindings.get(socket.id);
+    if (binding === undefined) {
+      ack(INVALID_ROOM_ACTION_ACK);
+      return;
+    }
+    // 客户端可能发来任意形状的 payload，这里只认明确的 boolean on。
+    const on = typeof payload === 'object' && payload !== null
+      ? (payload as { on?: unknown }).on
+      : undefined;
+    if (typeof on !== 'boolean') {
+      ack(INVALID_ROOM_ACTION_ACK);
+      return;
+    }
+
+    try {
+      const result = roomManager.setPlayerTakeover(binding.roomCode, binding.playerId, on);
+      if (result.ok) {
+        dispatchDomainEvents(result.events);
+      }
+      ackAfterEventFlush(ack, toActionAck(result));
+    } catch (error) {
+      logger?.error?.('room:set_takeover failed unexpectedly', error);
+      ack(INVALID_ROOM_ACTION_ACK);
+    }
+  }
+
+  function handleGameIntent(
+    socket: RoomSocket,    payload: unknown,
     ack: (response: Ack<Record<string, never>>) => void,
   ): void {
     if (!isGameIntentPayload(payload)) {
@@ -984,6 +1025,14 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
         }
 
         handleSkipOfflineTurn(socket, ack);
+      });
+      // AI 托管开关。payload 形如 { on: boolean }。
+      socket.on('room:set_takeover', (payload, ack) => {
+        if (typeof ack !== 'function') {
+          return;
+        }
+
+        handleSetTakeover(socket, payload, ack);
       });
       socket.on('game:intent', (payload, ack) => {
         if (typeof ack !== 'function') {

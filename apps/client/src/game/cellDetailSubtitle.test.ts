@@ -66,8 +66,11 @@ describe('位置卡第二行不再重复格名', () => {
 describe('次级按钮的图标不会渲染成黑块', () => {
   const icons = [...view.matchAll(/<svg class="utility-icon[^"]*"[\s\S]*?>/g)].map((m) => m[0]);
 
-  it('there are exactly two utility icons', () => {
-    expect(icons).toHaveLength(2);
+  it('至少有两个次级按钮图标（离开 / 设置），加AI 托管后更多', () => {
+    // 这里刻意**不锁死数量**：数量随按钮增减而变，而真正的意图是「每个图标都不能变黑块」
+    // （下一条逐个断言）。上一版锁了 exactly two，加一个托管图标就红—— 断言的是数字，
+    // 不是规则。
+    expect(icons.length).toBeGreaterThanOrEqual(2);
   });
 
   it.each(icons.map((svg, i) => [i, svg]))('icon #%i declares fill="none"', (_i, svg) => {

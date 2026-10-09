@@ -108,7 +108,11 @@ describe('online session', () => {
     const session = createOnlineSession({ storage, socketFactory: () => socket as never });
 
     expect([...listeners.keys()]).toEqual([
-      'room:state', 'player:connection', 'room:closed', 'game:events', 'game:snapshot', 'room:chat_broadcast', 'room:chat_history', 'room:settings',
+      'room:state', 'player:connection',
+      // AI 托管状态：与 player:connection 同理，必须在任何操作之前注册 ——
+      // 开关托管的 ack 往往紧跟着一条 room_state，漏收就会出现「界面没反应」。
+      'player:takeover',
+      'room:closed', 'game:events', 'game:snapshot', 'room:chat_broadcast', 'room:chat_history', 'room:settings',
       'room:undo_request', 'room:undo_result', 'room:undo_available',
       // 每回合限时（#107）：两条都要在**任何操作之前**注册好，否则最前面那几步会漏收倒计时。
       'room:turn_deadline', 'room:turn_timeout',

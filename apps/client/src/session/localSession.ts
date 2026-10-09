@@ -55,6 +55,8 @@ export interface LocalSession extends GameSession {
   readonly eventMessage: Ref<string>;
   readonly isAnimating: Ref<boolean>;
   readonly isBotThinking: Ref<boolean>;
+  /** AI 托管已开启：电脑会替本机玩家走完每一步，直到玩家关掉它。 */
+  readonly isTakeoverOn: Ref<boolean>;
   readonly lastError: Ref<string | null>;
   readonly staleSession: Ref<boolean>;
   readonly saveIdentity: LocalSaveIdentity | null;
@@ -229,6 +231,29 @@ export function createLocalSession(options: CreateLocalSessionOptions = {}): Loc
   const connectionStatus = ref<ConnectionStatus>('local');
   const isBotThinking = ref(false);
   const isPersisting = ref(false);
+  /**
+   * AI 托管开关。开启后本机玩家被 `isActedByComputer` 当作电脑看待：
+   * 走 `runBotTurnIfNeeded` 的排期 + `chooseBotIntent` 的决策，与真电脑玩家同一条路径 ——
+   * 不另写一套托管决策，否则两边行为迟早会分叉。
+   */
+  const isTakeoverOn = ref(false);
+
+  /**
+   * 「这一步由电脑来走」的唯一判据。
+   *
+   * 除了真电脑，还包括「托管中的本机玩家」—— 两者共用 `chooseBotIntent` 决策，
+   * 也共用 `runBotTurnIfNeeded` 排期。单开一处会漏，所以只认这一个函数。
+   *
+   * 写成类型守卫（返回 `actor is T`）而不是 boolean：调用处在闭包里继续用
+   * `actor.id`，普通 boolean 收窄不跨闭包边界，会留下 TS18048。
+   */
+  function isActedByComputer<T extends { isBot: boolean; id: string }>(
+    actor: T | undefined,
+  ): actor is T {
+    if (actor === undefined) return false;
+    if (actor.isBot) return true;
+    return isTakeoverOn.value && actor.id === localPlayerId.value;
+  }
   const lastError = ref<string | null>(null);
   const staleSession = ref(false);
   const compatibilityError = ref<string | null>(null);
@@ -286,6 +311,27 @@ export function createLocalSession(options: CreateLocalSessionOptions = {}): Loc
     void runBotTurnIfNeeded();
   }
 
+  /**
+   * 开关AI 托管。
+   *
+   * 开启后本机玩家的每一步都交给 `chooseBotIntent` 决策；关闭后立刻交回手动控制，
+   * 不需要等到本回合结束 —— 玩家随时想自己玩就能拿回来。
+   */
+  async function setTakeover(on: boolean): Promise<void> {
+    if (disposed || isTakeoverOn.value === on) return;
+    isTakeoverOn.value = on;
+    lastError.value = null;
+    if (on) {
+      // 立刻补一次排期：否则要等下一次自然轮到本机玩家才生效，
+      // 玩家会以为按钮没反应。
+      scheduleBotTurnIfNeeded();
+    } else {
+      // 正在思考中的电脑回合要作废，否则关掉托管后电脑仍会替玩家走完这一步。
+      botGeneration += 1;
+      isBotThinking.value = false;
+    }
+  }
+
   async function applyLocalIntent(intent: Intent, automated: boolean): Promise<boolean> {
     if (disposed) return false;
     if (staleSession.value) {
@@ -301,8 +347,10 @@ export function createLocalSession(options: CreateLocalSessionOptions = {}): Loc
       return false;
     }
     const actor = getActor(engineState);
-    if (autoPlayBots && actor?.isBot && !automated) {
-      lastError.value = '电脑玩家正在自动行动';
+    if (autoPlayBots && isActedByComputer(actor) && !automated) {
+      lastError.value = isTakeoverOn.value && actor?.isBot === false
+        ? 'AI 托管中，可先关掉托管再操作'
+        : '电脑玩家正在自动行动';
       return false;
     }
     if (engineState.debt && !canSendDuringDebt(intent)) {
@@ -458,25 +506,36 @@ export function createLocalSession(options: CreateLocalSessionOptions = {}): Loc
     if (isPlayback) return; // 回看模式：电脑不自动行动，整局由「回放」驱动。
     if (disposed || staleSession.value || isPersisting.value || !autoPlayBots || presenter.isAnimating.value || isBotThinking.value || engineState.phase === 'game_over') return;
     const actor = getActor(engineState);
-    if (!actor?.isBot) return;
+    // 托管中的本机玩家同样交给电脑：这是 AI 托管唯一的入口，
+    // 后面的 chooseBotIntent 直接复用电脑决策，不另写一套。
+    if (!isActedByComputer(actor)) return;
 
     const generation = ++botGeneration;
     isBotThinking.value = true;
-    presenter.eventMessage.value = `电脑思考中：${actor.nickname}`;
+    presenter.eventMessage.value = isTakeoverOn.value && actor?.isBot === false
+      ? 'AI 托管中'
+      : `电脑思考中：${actor?.nickname ?? ''}`;
     let appliedBotIntent = false;
     try {
       await wait(botDelay());
       if (disposed || generation !== botGeneration) return;
 
       const latestActor = getActor(engineState);
-      if (!latestActor?.isBot || presenter.isAnimating.value) return;
-      appliedBotIntent = await applyLocalIntent(chooseBotIntent(engineState, latestActor.id, undefined, botDifficulty), true);
+      if (!isActedByComputer(latestActor) || presenter.isAnimating.value) return;
+      // isActedByComputer 返回 boolean，起不到收窄作用；取id 到局部常量再往下用。
+      const actorId = latestActor.id;
+      appliedBotIntent = await applyLocalIntent(chooseBotIntent(engineState, actorId, undefined, botDifficulty), true);
     } catch (error) {
       if (!disposed && generation === botGeneration) recordError(error);
     } finally {
       if (disposed || generation !== botGeneration) return;
       isBotThinking.value = false;
       if (appliedBotIntent) scheduleBotTurnIfNeeded();
+      // 托管刚被打开、而当前回合本机玩家并不用电脑走时，这里不会再排期；
+      // 由 setTakeover 主动补一次调用，让托管立即生效而不必等下一次自然排期。
+      else if (isTakeoverOn.value && getActor(engineState) && !isActedByComputer(getActor(engineState))) {
+        scheduleBotTurnIfNeeded();
+      }
     }
   }
 
@@ -556,6 +615,8 @@ export function createLocalSession(options: CreateLocalSessionOptions = {}): Loc
     eventMessage: presenter.eventMessage,
     isAnimating: presenter.isAnimating,
     isBotThinking,
+    isTakeoverOn,
+    setTakeover,
     lastError,
     staleSession,
     saveIdentity,

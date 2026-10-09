@@ -55,6 +55,7 @@ type RoomDomainEvent =
   | { type: 'turn_deadline'; roomCode: string; info: { playerId: string | null; deadlineAt: number | null; limitSec: number } }
   | { type: 'turn_timeout'; roomCode: string; playerId: string; nickname: string }
   | { type: 'player_connection'; roomCode: string; playerId: string; online: boolean }
+  | { type: 'player_takeover'; roomCode: string; playerId: string; nickname: string; on: boolean }
   | { type: 'room_closed'; roomCode: string; reason: 'empty_lobby' | 'lobby_idle_timeout' }
   | { type: 'game_events'; roomCode: string; events: unknown[] }
   | { type: 'game_snapshot'; roomCode: string; state: GameState };

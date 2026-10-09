@@ -32,6 +32,15 @@ export type RoomDomainEvent =
   | { type: 'turn_deadline'; roomCode: string; info: TurnDeadlineInfo }
   | { type: 'turn_timeout'; roomCode: string; playerId: string; nickname: string }
   | { type: 'player_connection'; roomCode: string; playerId: string; online: boolean }
+  /**
+   * AI 托管状态变化。
+   *
+   * 走独立事件而不塞进 `PublicRoomState` —— 与 `room_settings` / `undo_*` 同一理由：
+   * 后者是房间成员的投影，动它的形状会让所有既有全等断言与快照一起变红
+   * （实测：给 `PublicRoomPlayer` 加一个字段 → 6 个文件 43 条断言当场变红）。
+   * 托管是围绕「某个玩家」的旁路信息，单独一条事件更诚实。
+   */
+  | { type: 'player_takeover'; roomCode: string; playerId: string; nickname: string; on: boolean }
   | { type: 'room_closed'; roomCode: string; reason: 'empty_lobby' | 'lobby_idle_timeout' }
   | { type: 'game_events'; roomCode: string; events: GameEvent[] }
   | { type: 'game_snapshot'; roomCode: string; state: GameState };

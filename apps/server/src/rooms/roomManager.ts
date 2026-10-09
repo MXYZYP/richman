@@ -104,6 +104,14 @@ export class RoomManager<TTimerHandle = unknown> {
   readonly #gameAutomationTimers = new Map<string, TTimerHandle>();
   /** 掉线后自动托管的宽限计时器：宽限内玩家重连则取消托管，避免短暂断网即被托管走步。 */
   readonly #autoTakeoverGrace = new Map<string, { timer: TTimerHandle; actorId: string }>();
+  /**
+   * 玩家主动开启的 AI 托管（每人一个开关，跨回合持续）。
+   *
+   * 与 `offline_takeover` 的区别：后者是**单回合**的代打（掉线了房主替他走这一步，
+   * 走完就清），这个是「我自己不想玩了」，要一直替他走到玩家关掉为止。
+   * 存 playerId 而不是布尔值——同一房间可能只有一个人开，而其他玩家仍要手动玩。
+   */
+  readonly #playerTakeover = new Set<string>();
   readonly #automation = new Map<string, RoomAutomation>();
   readonly #automationGeneration = new Map<string, number>();
   /** 自动化连续提交/决策失败计数：用于「有界自愈」——失败后下一拍重新计算意图，
@@ -1111,6 +1119,75 @@ export class RoomManager<TTimerHandle = unknown> {
     };
   }
 
+  /**
+   * 开关「AI 托管」：把自己的每一步都交给电脑，直到自己关掉。
+   *
+   * 与 `requestSkipOfflineTurn` 的区别（两者都借道 `offline_takeover` 自动化，但语义不同）：
+   *   - requestSkipOfflineTurn：房主替**掉线**的玩家走**这一步**，走完即清；
+   *   - setPlayerTakeover：玩家**自己**开的，跨回合持续，需要显式关闭。
+   *
+   * 决策复用 `chooseTakeoverIntent`（经`offline_takeover` 模式），它已覆盖债务 / 交易 /
+   * 拍卖 / 规则模块待选动作四类场景，不另写一套。
+   */
+  setPlayerTakeover(roomCode: string, playerId: string, on: boolean): RoomResult<Record<string, never>> {
+    const room = this.#rooms.get(roomCode);
+    if (room === undefined) {
+      return roomFailure('ROOM_NOT_FOUND', 'Room not found.');
+    }
+    const member = room.players.find((player) => player.id === playerId);
+    if (member === undefined) {
+      return roomFailure('INVALID_ROOM_ACTION', 'You are not in this room.');
+    }
+    if (member.isBot) {
+      return roomFailure('INVALID_ROOM_ACTION', 'Computer players do not need takeover.');
+    }
+    if (room.status !== 'playing' || room.gameState === null) {
+      return roomFailure('INVALID_ROOM_ACTION', 'The game is not in progress.');
+    }
+
+    const wasOn = this.#playerTakeover.has(playerId);
+    if (wasOn === on) {
+      return { ok: true, value: {}, events: [] };
+    }
+
+    if (on) {
+      this.#playerTakeover.add(playerId);
+    } else {
+      this.#playerTakeover.delete(playerId);
+      // 关掉时如果正由托管替自己走这一步，必须作废，否则电脑仍会把手伸完。
+      const record = this.#automation.get(roomCode);
+      if (record !== undefined && record.playerId === playerId) {
+        this.#clearAutomation(roomCode);
+      }
+    }
+
+    // 开启时若正轮到自己，立即起托管，不等下一次自然轮到。
+    const events: RoomDomainEvent[] = [];
+    const state = room.gameState;
+    const actorId = this.#engineActor(state);
+    if (on && actorId === playerId
+      && !this.#automation.has(roomCode) && !this.#gameAutomationTimers.has(roomCode)) {
+      const record = this.#createAutomation(room, state, 'offline_takeover', playerId);
+      this.#scheduleAutomation(room, record);
+    }
+    // 单独一条事件让全房间看到「XX 交给电脑了」—— 否则对手只看到「他不动」，
+    // 分不清是托管、是掉线还是挂机。
+    events.push({
+      type: 'player_takeover',
+      roomCode,
+      playerId,
+      nickname: member.nickname,
+      on,
+    });
+    events.push({ type: 'room_state', roomCode, room: this.#projectPublicRoom(room) });
+    return { ok: true, value: {}, events };
+  }
+
+  /** 某个玩家当前是否开着 AI 托管（供room_state 广播，让所有人看到「XX 交给了电脑」）。 */
+  isPlayerTakeoverOn(playerId: string): boolean {
+    return this.#playerTakeover.has(playerId);
+  }
+
   leaveRoom(roomCode: string, playerId: string): RoomResult<PublicRoomState | null> {
     const room = this.#rooms.get(roomCode);
     if (room === undefined) {
@@ -1993,7 +2070,18 @@ export class RoomManager<TTimerHandle = unknown> {
    */
   #maybeAutoTakeover(room: Room, state: GameState, actorId: string): RoomDomainEvent[] {
     const actor = state.players.find((p) => p.id === actorId);
-    if (actor === undefined || actor.isBot || actor.online) return [];
+    if (actor === undefined || actor.isBot) return [];
+    // 玩家主动开了 AI 托管：即使他**在线**、也没欠债，同样要一直替他走下去。
+    // 与掉线托管的差别只在触发条件，走的是同一条 offline_takeover 自动化路径 ——
+    // 所以决策（债务 / 交易 / 拍卖 / 模块待选动作）全部复用 chooseTakeoverIntent。
+    if (this.#playerTakeover.has(actorId)) {
+      if (this.#automation.has(room.code) || this.#gameAutomationTimers.has(room.code)) return [];
+      if (this.#autoTakeoverGrace.has(room.code)) return [];
+      const record = this.#createAutomation(room, state, 'offline_takeover', actorId);
+      this.#scheduleAutomation(room, record);
+      return [];
+    }
+    if (actor.online) return [];
     // 债务阶段不再一律拒托管。`#engineActor` 在欠债时返回的就是债务人本人，所以
     // 「此刻的行动者离线」恰好等价于「这笔债没人来还」。旧行为（debt !== null 直接返回）
     // 会让离线欠债玩家永久停摆：没有电脑排期、也没有托管宽限，房间进入
