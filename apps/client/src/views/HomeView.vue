@@ -39,66 +39,24 @@ const emit = defineEmits<{
 
 <template>
   <main class="home-shell">
-    <!-- 首页场景（纯 CSS + 内联 SVG 绘制，无外链图片）：一张摊开的桌面 ——
-         纸面、虚线棋路、两枚骰子、三枚棋子、一只茶盏、一方印章。
-         全部由 CSS 变量上色，所以深色模式自动跟着变；整块 aria-hidden，不参与无障碍树。 -->
-    <div class="home-scene" aria-hidden="true">
-      <svg class="home-scene__art" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice" focusable="false">
-        <rect class="scene-sheet" x="26" y="118" width="348" height="566" rx="20" transform="rotate(-4 200 400)" />
-        <path class="scene-route" d="M74 300H330V432H74V566H330" />
-        <g class="scene-tile">
-          <rect x="58" y="286" width="48" height="24" rx="6" />
-          <rect x="124" y="286" width="48" height="24" rx="6" />
-          <rect x="282" y="418" width="48" height="24" rx="6" />
-          <rect x="58" y="552" width="48" height="24" rx="6" />
-          <rect x="282" y="552" width="48" height="24" rx="6" />
-        </g>
-        <g class="scene-dice" transform="rotate(-14 100 200)">
-          <rect x="72" y="172" width="56" height="56" rx="14" />
-          <circle cx="89" cy="189" r="5" />
-          <circle cx="111" cy="211" r="5" />
-          <circle cx="100" cy="200" r="5" />
-        </g>
-        <g class="scene-dice" transform="rotate(11 306 218)">
-          <rect x="278" y="190" width="56" height="56" rx="14" />
-          <circle cx="295" cy="207" r="5" />
-          <circle cx="317" cy="207" r="5" />
-          <circle cx="295" cy="229" r="5" />
-          <circle cx="317" cy="229" r="5" />
-        </g>
-        <g class="scene-pawn">
-          <g transform="translate(118 648)">
-            <circle cx="0" cy="-18" r="12" />
-            <path d="M-15 18C-15 0-8-9 0-9s15 9 15 27z" />
-          </g>
-          <g transform="translate(192 678)">
-            <circle cx="0" cy="-18" r="12" />
-            <path d="M-15 18C-15 0-8-9 0-9s15 9 15 27z" />
-          </g>
-          <g transform="translate(262 640)">
-            <circle cx="0" cy="-18" r="12" />
-            <path d="M-15 18C-15 0-8-9 0-9s15 9 15 27z" />
-          </g>
-        </g>
-        <g class="scene-cup" transform="rotate(-8 330 712)">
-          <path d="M298 684h60l-8 42h-44z" />
-          <path d="M358 690c19 0 19 24 0 24" />
-        </g>
-        <g class="scene-stamp" transform="translate(76 730)">
-          <circle cx="0" cy="0" r="30" />
-          <path d="M-13-13 13 13M13-13-13 13" />
-        </g>
-      </svg>
-    </div>
+    <!-- 首页背景（10-16 第三版）：换成 AI 生成的纸面插画 —— 墨山、骰子、茶盏、折扇与虚线棋路，
+         中央大片留白正好托住卡片。图放 public/ 固定名（/home-bg.webp）并登记进 sw.js 的 SHELL；
+         明暗由 style.css / ui/darkMode.css 里的 --home-scrim 那一层负责，组件不写 appearance 分支。
+         整块 aria-hidden + pointer-events:none：纯装饰，不进无障碍树也不挡交互。 -->
+    <div class="home-scene" aria-hidden="true"></div>
     <section class="home-card" aria-labelledby="home-title">
       <header class="home-hero">
         <p class="home-eyebrow">纸上中国 · 一局走遍山河</p>
-        <!-- 贴纸化标题（参考《完美清洁公司》的 Logo 手法）：逐字换色 + 粗描边 + 微旋转。
-             前导「进入」用视觉隐藏保留在无障碍名里，所以标题的可访问名仍是「进入大富翁」
-             （e2e 的 heading 定位依赖它），眼睛看到的只有贴纸「大富翁」。 -->
-        <h1 id="home-title" class="home-sticker"><span class="home-sticker__lead">进入</span><span class="home-sticker__char">大</span><span class="home-sticker__char">富</span><span class="home-sticker__char">翁</span></h1>
+        <!-- 贴纸标题（10-16 第三版）：改用 AI 生成的厚描边卡通字（/home-logo.webp）并整块放大，
+             就是用户那句「大富翁那几个字一定要上部居中，放大一些，美工要好一点」。
+             ★ 可访问名必须仍是「进入大富翁」：整行文字视觉隐藏留在无障碍名里，贴纸本身是
+             aria-hidden 的空 span（背景图上色），e2e 的 getByRole('heading', { name: '进入大富翁' }) 照旧命中。
+             ★ 贴纸用 CSS 背景图，不用 img 标签：模板里的根绝对路径会被 @vitejs/plugin-vue 的
+             transformAssetUrls 当成**项目内文件**去解析（实测渲染成 /@fs/home-logo.webp），
+             而 CSS 的 url() 不会被改写 —— public/ 下的资源只能走后者。
+             ★ 两个 span 之间**一个换行都不许有** —— 换行会在可访问名里塞进空白，e2e 当场失配。 -->
+        <h1 id="home-title" class="home-sticker"><span class="home-sticker__lead">进入大富翁</span><span class="home-sticker__logo" aria-hidden="true"></span></h1>
         <p class="home-sticker__sub">掷骰 · 买地 · 收租</p>
-        <p class="home-copy">用 6 位房间码和好友同桌，或单机游玩开一局。手机、电脑浏览器皆可。</p>
         <!-- 两个等宽主按钮、两种色、地位对等：在线=朱砂，单机=竹青。
              刻意不用 --color-pay / --color-gain 给模式上色 —— 那两个是「钱在动」的语义色。
              两个按钮各带一行同样字数的副行，把「按下去会发生什么」写在按钮上：
@@ -169,9 +127,14 @@ const emit = defineEmits<{
   min-height: 100vh;
   min-height: 100dvh;
   display: grid;
-  place-items: center;
+  /* 10-16 第三版：整页改成「顶部对齐 + 横向居中」（用户：「大富翁那几个字一定要上部居中」）。
+     ★ 必须是 align-content: start，不能只把 place-items 的 align 换成 start ——
+     两行（卡片 / 页脚）的行高会被默认的 stretch 撑满整个视口，卡片与页脚会被撕到上下两端。
+     换成 start 之后 @media (max-height:620px) 那条「矮屏顶部对齐」就恒真了，已一并删掉。 */
+  justify-items: center;
+  align-content: start;
   padding:
-    max(18px, env(safe-area-inset-top))
+    max(22px, 5vh, env(safe-area-inset-top))
     max(18px, env(safe-area-inset-right))
     max(18px, env(safe-area-inset-bottom))
     max(18px, env(safe-area-inset-left));
@@ -190,12 +153,12 @@ const emit = defineEmits<{
   background:
     var(--surface-card),
     var(--board-surface);
-  box-shadow: 0 18px 48px rgb(53 39 20 / 14%);
+  /* 底图从浅色 SVG 换成有明暗层次的插画后，原来 14% 的落影不够把卡片托出来。 */
+  box-shadow: 0 20px 52px rgb(53 39 20 / 22%);
 }
 
 
 .home-eyebrow,
-.home-copy,
 .home-field span,
 .home-hint {
   color: var(--color-muted);
@@ -208,15 +171,10 @@ const emit = defineEmits<{
   letter-spacing: 0.2em;
 }
 
-/* 字号由 .home-sticker__char 各自给出：贴纸逐字微旋转，字号必须落在字上才不会被旋转带歪。 */
+/* 标题现在是位图（.home-sticker__logo）：字号、描边、渐变都在图里，
+   这里只负责清掉 h1 的默认外边距，颜色对图片已经不起作用。 */
 .home-card h1 {
   margin: 0;
-  color: var(--title-color);
-}
-
-.home-copy {
-  margin: 0;
-  line-height: 1.6;
 }
 
 /* 玩法说明入口（#109）：次要动作，所以是描边胶囊而不是实心主按钮。 */
@@ -273,9 +231,9 @@ const emit = defineEmits<{
    折叠屏内屏与小平板竖屏的 CSS 宽度常落在 768–1024，用 767 会把它们误判成桌面。 */
 @media (max-width: 1024px) {
   .home-shell {
-    /* 移动形态改为顶部对齐：单列内容常高于视口，居中会让首屏上下同时被裁。 */
+    /* 窄屏只收内边距：顶部对齐已由基类的 align-content:start 承担，全尺寸一致。 */
     padding:
-      max(10px, env(safe-area-inset-top))
+      max(14px, env(safe-area-inset-top))
       max(10px, env(safe-area-inset-right))
       max(10px, env(safe-area-inset-bottom))
       max(10px, env(safe-area-inset-left));
@@ -291,111 +249,76 @@ const emit = defineEmits<{
   }
 }
 
-/* 矮视口（横屏手机、折叠屏半开）：一律顶部对齐，避免居中把内容上下切掉。 */
-@media (max-height: 620px) {
-  .home-shell {
-    place-items: start center;
-  }
-}
-
 /* ============ P1 首页场景化（视觉升级提案 §一、§三）============ */
 
-/* 场景层：铺满 shell 的「桌面」底。用全局变量上色 ⇒ 深色模式自动跟随，
-   不必写 :root[data-appearance] 分支。aria-hidden，且 pointer-events:none，不挡交互。 */
+/* 场景层：铺满 shell 的纸面插画底（10-16 第三版换图，原先是纯 CSS + 内联 SVG 手绘的桌面）。
+   位图走 public/ 固定名，明暗由 --home-scrim 那一层负责 —— 浅色是暖白柔光、深色是暗色幕布
+   （见 style.css 与 ui/darkMode.css），所以组件里没有 appearance 分支。
+   aria-hidden，且 pointer-events:none，不挡交互。 */
 .home-scene {
   position: absolute;
   inset: 0;
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  background:
-    radial-gradient(1200px 700px at 50% -10%, rgb(255 252 243 / 88%), transparent 70%),
-    radial-gradient(900px 620px at 10% 90%, rgb(226 214 188 / 62%), transparent 72%),
-    var(--board-bg);
+  /* 两张底图同一套画风，按**视口方向**切：宽屏用横版（3:2），竖屏换竖版（2:3）。
+     这里选的是「构图方向」而不是布局档次，所以用 aspect-ratio，不再插一个宽度断点。 */
+  --home-bg: url('/home-bg.webp');
+  background-color: var(--board-bg);
+  background-image: var(--home-scrim), var(--home-bg);
+  background-size: auto, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
 }
 
-.home-scene__art {
-  display: block;
-  width: 100%;
-  height: 100%;
-  /* 电脑（16:9）适配：viewBox 是竖幅 400×800，slice 在 1920×1080 上要放大 4.8 倍 ——
-     只剩中间一条、骰子被放到近半屏大。封一个最大宽度把放大倍数压回约 3 倍；
-     让出来的两侧由 .home-scene 的径向渐变兜住，不会出现空白块。
-     屏宽 < 1180px（手机 / 平板 / 折叠屏）完全不受影响。 */
-  max-width: 1180px;
-  margin-inline: auto;
-}
-
-.scene-sheet { fill: var(--board-surface); opacity: 0.9; }
-
-.scene-route {
-  fill: none;
-  stroke: var(--branch-track);
-  stroke-width: 3;
-  stroke-dasharray: 10 11;
-  stroke-linecap: round;
-  opacity: 0.5;
-}
-
-.scene-tile rect { fill: var(--color-accent); opacity: 0.48; }
-
-.scene-dice rect {
-  fill: var(--board-surface);
-  stroke: var(--color-border);
-  stroke-width: 3;
-}
-
-.scene-dice circle { fill: var(--title-color); opacity: 0.7; }
-
-.scene-pawn circle,
-.scene-pawn path { fill: var(--color-primary); opacity: 0.5; }
-
-.scene-cup path {
-  fill: none;
-  stroke: var(--color-accent);
-  stroke-width: 5;
-  stroke-linejoin: round;
-  opacity: 0.85;
-}
-
-.scene-stamp circle,
-.scene-stamp path {
-  fill: none;
-  stroke: var(--color-primary);
-  stroke-width: 6;
-  stroke-linecap: round;
-  opacity: 0.8;
+/* 竖屏（含正方形）换竖版：横版 3:2 在 390x844 上只露出中间约 31% 的一条，两侧的山
+   会被整块裁掉；竖版 2:3 能露出约七成宽度，构图才立得住。 */
+@media (max-aspect-ratio: 1 / 1) {
+  .home-scene {
+    --home-bg: url('/home-bg-portrait.webp');
+  }
 }
 
 .home-hero {
   position: relative;
   display: grid;
   gap: 10px;
-  justify-items: start;
+  /* 10-16 第三版：hero 由左对齐改为**居中** —— 标题、角标、两个主按钮共用一条中轴，
+     正是用户要的「上部居中」。左对齐时大字顶着卡片左边缘，看着像没排完。 */
+  justify-items: center;
+  text-align: center;
 }
 
-/* 贴纸标题：粗描边压在字的后面（paint-order: stroke fill），逐字换色 + 微旋转。 */
+/* 贴纸标题（10-16 第三版）：换成 AI 生成的厚描边卡通字位图。
+   旧版是 CSS 逐字换色 + -webkit-text-stroke 描边，字形受字体限制、细看发飘，也放不大；
+   位图版笔画 / 描边 / 渐变都是成品，正好一次把「换个字体、再放大」两件事都办了。 */
 .home-sticker {
-  display: flex;
-  gap: 0.03em;
+  display: grid;
+  place-items: center;
+  /* width:100% 不是多余的：.home-hero 的 justify-items:center 会让子项 shrink-to-fit，
+     那样贴纸的百分比宽度只能反过来依赖它自己的内容宽度（自指，百分比失效）。
+     给 h1 一个定宽，里面的 min(400px, 92%) 才有确定的分母。 */
+  width: 100%;
   margin: 2px 0 0;
-  line-height: 1;
 }
 
-.home-sticker__char {
-  font-size: clamp(46px, 12vw, 76px);
-  font-weight: 900;
-  line-height: 1;
-  color: #fff7e8;
-  -webkit-text-stroke: 9px var(--title-color);
-  paint-order: stroke fill;
+.home-sticker__logo {
+  display: block;
+  /* min() 收口：手机（卡片内宽约 300px）按 92% 缩，电脑放到 400px 封顶 ——
+     再大就会把两个主按钮挤出首屏。窄屏靠百分比、宽屏靠上限，不新增断点。 */
+  width: min(400px, 92%);
+  /* 位图是 820×452 那张贴纸。高度交给 aspect-ratio 跟着宽度算，窄屏自动等比缩，不写断点。 */
+  aspect-ratio: 820 / 452;
+  background-image: url('/home-logo.webp');
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  /* 图片自带柔和投影，这里再补一层极轻的落影，把贴纸从纸面插画上抬起来。 */
+  filter: drop-shadow(0 6px 16px rgb(53 39 20 / 26%));
 }
 
-.home-sticker__char:nth-child(2) { color: var(--color-accent); transform: rotate(-3deg) translateY(3px); }
-.home-sticker__char:nth-child(3) { transform: rotate(1.5deg) translateY(-3px); }
-.home-sticker__char:nth-child(4) { color: var(--color-accent); transform: rotate(-1deg) translateY(1px); }
-
-/* 视觉隐藏但仍留在无障碍名里：标题的可访问名 = 「进入」+ 贴纸三字 = 进入大富翁。 */
+/* 视觉隐藏但仍留在无障碍名里：贴纸那个 span 是 aria-hidden 的（纯背景图），读屏不念它，
+   所以标题的可访问名完全由这一行文字提供 —— 正好就是 e2e 要找的「进入大富翁」。 */
 .home-sticker__lead {
   position: absolute;
   width: 1px;
@@ -418,10 +341,11 @@ const emit = defineEmits<{
   border-radius: var(--radius-chip);
   background: var(--color-primary);
   color: #fff4ec;
-  /* 字距从 0.32em 收到 0.16em：字符数从 4 个涨到 11 个，原字距会把卡片顶破。 */
-  font-size: 12.5px;
+  /* 字距从 0.32em 收到 0.14em：字符数从 4 个涨到 11 个，原字距会把卡片顶破。
+     10-16 第三版随标题一起放大到 13.5px —— 标题大了，角标还留在 12.5px 会显小。 */
+  font-size: 13.5px;
   font-weight: 800;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   transform: rotate(-1.5deg);
 }
 
@@ -441,7 +365,10 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: center;
   gap: 1px;
-  min-height: 54px;
+  /* 58px + 8px 纵向内边距：下缘现在多了一条 5px 厚的「贴纸底边」，
+     不把高度补回来，文字会被底边挤得上移，两个按钮也不再等高。 */
+  min-height: 58px;
+  padding: 8px 12px;
   border: 0;
   border-radius: var(--radius-control);
   font-size: 1.05rem;
@@ -458,12 +385,52 @@ const emit = defineEmits<{
   opacity: 0.85;
 }
 
-.home-main--online { background: var(--mode-online); color: #fff4ec; }
-.home-main--local { background: var(--mode-local); color: #f1fbf4; }
+/* 10-16 第三版：用户「这个条块的背景色也不好看」——
+   纯色平涂改成**厚贴纸按钮**：同色上亮下深的渐变 + 一条深色底边 + 柔和落影，
+   按下时整体下沉 3px、底边收窄，做出物理按键手感（手法与贴纸 logo 一致）。
+   渐变的亮端与底边都用 color-mix 从 --mode-online / --mode-local 推出来 ——
+   深色模式（ui/darkMode.css 已把这两个变量提亮）自动跟得上，不必各写一套，也不引硬编码字面量。 */
+.home-main--online {
+  --mode-deep: color-mix(in srgb, var(--mode-online) 62%, #000);
+  color: #fff4ec;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--mode-online) 76%, #fff) 0%,
+    var(--mode-online) 58%,
+    color-mix(in srgb, var(--mode-online) 88%, #000) 100%
+  );
+}
+
+.home-main--local {
+  --mode-deep: color-mix(in srgb, var(--mode-local) 62%, #000);
+  color: #f1fbf4;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--mode-local) 76%, #fff) 0%,
+    var(--mode-local) 58%,
+    color-mix(in srgb, var(--mode-local) 88%, #000) 100%
+  );
+}
+
+.home-main--online,
+.home-main--local {
+  box-shadow:
+    0 5px 0 var(--mode-deep),
+    0 12px 22px rgb(53 39 20 / 22%);
+}
+
+.home-main:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    0 2px 0 var(--mode-deep),
+    0 6px 12px rgb(53 39 20 / 18%);
+}
 
 .home-main:disabled {
   background: var(--button-disabled-bg);
   color: var(--button-disabled-text);
+  /* 禁用态必须是平的：留着贴纸底边会看着像「还能按」。 */
+  box-shadow: none;
   cursor: not-allowed;
 }
 
@@ -515,11 +482,6 @@ const emit = defineEmits<{
   width: clamp(20px, 5vw, 24px);
   height: clamp(20px, 5vw, 24px);
   stroke-width: 2;
-}
-
-/* 窄屏：场景底压不住内容，亮一点。 */
-@media (max-width: 1024px) {
-  .home-scene { opacity: 0.9; }
 }
 
 /* 更窄的屏：卡片按 100% 撑满，横向上必然与左上角那一列图标相交

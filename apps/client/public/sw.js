@@ -1,4 +1,4 @@
-// P2-11 PWA service worker（离线壳缓存，v8）。
+// P2-11 PWA service worker（离线壳缓存，v10）。
 // 策略：安装时预缓存应用壳 + 解析 index.html 中的带 hash 静态资源（JS/CSS）一并预缓存，
 //       保证「首次离线」即可加载完整首页（v1 仅缓存壳，离线首访因 JS/CSS 未缓存而空白）。
 //       导航请求网络优先（失败回退缓存首页）；同源静态资源 stale-while-revalidate。
@@ -10,12 +10,17 @@
 //   且 Ctrl+Shift+R 也无效 —— 强刷只绕过 HTTP 缓存，绕不过 Service Worker。
 //   绕过办法（临时救急）：DevTools → Application → Service Workers → Unregister，
 //   或勾选 Network 面板的 "Disable cache"。
-const CACHE = 'richman-v8';
+const CACHE = 'richman-v10';
 const SHELL = [
   '/index.html',
   '/manifest.webmanifest',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+  // 首页位图：下面 extractAssetUrls 只抽 .js / .css，图片必须在这里手工登记，
+  // 否则离线首访能拿到壳、却看不到首页背景与贴纸标题。
+  '/home-bg.webp',
+  '/home-bg-portrait.webp',
+  '/home-logo.webp',
 ];
 
 // 从 index.html 抽取带 hash 的同源静态资源（/assets/*.js、/assets/*.css）。

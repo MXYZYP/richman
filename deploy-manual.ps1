@@ -143,6 +143,11 @@ $files = @(
   "apps/client/public/sw.js",
   "apps/client/public/icons/icon-192.png",
   "apps/client/public/icons/icon-512.png",
+  # Home page artwork (landscape / portrait / sticker logo): the server build copies
+  # public/ verbatim, so a file missing from this list silently stays stale there.
+  "apps/client/public/home-bg.webp",
+  "apps/client/public/home-bg-portrait.webp",
+  "apps/client/public/home-logo.webp",
   # ---------- Engine / protocol / server ----------
   "vitest.config.ts",
   "packages/engine/src/types.ts",

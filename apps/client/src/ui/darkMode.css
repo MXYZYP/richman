@@ -66,6 +66,11 @@
   --mode-online: #d9694f;
   --mode-local: #4fae7c;
 
+  /* 首页背景插画在深色下必须压成暗幕：那是一张亮纸，不压会把整页顶得发白。 */
+  --home-scrim:
+    radial-gradient(1100px 640px at 50% 6%, rgb(18 14 24 / 34%), transparent 74%),
+    linear-gradient(180deg, rgb(10 8 14 / 46%), rgb(10 8 14 / 74%));
+
   /* 连接横幅 */
   --color-warning: #e0a94a;
   --banner-warning-bg: #2f3550;

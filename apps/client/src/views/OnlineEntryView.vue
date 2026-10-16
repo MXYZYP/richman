@@ -802,7 +802,9 @@ function jumpToForm(): void {
   align-items: center;
   justify-content: center;
   gap: 1px;
-  min-height: 54px;
+  /* 与首页同一套贴纸按钮：下缘多了 5px 厚底边，高度要补回来，两个按钮才等高。 */
+  min-height: 58px;
+  padding: 8px 12px;
   border: 0;
   border-radius: var(--radius-control);
   font-size: 1.05rem;
@@ -819,12 +821,48 @@ function jumpToForm(): void {
   opacity: 0.85;
 }
 
-.home-main--online { background: var(--mode-online); color: #fff4ec; }
-.home-main--local { background: var(--mode-local); color: #f1fbf4; }
+/* 与首页 HomeView 保持一致：纯色平涂 -> 同色渐变 + 深色底边的厚贴纸按钮。
+   「一键开房」用的就是这个 --online，不该和首页那两个大按钮长得不一样。 */
+.home-main--online {
+  --mode-deep: color-mix(in srgb, var(--mode-online) 62%, #000);
+  color: #fff4ec;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--mode-online) 76%, #fff) 0%,
+    var(--mode-online) 58%,
+    color-mix(in srgb, var(--mode-online) 88%, #000) 100%
+  );
+}
+
+.home-main--local {
+  --mode-deep: color-mix(in srgb, var(--mode-local) 62%, #000);
+  color: #f1fbf4;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--mode-local) 76%, #fff) 0%,
+    var(--mode-local) 58%,
+    color-mix(in srgb, var(--mode-local) 88%, #000) 100%
+  );
+}
+
+.home-main--online,
+.home-main--local {
+  box-shadow:
+    0 5px 0 var(--mode-deep),
+    0 12px 22px rgb(53 39 20 / 22%);
+}
+
+.home-main:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    0 2px 0 var(--mode-deep),
+    0 6px 12px rgb(53 39 20 / 18%);
+}
 
 .home-main:disabled {
   background: var(--button-disabled-bg);
   color: var(--button-disabled-text);
+  box-shadow: none;
   cursor: not-allowed;
 }
 

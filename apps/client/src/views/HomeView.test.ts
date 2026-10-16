@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import releaseNotes from '../../../../release-notes.json';
@@ -39,7 +39,9 @@ describe('HomeView 三条次要入口（#109 / #115 / #117）', () => {
     expect(html).toContain('看玩法说明');
     expect(html).toContain('收到复盘码？导入回看');
     expect(html).toContain('自己画了图？地图工坊');
-    expect(html.indexOf('class="home-entry-row"')).toBeGreaterThan(html.indexOf('class="home-copy"'));
+    // 锚点原先是 .home-copy（「用 6 位房间码…」那句）—— 10-16 第三版按用户要求删掉了它，
+    // 改钉标题下的角标：两端都还在首页内，断言照样有判别力。
+    expect(html.indexOf('class="home-entry-row"')).toBeGreaterThan(html.indexOf('class="home-sticker__sub"'));
     expect(html.indexOf('class="home-entry-row"')).toBeLessThan(html.indexOf('class="home-icon-row"'));
   });
 
@@ -140,7 +142,7 @@ describe('HomeView 成果图标区（《UI 改造方案》§四）', () => {
  * 首页场景化（P1 视觉升级）。
  *
  * 这一块盯的是一条**对外契约**：首页 <h1> 的可访问名必须是「进入大富翁」。
- * 视觉上标题是逐字换色的贴纸「大富翁」，前导「进入」用视觉隐藏留在无障碍名里；
+ * 视觉上标题是 AI 生成的贴纸字图（10-16 第三版起），「进入大富翁」五个字用视觉隐藏留在无障碍名里；
  * e2e（e2e/smoke.local.spec.ts）正是用 `getByRole('heading', { name: '进入大富翁' })` 找它。
  * 贴纸字之间多出一个**同一行内的空格**，可访问名就变成「进入大 富翁」，e2e 当场找不到标题
  * （实测：注入该空格后本用例报 `expected '进入大 富翁' to be '进入大富翁'`）。
@@ -158,9 +160,17 @@ describe('HomeView 首页场景化（P1）', () => {
   it('给出场景底与两个等宽双色主按钮', async () => {
     const html = await renderHome();
 
-    // 场景是纯 CSS + 内联 SVG，必须 aria-hidden：装饰不进无障碍树，也不该被读屏念出来。
+    // 场景底必须 aria-hidden：装饰不进无障碍树，也不该被读屏念出来。
     expect(html).toMatch(/<div class="home-scene" aria-hidden="true"/);
-    expect(html).toContain('class="home-scene__art"');
+
+    // 10-16 第三版把场景从「内联 SVG 手绘」换成了外链位图。位图挂在 CSS 里，SSR 渲染看不见，
+    // 只能读样式源码确认真的挂上了（这是**接线守卫**，不是渲染验证）——
+    // 顺手钉住它没有退回 SVG 手绘：正反两条一起断言，才不会被「同名的旧规则还留着」蒙混过去。
+    const sceneSource = readFileSync(resolve(here, 'HomeView.vue'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(sceneSource).toContain("url('/home-bg.webp')");
+    expect(sceneSource).not.toContain('home-scene__art');
+    expect(sceneSource).not.toContain('<svg class="home-scene');
 
     // 两个主按钮：在线 = 朱砂、单机 = 竹青，同宽同高（同一网格列）⇒ 地位对等。
     expect(html).toContain('class="home-main home-main--online"');
@@ -214,5 +224,98 @@ describe('HomeView 首页场景化（P1）', () => {
     expect(source).not.toContain('quickCreate');
     expect(source).not.toContain('localStorage');
     expect(source).not.toContain('home-quick');
+  });
+});
+
+/**
+ * 首页美工第三版（10-16 用户看过手机 / 电脑截图后的 4 项要求）。
+ *
+ * 这一版改的全是「一眼能看出好坏、但 SSR 渲染里根本看不见」的东西，所以下面四条基本
+ * 都是读样式源码的**接线守卫**（注释里逐条写明它守的是哪次返工），只有标题那条能拿到 DOM。
+ */
+describe('HomeView 美工第三版（10-16）', () => {
+  it('标题换成 AI 贴纸字图，不再退回 CSS 逐字描边；图是装饰性的', async () => {
+    const html = await renderHome();
+    // 贴纸是 aria-hidden 的空 span（靠背景图上色）：不带 aria-hidden 的话，
+    // 读屏会把「进入大富翁」念两遍。
+    expect(html).toMatch(/<span[^>]*home-sticker__logo[^>]*aria-hidden="true"/);
+    // 也钉住它没有退回 img 标签：模板里的根绝对路径会被 transformAssetUrls 改写
+    // （实测 /home-logo.webp 变成 /@fs/home-logo.webp，public/ 资源必须走 CSS 的 url()）。
+    expect(html).not.toContain('<img');
+
+    const source = readFileSync(resolve(here, 'HomeView.vue'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    // 位图挂在 CSS 里，且不许退回逐字换色 + text-stroke 的旧实现（留了就是两套标题叠在一起）。
+    expect(source).toContain("url('/home-logo.webp')");
+    expect(source).not.toContain('home-sticker__char');
+    expect(source).not.toContain('-webkit-text-stroke');
+  });
+
+  it('已按用户要求删掉「用 6 位房间码…」那句', async () => {
+    const html = await renderHome();
+    expect(html).not.toContain('用 6 位房间码');
+    expect(html).not.toContain('class="home-copy"');
+  });
+
+  it('整页内容顶部对齐、横向居中（是 align-content，不是 place-items）', () => {
+    // 守的是一次真实返工：只把 place-items 的 align 改成 start，两行（卡片 / 页脚）的行高
+    // 会被默认的 stretch 撑满整个视口，卡片与页脚被撕到上下两端 —— 必须是 align-content: start。
+    const source = readFileSync(resolve(here, 'HomeView.vue'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+
+    const shell = /\.home-shell\s*\{([^}]*)\}/.exec(source);
+    if (shell === null) throw new Error('首页应当有 .home-shell 规则');
+    expect(shell[1]).toContain('align-content: start');
+    expect(shell[1]).not.toContain('place-items: center');
+
+    // hero 从「左对齐」改成「居中」正是用户说的「上部居中」。
+    const hero = /\.home-hero\s*\{([^}]*)\}/.exec(source);
+    if (hero === null) throw new Error('首页应当有 .home-hero 规则');
+    expect(hero[1]).toContain('justify-items: center');
+  });
+
+  it('两个模式按钮改成渐变 + 深色底边的厚贴纸按钮，且色值由主题变量推导', () => {
+    const source = readFileSync(resolve(here, 'HomeView.vue'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+
+    for (const mode of ['online', 'local']) {
+      const rule = new RegExp('\\.home-main--' + mode + '\\s*\\{([^}]*)\\}').exec(source);
+      if (rule === null) throw new Error('首页应当有 .home-main--' + mode + ' 规则');
+      // 上亮下深的同色渐变，取代原来那句 background: var(--mode-*) 的平涂。
+      expect(rule[1]).toContain('linear-gradient');
+      expect(rule[1]).toContain('color-mix(in srgb, var(--mode-' + mode + ')');
+      // 底边色也必须是推导出来的：深色模式下 --mode-* 会被提亮，硬编码就跟不上。
+      expect(rule[1]).toContain('--mode-deep');
+    }
+
+    // 按下时下沉（贴纸被按下去的手感），且禁用态不许留底边（留着像「还能按」）。
+    expect(source).toContain('translateY(3px)');
+    const disabled = /\.home-main:disabled\s*\{([^}]*)\}/.exec(source);
+    if (disabled === null) throw new Error('首页应当有 .home-main:disabled 规则');
+    expect(disabled[1]).toContain('box-shadow: none');
+  });
+
+  it('竖屏换用竖版底图（横版 3:2 在手机上只剩中间一条）', () => {
+    // 读样式源码而非渲染结果：SSR 拿不到媒体查询求值后的背景图。
+    // 守的是一次真实返工 —— 只出横版时，390x844 上只露出约 31% 宽度，两侧的山全被裁掉。
+    const source = readFileSync(resolve(here, 'HomeView.vue'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    // 两条一起断言：默认横版 + 竖屏覆盖成竖版，少任何一条都不成立。
+    expect(source).toContain("--home-bg: url('/home-bg.webp')");
+    expect(source).toMatch(/@media\s*\(max-aspect-ratio[^{]*\{[^}]*url\('\/home-bg-portrait\.webp'\)/);
+  });
+
+  it('三张首页位图都登记进了 sw.js 的 SHELL，文件也真的在 public/ 下', () => {
+    // 这条守的是一个**只在离线首访才暴露**的坑：extractAssetUrls 只抽 .js / .css，
+    // 图片不会自动进预缓存 —— 忘了登记，线上在线访问看不出任何异常，离线首访却只有空壳。
+    const publicDir = resolve(here, '../../public');
+    const sw = readFileSync(resolve(publicDir, 'sw.js'), 'utf8');
+    const source = readFileSync(resolve(here, 'HomeView.vue'), 'utf8');
+
+    for (const asset of ['/home-bg.webp', '/home-logo.webp', '/home-bg-portrait.webp']) {
+      expect(source).toContain(asset);
+      expect(sw).toContain("'" + asset + "'");
+      expect(existsSync(resolve(publicDir, asset.slice(1)))).toBe(true);
+    }
   });
 });

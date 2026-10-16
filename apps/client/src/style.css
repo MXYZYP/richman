@@ -71,6 +71,14 @@
   --mode-online: #9C3A2A;
   --mode-local: #2F8F5B;
 
+  /* 首页背景插画上的一层（图是 apps/client/public/home-bg.webp）。
+     浅色用暖白柔光把中央留白提亮，卡片与文字压在图上也读得清；
+     深色换一套暗幕（ui/darkMode.css）—— 首页因此不必写 appearance 分支。
+     注意：.home-scene 直接引用本变量，值必须存在，否则整条 background-image 失效。 */
+  --home-scrim:
+    radial-gradient(1100px 640px at 50% 6%, rgb(255 252 243 / 72%), transparent 74%),
+    linear-gradient(180deg, rgb(255 252 243 / 14%), rgb(255 252 243 / 46%));
+
   /* 连接横幅：重连中 琥珀警示；断开 红警（暖纸底，非纯色块）*/
   --color-warning: #B7791F;
   --banner-warning-bg: #fdf1d8;
