@@ -97,7 +97,8 @@ function closeFromBackdrop(event: MouseEvent): void {
   background: transparent;
   color: var(--color-primary);
   font: inherit;
-  font-size: 12px;
+  /* 10-16 首页页脚反馈「更新说明颜色太浅」⇒ 提到与备案号同一档 13px（原来 12px）。 */
+  font-size: 13px;
   font-weight: 900;
   text-decoration: underline;
   text-underline-offset: 3px;

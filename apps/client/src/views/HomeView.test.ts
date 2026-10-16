@@ -52,30 +52,62 @@ describe('HomeView 三条次要入口（#109 / #115 / #117）', () => {
 
     expect(row.match(/class="home-guide"/g)?.length).toBe(3);
   });
+
+  it('三条入口等宽铺满一行，不再退回折行的 2+1', () => {
+    // 读样式源码而非渲染结果：SSR 拿不到计算后的布局，这里只能守规则本身。
+    // 守的是一次真实返工 —— 原先折行排成 2+1，第二行孤零一条、行距对不齐（10-16 用户截图指出）。
+    const source = readFileSync(resolve(here, 'HomeView.vue'), 'utf8')
+      // 先剥注释：注释里写了 "flex" 会被自己的检测先读到（谎话守卫比没守卫更糟）。
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    const rule = /\.home-entry-row\s*\{([^}]*)\}/.exec(source);
+    if (rule === null) throw new Error('首页应当有 .home-entry-row 规则');
+    expect(rule[1]).toContain('repeat(3');
+    expect(rule[1]).not.toContain('flex');
+  });
 });
 
 /**
  * 成果图标区（《UI 改造方案》§四）。
  *
  * 这一段替掉了原先摊在首页的「我的战绩」一整块 + 成就折叠块 + 云同步一整块 + 排行榜列表。
- * 两条要害：
+ * 三条要害：
  *  1. 四个图标**不依赖本机存储** —— 它们是导航，不是数据。原先那排图标带 `v-if="playerStats"`，
  *     浏览器不给 localStorage 时整排消失，等于把入口一起藏了。
  *  2. 明细字符不许再出现在首页：那正是这次改造要拿掉的东西。
+ *  3. 图标是**纯图标**（10-16 用户拍板）：没有可见文字，名字只能落在 aria-label / title 上。
+ *     这条必须钉死 —— 去掉文字时很容易顺手把名字也去掉，那就真成了四个看不懂的图形。
  */
 describe('HomeView 成果图标区（《UI 改造方案》§四）', () => {
-  it('一排四个图标，各有可读的名字，排在三条次要入口之后', async () => {
+  it('一排四个纯图标按钮，名字落在 aria-label / title 上，排在三条次要入口之后', async () => {
     const html = await renderHome();
     const start = html.indexOf('class="home-icon-row"');
     expect(start).toBeGreaterThan(-1);
 
-    const row = html.slice(start, html.indexOf('class="home-icon-hint"'));
+    const row = html.slice(start, html.indexOf('</nav>'));
     expect(row.match(/class="home-icon"/g)?.length).toBe(4);
     for (const label of ['战绩', '成就', '云同步', '排行榜']) {
-      // <em> 会被 scoped CSS 追加 data-v-xxx 属性，精确串匹配抓不到，只能按标签体断言。
-      expect(row).toMatch(new RegExp(`<em[^>]*>${label}</em>`));
+      expect(row).toMatch(new RegExp(`aria-label="${label}"`));
+      expect(row).toMatch(new RegExp(`title="${label}"`));
     }
+    // 反面：可见标签不许再出现 —— 又长回文字就是回退了本次改版。
+    expect(row).not.toMatch(/<em[^>]*>(战绩|成就|云同步|排行榜)<\/em>/);
     expect(start).toBeGreaterThan(html.indexOf('class="home-entry-row"'));
+  });
+
+  it('图标列贴在左上角，且不再挂在卡片里（挂在卡片里只会绕卡片排）', () => {
+    // 读样式源码而非渲染结果：SSR 给不出计算后的位置。
+    // 守的是一次真实返工 —— 图标原来在卡片底部一排，第二版改成参考图那种左上角竖列。
+    const source = readFileSync(resolve(here, 'HomeView.vue'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rule = /\.home-icon-row\s*\{([^}]*)\}/.exec(source);
+    if (rule === null) throw new Error('首页应当有 .home-icon-row 规则');
+    expect(rule[1]).toContain('position: absolute');
+    expect(rule[1]).toContain('top:');
+    expect(rule[1]).toContain('left:');
+
+    // 卡片自带 position:relative —— 图标列留在卡片里就只会相对卡片定位，贴不到屏幕角上。
+    const card = /<section class="home-card"[\s\S]*?\n    <\/section>/.exec(source);
+    if (card === null) throw new Error('首页应当有 .home-card 区块');
+    expect(card[0]).not.toContain('home-icon-row');
   });
 
   it('不读本机存储：浏览器不给 localStorage 时四个图标照样在', async () => {
@@ -138,6 +170,20 @@ describe('HomeView 首页场景化（P1）', () => {
     // 各带一行同样字数的副行 ⇒ 高度不参差（「等宽」这条承诺的等高半边）。
     expect(html).toContain('开房 / 加入');
     expect(html).toContain('无需联网');
+  });
+
+  it('标题下的角标不写死任何一张地图，也不许空着', async () => {
+    const html = await renderHome();
+    const sub = /<p class="home-sticker__sub"[^>]*>([\s\S]*?)<\/p>/.exec(html);
+    if (sub === null) throw new Error('首页应当有标题下的角标');
+    const text = sub[1].replace(/<[^>]+>/g, '').trim();
+
+    expect(text.length).toBeGreaterThan(0);
+    // 10-16 用户原话：「换个说法，我又不是只有这一个地图」——
+    // 角标一旦等于某张地图的名字，就又在暗示「只有这一张」。
+    for (const mapName of ['中国之旅', '世界名城', '丝路', '三国', '山西', '运城']) {
+      expect(text).not.toContain(mapName);
+    }
   });
 
   /**

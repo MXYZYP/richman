@@ -97,7 +97,7 @@ const emit = defineEmits<{
              前导「进入」用视觉隐藏保留在无障碍名里，所以标题的可访问名仍是「进入大富翁」
              （e2e 的 heading 定位依赖它），眼睛看到的只有贴纸「大富翁」。 -->
         <h1 id="home-title" class="home-sticker"><span class="home-sticker__lead">进入</span><span class="home-sticker__char">大</span><span class="home-sticker__char">富</span><span class="home-sticker__char">翁</span></h1>
-        <p class="home-sticker__sub">中国之旅</p>
+        <p class="home-sticker__sub">掷骰 · 买地 · 收租</p>
         <p class="home-copy">用 6 位房间码和好友同桌，或单机游玩开一局。手机、电脑浏览器皆可。</p>
         <!-- 两个等宽主按钮、两种色、地位对等：在线=朱砂，单机=竹青。
              刻意不用 --color-pay / --color-gain 给模式上色 —— 那两个是「钱在动」的语义色。
@@ -127,29 +127,26 @@ const emit = defineEmits<{
         <button type="button" class="home-guide" @click="emit('openWorkshop')">自己画了图？地图工坊</button>
       </div>
 
-      <!-- 成果图标区（《UI 改造方案》§四）：首页只承担「看得见、点得到」，明细一律往后放。
-           原本摊在这里的是「我的战绩」一整块 + 成就折叠块 + 云同步一整块 + 排行榜一长串列表，
-           首页高度要滚三屏；收成一行 4 个图标后一屏放得下。 -->
-      <nav class="home-icon-row" aria-label="我的记录">
-        <button type="button" class="home-icon" @click="emit('navigate', 'stats')">
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 17V10M11 17V4M18 17v-5" /></svg>
-          <em>战绩</em>
-        </button>
-        <button type="button" class="home-icon" @click="emit('navigate', 'achievements')">
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7.5 4h7v4.5a3.5 3.5 0 0 1-7 0V4Z" /><path d="M7.5 5.5H5v1.8a2.5 2.5 0 0 0 2.5 2.5" /><path d="M14.5 5.5H17v1.8a2.5 2.5 0 0 1-2.5 2.5" /><path d="M11 12v3.2M8 18.5h6M9.3 18.5v-3.3h3.4v3.3" /></svg>
-          <em>成就</em>
-        </button>
-        <button type="button" class="home-icon" @click="emit('navigate', 'cloud')">
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6.6 15.5h8.8a3.1 3.1 0 0 0 .2-6.2A4.6 4.6 0 0 0 6.9 9.6a3 3 0 0 0-.3 5.9Z" /><path d="M11 12.4v-2.6M9.7 11l1.3-1.3 1.3 1.3" /></svg>
-          <em>云同步</em>
-        </button>
-        <button type="button" class="home-icon" @click="emit('navigate', 'leaderboard')">
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 6.5h14M4 11h14M4 15.5h9" /></svg>
-          <em>排行榜</em>
-        </button>
-      </nav>
-      <p class="home-icon-hint">点任一图标进入对应详情页</p>
     </section>
+
+    <!-- 图标列（《UI 改造方案》§四，10-16 第二版）：不写可见文字、不做角标数字，
+         位置照参考图贴在屏幕左上角竖排。aria-label 与 title 都给了 —— 纯图标按钮的名字
+         只剩这两条去路，去掉就真的只是四个看不懂的图形。
+         位置由 CSS 绝对定位决定；源码顺序排在卡片之后，是为了保住「先主操作、后元信息」的读写顺序。 -->
+    <nav class="home-icon-row" aria-label="我的记录">
+      <button type="button" class="home-icon" aria-label="战绩" title="战绩" @click="emit('navigate', 'stats')">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 17V10M11 17V4M18 17v-5" /></svg>
+      </button>
+      <button type="button" class="home-icon" aria-label="成就" title="成就" @click="emit('navigate', 'achievements')">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7.5 4h7v4.5a3.5 3.5 0 0 1-7 0V4Z" /><path d="M7.5 5.5H5v1.8a2.5 2.5 0 0 0 2.5 2.5" /><path d="M14.5 5.5H17v1.8a2.5 2.5 0 0 1-2.5 2.5" /><path d="M11 12v3.2M8 18.5h6M9.3 18.5v-3.3h3.4v3.3" /></svg>
+      </button>
+      <button type="button" class="home-icon" aria-label="云同步" title="云同步" @click="emit('navigate', 'cloud')">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6.6 15.5h8.8a3.1 3.1 0 0 0 .2-6.2A4.6 4.6 0 0 0 6.9 9.6a3 3 0 0 0-.3 5.9Z" /><path d="M11 12.4v-2.6M9.7 11l1.3-1.3 1.3 1.3" /></svg>
+      </button>
+      <button type="button" class="home-icon" aria-label="排行榜" title="排行榜" @click="emit('navigate', 'leaderboard')">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 6.5h14M4 11h14M4 15.5h9" /></svg>
+      </button>
+    </nav>
 
     <footer class="home-beian">
       <!-- 更新说明入口：首页必须能看到当前版本并打开更新历史（组件自带触发按钮 + 弹层）。 -->
@@ -166,6 +163,9 @@ const emit = defineEmits<{
      安全区：index.html 开了 viewport-fit=cover，内容会延伸到刘海/圆角区域，
      故四边都要让出 inset，否则底部按钮会被 Home 指示条压住。*/
   position: relative;
+  /* 图标列的边长。窄屏那段要按「4 个图标 + 3 个间距 + 上边距」算出卡片该让出的高度，
+     所以尺寸必须落在一个变量上，不能散在 .home-icon 里写死。 */
+  --home-icon-size: clamp(40px, 11vw, 48px);
   min-height: 100vh;
   min-height: 100dvh;
   display: grid;
@@ -182,7 +182,8 @@ const emit = defineEmits<{
   z-index: 1;
   width: min(560px, 100%);
   display: grid;
-  gap: 18px;
+  /* 块间距随屏宽微调：折叠屏外屏（~320px）上省下的这几点高度，正好够首屏不被裁。 */
+  gap: clamp(14px, 2.4vw, 18px);
   padding: clamp(20px, 4vw, 34px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
@@ -220,23 +221,29 @@ const emit = defineEmits<{
 
 /* 玩法说明入口（#109）：次要动作，所以是描边胶囊而不是实心主按钮。 */
 .home-entry-row {
-  /* 三条入口并列，窄屏自动折行；整行仍靠左，保持与标题对齐。 */
-  display: flex;
-  flex-wrap: wrap;
+  /* 三条入口**等宽铺满一行**（10-16 用户：「间距调整一下」）。
+     原来是 wrap 折行：卡片只有 560px，三条长标签会折成 2+1 —— 第二行孤零一条，
+     行距也和上一行对不齐，看着像没排完。换成三列 grid 后一行排满、间距统一、三条等高
+     （长句在窄屏内折成两行时由 grid 行拉伸对齐，不会参差）。
+     窄屏不插新断点，靠下面 .home-guide 的 clamp 字号自适应。 */
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  justify-self: start;
 }
 
 .home-guide {
-  justify-self: start;
-  min-height: 36px;
-  padding-inline: 14px;
+  min-height: 38px;
+  padding: 6px 8px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: transparent;
   color: var(--color-muted);
-  font-size: 13px;
+  /* 13px 随屏宽缩到 11px：320px 的折叠屏外屏也能一行塞下三条。 */
+  font-size: clamp(11px, 2.6vw, 13px);
+  line-height: 1.25;
   font-weight: 700;
+  text-align: center;
+  white-space: normal;
   cursor: pointer;
 }
 
@@ -246,8 +253,9 @@ const emit = defineEmits<{
 
 .home-beian {
   margin: 14px 0 0;
-  font-size: 12px;
-  color: var(--color-muted);
+  /* 原来是 12px + --color-muted(#6B6658)，用户反馈「颜色太浅」⇒ 换正文色 并加大一号。 */
+  font-size: 13px;
+  color: var(--color-text);
   text-align: center;
   letter-spacing: 0.02em;
 }
@@ -310,6 +318,12 @@ const emit = defineEmits<{
   display: block;
   width: 100%;
   height: 100%;
+  /* 电脑（16:9）适配：viewBox 是竖幅 400×800，slice 在 1920×1080 上要放大 4.8 倍 ——
+     只剩中间一条、骰子被放到近半屏大。封一个最大宽度把放大倍数压回约 3 倍；
+     让出来的两侧由 .home-scene 的径向渐变兜住，不会出现空白块。
+     屏宽 < 1180px（手机 / 平板 / 折叠屏）完全不受影响。 */
+  max-width: 1180px;
+  margin-inline: auto;
 }
 
 .scene-sheet { fill: var(--board-surface); opacity: 0.9; }
@@ -394,15 +408,20 @@ const emit = defineEmits<{
   border: 0;
 }
 
+/* 标题下的角标。10-16 用户：「换个说法，我又不是只有这一个地图」
+   —— 于是不再写任何地图名，改成三个字一组的**玩法动作**（掷骰 → 买地 → 收租），
+   跟参考图里「整理装备 · 清洁房屋 · 扩张车队」是同一种句式：一句话说清这游戏在干嘛。 */
 .home-sticker__sub {
   margin: 4px 0 0;
-  padding: 3px 16px;
+  padding: 4px 14px;
+  max-width: 100%;
   border-radius: var(--radius-chip);
   background: var(--color-primary);
   color: #fff4ec;
-  font-size: 12px;
+  /* 字距从 0.32em 收到 0.16em：字符数从 4 个涨到 11 个，原字距会把卡片顶破。 */
+  font-size: 12.5px;
   font-weight: 800;
-  letter-spacing: 0.32em;
+  letter-spacing: 0.16em;
   transform: rotate(-1.5deg);
 }
 
@@ -452,49 +471,64 @@ const emit = defineEmits<{
 
 /* ---- 成果图标区（《UI 改造方案》§四）---- */
 /* 替掉了原先把战绩 / 成就 / 云同步 / 排行榜全摊在首页的写法：明细全部搬进详情页，
-   首页只留这四个入口。四个等宽，视线一行扫完。 */
+   首页只留这四个入口。10-16 第二版：位置照参考图挪到**屏幕左上角竖排**。 */
 .home-icon-row {
+  /* 挂在 .home-shell 下（**不能留在卡片里**）：卡片自带 position:relative，留在里面
+     就只会相对卡片定位，永远贴不到屏幕角上。这里靠绝对定位脱离网格居中。 */
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  z-index: 2;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  justify-items: center;
+  gap: 10px;
 }
 
 .home-icon {
   display: grid;
-  justify-items: center;
-  gap: 6px;
-  min-height: 62px;
-  padding: 10px 4px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  background: var(--surface-raised);
-  color: var(--color-primary);
+  place-items: center;
+  /* 照参考图做「白圆片 + 彩色图标 + 柔和投影」，取代原来的等宽描边卡片。 */
+  width: var(--home-icon-size);
+  height: var(--home-icon-size);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-cell);
+  box-shadow: 0 2px 8px rgb(53 39 20 / 18%);
   cursor: pointer;
 }
 
+/* 四个图标各一色。取的都是主题里已有的语义色，不引硬编码字面量：
+   战绩=朱砂 · 成就=点缀金 · 云同步=竹青 · 排行榜=琥珀。 */
+.home-icon:nth-child(1) { color: var(--color-primary); }
+.home-icon:nth-child(2) { color: var(--color-accent); }
+.home-icon:nth-child(3) { color: var(--color-gain); }
+.home-icon:nth-child(4) { color: var(--color-warning); }
+
 .home-icon:hover {
-  border-color: var(--color-accent);
-  color: var(--title-color);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgb(53 39 20 / 26%);
 }
 
-.home-icon em {
-  /* 中文标签用 <em> 会被浏览器写成斜体，这里按设计稿保持正体。 */
-  font-style: normal;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: var(--color-text);
-}
-
-.home-icon-hint {
-  margin: 0;
-  color: var(--color-muted);
-  font-size: 12px;
-  text-align: center;
+.home-icon svg {
+  /* 图标紧跟按钮尺寸；描边从属性里的 1.5 提到 2 —— 小尺寸压在浅底上，1.5 会发灰。 */
+  width: clamp(20px, 5vw, 24px);
+  height: clamp(20px, 5vw, 24px);
+  stroke-width: 2;
 }
 
 /* 窄屏：场景底压不住内容，亮一点。 */
 @media (max-width: 1024px) {
   .home-scene { opacity: 0.9; }
+}
+
+/* 更窄的屏：卡片按 100% 撑满，横向上必然与左上角那一列图标相交
+   ⇒ 给 shell 让出「4 个图标 + 3 个间距 + 上下留白」的高度，图标留在左上角、卡片整体下移。
+   阈值 700px 是算出来的不是拍的：卡片最宽 560px + 图标列约 62px × 2 侧 ≈ 684px，取 700 留余量。
+   比这更宽的屏卡片居中、横向根本碰不到这一列，不必白占这段高度。 */
+@media (max-width: 700px) {
+  .home-shell {
+    padding-top: calc(var(--home-icon-size) * 4 + 30px + 28px);
+  }
 }
 </style>
