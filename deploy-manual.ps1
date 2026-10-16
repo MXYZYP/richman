@@ -412,6 +412,11 @@ $files = @(
   # not sw.js leaves the worker serving stale chunks: the feature is in dist/assets yet
   # invisible in the page, and a hard reload does not help.
   "apps/client/src/ui/serviceWorkerCache.test.ts",
+  # Guards the structure of ui/gameTheme.css. Four skin blocks were once missing their
+  # closing brace (16 `{` vs 12 `}`), which nested every later block inside the previous
+  # one: midnight/forest/sand matched nothing, and the trailing
+  # @media (prefers-reduced-motion) block took the 260ms dialog entrance with it.
+  "apps/client/src/ui/themeFileIntegrity.test.ts",
   "apps/client/src/audio/sfx.test.ts",
   "apps/client/src/audio/bgm.test.ts",
   # Tests added by the third batch: turn clock (#107), public room list (#108),

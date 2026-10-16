@@ -604,6 +604,26 @@ async function publishMyStats(): Promise<void> {
   };
 }
 
+// ───────────── 首页场景的页内跳转（P1 视觉升级） ─────────────
+// hero 的两个主按钮与左上图标栈都指向页内已有的区块，不新增任何「只有首页才有」的入口。
+// 联机需要先填昵称与房间码，所以「在线联网对战」把玩家送到表单并聚焦第一个输入框。
+function jumpTo(id: string): void {
+  const target = document.getElementById(id);
+  if (target !== null) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function jumpToOnlineForm(): void {
+  const form = document.getElementById('home-form');
+  if (form === null) return;
+  form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const first = form.querySelector('input');
+  if (first instanceof HTMLInputElement) first.focus({ preventScroll: true });
+}
+
+/** 成就角标数字：0 时不渲染角标（一排「0」比没有更吵）。 */
+const unlockedAchievements = computed(() => achievementSummary.value?.unlockedCount ?? 0);
+const totalAchievements = computed(() => achievementSummary.value?.total ?? 0);
+
 onMounted(() => {
   void refreshLeaderboard();
 });
@@ -611,10 +631,94 @@ onMounted(() => {
 
 <template>
   <main class="home-shell">
+    <!-- 首页场景（纯 CSS + 内联 SVG 绘制，无外链图片）：一张摊开的桌面 ——
+         纸面、虚线棋路、两枚骰子、三枚棋子、一只茶盏、一方印章。
+         全部由 CSS 变量上色，所以深色模式自动跟着变；整块 aria-hidden，不参与无障碍树。 -->
+    <div class="home-scene" aria-hidden="true">
+      <svg class="home-scene__art" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice" focusable="false">
+        <rect class="scene-sheet" x="26" y="118" width="348" height="566" rx="20" transform="rotate(-4 200 400)" />
+        <path class="scene-route" d="M74 300H330V432H74V566H330" />
+        <g class="scene-tile">
+          <rect x="58" y="286" width="48" height="24" rx="6" />
+          <rect x="124" y="286" width="48" height="24" rx="6" />
+          <rect x="282" y="418" width="48" height="24" rx="6" />
+          <rect x="58" y="552" width="48" height="24" rx="6" />
+          <rect x="282" y="552" width="48" height="24" rx="6" />
+        </g>
+        <g class="scene-dice" transform="rotate(-14 100 200)">
+          <rect x="72" y="172" width="56" height="56" rx="14" />
+          <circle cx="89" cy="189" r="5" />
+          <circle cx="111" cy="211" r="5" />
+          <circle cx="100" cy="200" r="5" />
+        </g>
+        <g class="scene-dice" transform="rotate(11 306 218)">
+          <rect x="278" y="190" width="56" height="56" rx="14" />
+          <circle cx="295" cy="207" r="5" />
+          <circle cx="317" cy="207" r="5" />
+          <circle cx="295" cy="229" r="5" />
+          <circle cx="317" cy="229" r="5" />
+        </g>
+        <g class="scene-pawn">
+          <g transform="translate(118 648)">
+            <circle cx="0" cy="-18" r="12" />
+            <path d="M-15 18C-15 0-8-9 0-9s15 9 15 27z" />
+          </g>
+          <g transform="translate(192 678)">
+            <circle cx="0" cy="-18" r="12" />
+            <path d="M-15 18C-15 0-8-9 0-9s15 9 15 27z" />
+          </g>
+          <g transform="translate(262 640)">
+            <circle cx="0" cy="-18" r="12" />
+            <path d="M-15 18C-15 0-8-9 0-9s15 9 15 27z" />
+          </g>
+        </g>
+        <g class="scene-cup" transform="rotate(-8 330 712)">
+          <path d="M298 684h60l-8 42h-44z" />
+          <path d="M358 690c19 0 19 24 0 24" />
+        </g>
+        <g class="scene-stamp" transform="translate(76 730)">
+          <circle cx="0" cy="0" r="30" />
+          <path d="M-13-13 13 13M13-13-13 13" />
+        </g>
+      </svg>
+    </div>
     <section class="home-card" aria-labelledby="home-title">
-      <p class="home-eyebrow">联机对战 · 单机游玩</p>
-      <h1 id="home-title">进入大富翁</h1>
-      <p class="home-copy">用 6 位房间码和好友同桌，或单机游玩开一局。手机、电脑浏览器皆可。</p>
+      <nav v-if="playerStats" class="home-quick" aria-label="我的记录">
+        <button type="button" class="home-quick__btn" aria-label="玩法说明" @click="emit('openGuide')">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 7c-1.6-1.6-3.7-2.2-8-2.2v12.4c4.3 0 6.4.6 8 2.2 1.6-1.6 3.7-2.2 8-2.2V4.8c-4.3 0-6.4.6-8 2.2z" /><path d="M12 7v12.4" /></svg>
+        </button>
+        <button type="button" class="home-quick__btn" :aria-label="`我的战绩（${playerStats.gamesPlayed} 局）`" @click="jumpTo('stats-section')">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="5" y="4" width="14" height="16" rx="2.5" /><path d="M9 9.5h6" /><path d="M9 14h6" /></svg>
+        </button>
+        <button type="button" class="home-quick__btn" :aria-label="`成就 ${unlockedAchievements} / ${totalAchievements}`" @click="jumpTo('achievements')">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 4h8v5a4 4 0 0 1-8 0z" /><path d="M8 5.5H5.5A2.6 2.6 0 0 0 8 10" /><path d="M16 5.5h2.5A2.6 2.6 0 0 1 16 10" /><path d="M12 13v4" /><path d="M9 20h6" /></svg>
+          <span v-if="unlockedAchievements > 0" class="home-quick__badge">{{ unlockedAchievements }}</span>
+        </button>
+        <button type="button" class="home-quick__btn" aria-label="成就排行榜" @click="jumpTo('leaderboard')">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 20v-8" /><path d="M12 20V4.5" /><path d="M19 20v-5" /><path d="M3 20h18" /></svg>
+        </button>
+      </nav>
+      <header class="home-hero">
+        <p class="home-eyebrow">纸上中国 · 一局走遍山河</p>
+        <!-- 贴纸化标题（参考《完美清洁公司》的 Logo 手法）：逐字换色 + 粗描边 + 微旋转。
+             前导「进入」用视觉隐藏保留在无障碍名里，所以标题的可访问名仍是「进入大富翁」
+             （e2e 的 heading 定位依赖它），眼睛看到的只有贴纸「大富翁」。 -->
+        <h1 id="home-title" class="home-sticker"><span class="home-sticker__lead">进入</span><span class="home-sticker__char">大</span><span class="home-sticker__char">富</span><span class="home-sticker__char">翁</span></h1>
+        <p class="home-sticker__sub">中国之旅</p>
+        <p class="home-copy">用 6 位房间码和好友同桌，或单机游玩开一局。手机、电脑浏览器皆可。</p>
+        <!-- 两个等宽主按钮、两种色、地位对等：在线=朱砂，单机=竹青。
+             刻意不用 --color-pay / --color-gain 给模式上色 —— 那两个是「钱在动」的语义色。
+             「在线联网对战」把玩家送到下面的表单并聚焦昵称：联机本来就需要昵称与房间码，
+             伪造一个不存在的「一键开房」反而更让人困惑。 -->
+        <div class="home-main-actions">
+          <button type="button" class="home-main home-main--online" :disabled="submitting" @click="jumpToOnlineForm">
+            在线联网对战
+          </button>
+          <button type="button" class="home-main home-main--local" :disabled="submitting" @click="submitLocal">
+            单机模式
+          </button>
+        </div>
+      </header>
 
       <!-- 玩法说明入口（#109）：首次进站会自动弹一次；这里是「想重看」或「没看到那次弹窗」的兜底。
            放在标题正下方，是想看说明的人一眼就能找到，不必先滚到页脚。
@@ -705,7 +809,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-if="playerStats" class="player-stats" aria-labelledby="stats-title">
+      <section v-if="playerStats" id="stats-section" class="player-stats" aria-labelledby="stats-title">
         <h2 id="stats-title">我的战绩</h2>
         <dl class="stats-grid">
           <div class="stats-cell">
@@ -726,7 +830,7 @@ onMounted(() => {
              做成下拉块 —— 收起时只留一行「成就 X / Y」，不占主屏；展开才铺三组明细。
              用 <details> 而不是 v-if：明细始终留在 DOM 里，折叠只是视觉收起，
              因此展开不会有「先空一下再填」的跳动，也不需要额外状态。 -->
-        <details v-if="achievementSummary" class="achievements">
+        <details v-if="achievementSummary" id="achievements" class="achievements">
           <summary class="achievements-summary">
             <strong>成就 {{ achievementSummary.unlockedCount }} / {{ achievementSummary.total }}</strong>
             <span class="achievements-toggle" aria-hidden="true"></span>
@@ -868,7 +972,7 @@ onMounted(() => {
 
       <!-- 排行榜（#116）。刻意不在这里写长注释：SSR 的开发构建会把模板注释原样输出，
            把说明放回脚本里，页面产物就只剩真正要渲染的内容。 -->
-      <section v-if="playerStats" class="leaderboard" aria-labelledby="leaderboard-title">
+      <section v-if="playerStats" id="leaderboard" class="leaderboard" aria-labelledby="leaderboard-title">
         <div class="leaderboard-head">
           <h2 id="leaderboard-title">成就排行榜</h2>
           <div class="leaderboard-actions">
@@ -920,7 +1024,7 @@ onMounted(() => {
         </ol>
       </section>
 
-      <form class="home-form" @submit.prevent>
+      <form id="home-form" class="home-form" @submit.prevent>
         <label class="home-field">
           <span>你的昵称</span>
           <input
@@ -1108,6 +1212,7 @@ onMounted(() => {
      用 vh 会让内容高度与实际可视区脱节（对局页 .game-view 早已因此改为钉死视口）。
      安全区：index.html 开了 viewport-fit=cover，内容会延伸到刘海/圆角区域，
      故四边都要让出 inset，否则底部按钮会被 Home 指示条压住。*/
+  position: relative;
   min-height: 100vh;
   min-height: 100dvh;
   display: grid;
@@ -1120,6 +1225,8 @@ onMounted(() => {
 }
 
 .home-card {
+  position: relative;
+  z-index: 1;
   width: min(560px, 100%);
   display: grid;
   gap: 18px;
@@ -1161,15 +1268,17 @@ onMounted(() => {
 }
 
 .stats-cell dt {
-  font-size: 12px;
+  font-size: var(--text-l3-size);
+  font-weight: var(--text-l3-weight);
   color: var(--color-muted);
 }
 
 .stats-cell dd {
   margin: 0;
-  font-size: 20px;
-  font-weight: 700;
+  font-size: var(--text-l2-size);
+  font-weight: var(--text-l2-weight);
   color: var(--color-text);
+  font-variant-numeric: tabular-nums;
 }
 
 /* 战绩码（#102）：只在本机有存储时出现，导出与导入共用一套码框样式。 */
@@ -1199,7 +1308,7 @@ onMounted(() => {
   border: 0;
   border-radius: 14px;
   background: var(--color-primary);
-  color: var(--button-enabled-text);
+  color: #fff4ec;
   font-size: 0.95rem;
   font-weight: 900;
   cursor: pointer;
@@ -1244,7 +1353,7 @@ onMounted(() => {
 }
 
 .stats-transfer-notice--error {
-  color: var(--color-primary);
+  color: var(--color-pay);
 }
 /* ---- 云同步（#123）：与「战绩码」同格，但它是在线账号，因此独立成块。 ---- */
 .cloud-sync {
@@ -1359,7 +1468,7 @@ onMounted(() => {
 }
 
 .cloud-sync-notice--error {
-  color: var(--color-primary);
+  color: var(--color-pay);
 }
 
 
@@ -1561,7 +1670,7 @@ onMounted(() => {
 }
 
 .leaderboard-notice--error {
-  color: var(--color-primary);
+  color: var(--color-pay);
 }
 
 .leaderboard-me {
@@ -1643,11 +1752,10 @@ onMounted(() => {
   letter-spacing: 0.2em;
 }
 
+/* 字号由 .home-sticker__char 各自给出：贴纸逐字微旋转，字号必须落在字上才不会被旋转带歪。 */
 .home-card h1 {
   margin: 0;
-  color: var(--color-primary);
-  font-size: clamp(30px, 6vw, 48px);
-  line-height: 1;
+  color: var(--title-color);
 }
 
 .home-copy {
@@ -1686,7 +1794,7 @@ onMounted(() => {
   padding: 10px 12px;
   border-radius: 12px;
   background: var(--color-error-bg);
-  color: var(--color-primary);
+  color: var(--color-pay);
   font-weight: 900;
 }
 
@@ -1785,7 +1893,7 @@ onMounted(() => {
 }
 
 .home-card input[aria-invalid='true'] {
-  border-color: var(--color-primary);
+  border-color: var(--color-pay);
 }
 
 .home-card input:focus-visible,
@@ -1856,7 +1964,7 @@ onMounted(() => {
 }
 
 .home-hint.invalid {
-  color: var(--color-primary);
+  color: var(--color-pay);
   font-weight: 900;
 }
 
@@ -1904,7 +2012,7 @@ onMounted(() => {
 .home-resume-button {
   padding-inline: 16px;
   background: var(--color-primary);
-  color: var(--button-enabled-text);
+  color: #fff4ec;
 }
 
 .home-resume-actions {
@@ -1926,7 +2034,7 @@ onMounted(() => {
 }
 
 .home-resume-note {
-  color: var(--color-primary);
+  color: var(--color-pay);
   font-weight: 900;
 }
 
@@ -1994,7 +2102,7 @@ onMounted(() => {
 }
 
 .home-rooms__notice--error {
-  color: var(--color-warning, #b45309);
+  color: var(--color-pay);
 }
 
 .home-rooms__list {
@@ -2116,5 +2224,213 @@ onMounted(() => {
   .home-shell {
     place-items: start center;
   }
+}
+
+/* ============ P1 首页场景化（视觉升级提案 §一、§三）============ */
+
+/* 场景层：铺满 shell 的「桌面」底。用全局变量上色 ⇒ 深色模式自动跟随，
+   不必写 :root[data-appearance] 分支。aria-hidden，且 pointer-events:none，不挡交互。 */
+.home-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgb(255 252 243 / 88%), transparent 70%),
+    radial-gradient(900px 620px at 10% 90%, rgb(226 214 188 / 62%), transparent 72%),
+    var(--board-bg);
+}
+
+.home-scene__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.scene-sheet { fill: var(--board-surface); opacity: 0.9; }
+
+.scene-route {
+  fill: none;
+  stroke: var(--branch-track);
+  stroke-width: 3;
+  stroke-dasharray: 10 11;
+  stroke-linecap: round;
+  opacity: 0.5;
+}
+
+.scene-tile rect { fill: var(--color-accent); opacity: 0.48; }
+
+.scene-dice rect {
+  fill: var(--board-surface);
+  stroke: var(--color-border);
+  stroke-width: 3;
+}
+
+.scene-dice circle { fill: var(--title-color); opacity: 0.7; }
+
+.scene-pawn circle,
+.scene-pawn path { fill: var(--color-primary); opacity: 0.5; }
+
+.scene-cup path {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 5;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+
+.scene-stamp circle,
+.scene-stamp path {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 6;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+
+/* 图标栈：桌面端竖排浮在场景左上角（参考《完美清洁公司》），
+   窄屏回到文档流变成一行 —— 否则它会压在卡片标题上。 */
+.home-quick {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: max(18px, env(safe-area-inset-top));
+  inset-inline-start: max(18px, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.home-quick__btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-chip);
+  background: var(--surface-raised);
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.home-quick__btn:hover { color: var(--title-color); }
+
+.home-quick__badge {
+  position: absolute;
+  inset-block-start: -5px;
+  inset-inline-end: -5px;
+  display: grid;
+  place-items: center;
+  min-width: 19px;
+  height: 19px;
+  padding-inline: 5px;
+  border-radius: 999px;
+  background: var(--color-gain);
+  color: #f3fbf5;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-hero {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+/* 贴纸标题：粗描边压在字的后面（paint-order: stroke fill），逐字换色 + 微旋转。 */
+.home-sticker {
+  display: flex;
+  gap: 0.03em;
+  margin: 2px 0 0;
+  line-height: 1;
+}
+
+.home-sticker__char {
+  font-size: clamp(46px, 12vw, 76px);
+  font-weight: 900;
+  line-height: 1;
+  color: #fff7e8;
+  -webkit-text-stroke: 9px var(--title-color);
+  paint-order: stroke fill;
+}
+
+.home-sticker__char:nth-child(2) { color: var(--color-accent); transform: rotate(-3deg) translateY(3px); }
+.home-sticker__char:nth-child(3) { transform: rotate(1.5deg) translateY(-3px); }
+.home-sticker__char:nth-child(4) { color: var(--color-accent); transform: rotate(-1deg) translateY(1px); }
+
+/* 视觉隐藏但仍留在无障碍名里：标题的可访问名 = 「进入」+ 贴纸三字 = 进入大富翁。 */
+.home-sticker__lead {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.home-sticker__sub {
+  margin: 4px 0 0;
+  padding: 3px 16px;
+  border-radius: var(--radius-chip);
+  background: var(--color-primary);
+  color: #fff4ec;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.32em;
+  transform: rotate(-1.5deg);
+}
+
+/* 两个等宽主按钮、上下相邻、两种色、地位对等（手法 3）。 */
+.home-main-actions {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.home-main {
+  min-height: 54px;
+  border: 0;
+  border-radius: var(--radius-control);
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.home-main--online { background: var(--mode-online); color: #fff4ec; }
+.home-main--local { background: var(--mode-local); color: #f1fbf4; }
+
+.home-main:disabled {
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
+  cursor: not-allowed;
+}
+
+/* ============ P2 视觉层次：卡片左色边 ============ */
+/* 一条左边条就把「这张卡属于哪一类」说完了，比再加一个标签便宜得多。 */
+.local-save-card { border-left: 4px solid var(--mode-local); }
+.home-rooms__item { border-left: 3px solid var(--color-primary); }
+.leaderboard-row { border-left: 3px solid var(--color-border); }
+.leaderboard-row-self { border-left-color: var(--color-accent); }
+
+.home-shell { row-gap: 10px; }
+
+/* 窄屏：图标栈回到文档流变成一行，靠左对齐；场景底也要更亮一点才压得住内容。 */
+@media (max-width: 1024px) {
+  .home-quick {
+    position: static;
+    flex-direction: row;
+    justify-self: start;
+  }
+
+  .home-scene { opacity: 0.9; }
 }
 </style>

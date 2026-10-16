@@ -386,3 +386,79 @@ describe('HomeView public room list', () => {
     expect(html).toContain('输入房间码可以直接加入好友的房');
   });
 });
+
+/**
+ * 首页场景化（P1 视觉升级）。
+ *
+ * 这一块盯的是一条**对外契约**：首页 <h1> 的可访问名必须是「进入大富翁」。
+ * 视觉上标题是逐字换色的贴纸「大富翁」，前导「进入」用视觉隐藏留在无障碍名里；
+ * e2e（e2e/smoke.local.spec.ts）正是用 `getByRole('heading', { name: '进入大富翁' })` 找它。
+ * 贴纸字之间多出一个**同一行内的空格**，可访问名就变成「进入大 富翁」，e2e 当场找不到标题
+ * （实测：注入该空格后本用例报 `expected '进入大 富翁' to be '进入大富翁'`）。
+ * 注意换行+缩进不算：Vue 的 whitespace:'condense' 会把含换行的纯空白节点整段删掉，
+ * 只有同排空格才真的落进可访问名。这类失败在本地 vitest 里看不见，所以在这里钉住。
+ */
+describe('HomeView 首页场景化（P1）', () => {
+  async function renderHomeHtml(): Promise<string> {
+    return renderToString(createSSRApp({ render: () => h(HomeView) }));
+  }
+
+  /** 用 stub 顶掉 localStorage，让依赖本机存储的区块真的渲染出来。 */
+  async function withStorage<T>(run: () => Promise<T>): Promise<T> {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+    const values = new Map<string, string>();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => { values.set(key, value); },
+        removeItem: (key: string) => { values.delete(key); },
+      },
+    });
+    try {
+      return await run();
+    } finally {
+      if (previous === undefined) Reflect.deleteProperty(globalThis, 'localStorage');
+      else Object.defineProperty(globalThis, 'localStorage', previous);
+    }
+  }
+
+  it('标题的可访问名是「进入大富翁」—— 贴纸字之间不能落进空白', async () => {
+    const html = await renderHomeHtml();
+    const match = /<h1[^>]*>([\s\S]*?)<\/h1>/.exec(html);
+    if (match === null) throw new Error('首页应当有一个 h1');
+    expect(match[1].replace(/<[^>]+>/g, '')).toBe('进入大富翁');
+  });
+
+  it('给出场景底与两个等宽双色主按钮', async () => {
+    const html = await renderHomeHtml();
+
+    // 场景是纯 CSS + 内联 SVG，必须 aria-hidden：装饰不进无障碍树，也不该被读屏念出来。
+    expect(html).toMatch(/<div class="home-scene" aria-hidden="true"/);
+    expect(html).toContain('class="home-scene__art"');
+
+    // 两个主按钮：在线 = 朱砂、单机 = 竹青，同宽同高（同一网格列）⇒ 地位对等。
+    expect(html).toContain('class="home-main home-main--online"');
+    expect(html).toContain('class="home-main home-main--local"');
+    expect(html).toContain('在线联网对战');
+    expect(html).toContain('单机模式');
+  });
+
+  it('有本机存储时图标栈出现，四个入口各有可读的名字', async () => {
+    const html = await withStorage(renderHomeHtml);
+    const start = html.indexOf('class="home-quick"');
+    expect(start).toBeGreaterThan(-1);
+    const stack = html.slice(start, html.indexOf('class="home-hero"'));
+
+    expect(stack.match(/class="home-quick__btn"/g)?.length).toBe(4);
+    expect(stack).toContain('aria-label="玩法说明"');
+    expect(stack).toContain('aria-label="成就排行榜"');
+  });
+
+  it('没有本机存储时图标栈整体消失 —— 它指向的战绩/成就/排行区块本来就不在', async () => {
+    Reflect.deleteProperty(globalThis, 'localStorage');
+    const html = await renderHomeHtml();
+
+    expect(html).not.toContain('class="home-quick"');
+  });
+});

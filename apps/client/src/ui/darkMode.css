@@ -62,6 +62,10 @@
   --button-disabled-bg: #2a3142;
   --button-disabled-text: #7886a0;
 
+  /* 玩法入口专属色在深底上要提亮，否则朱砂与竹青都会「沉」进背景 */
+  --mode-online: #d9694f;
+  --mode-local: #4fae7c;
+
   /* 连接横幅 */
   --color-warning: #e0a94a;
   --banner-warning-bg: #2f3550;

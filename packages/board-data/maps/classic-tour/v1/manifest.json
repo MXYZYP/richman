@@ -2,7 +2,7 @@
   "ref": {
     "id": "classic-tour",
     "version": 1,
-    "contentHash": "2e4549dc87124d1a2235632607472d894258af81d3ac3593b78b178574145cbf"
+    "contentHash": "8d132fb8b90e812d8e1494143ad6cc7a5e3ac671bbf3b27c390a07538cae5ca2"
   },
   "metadata": {
     "title": "世界名城",
@@ -1052,14 +1052,14 @@
         "center": "#eaf4f8"
       },
       "propertyBands": {
-        "band:feishu-d73a49": "#c0392b",
-        "band:feishu-1677ff": "#1f78d1",
-        "band:feishu-8e44ad": "#7d3cb5",
-        "band:feishu-1f5fbf": "#1659a8",
-        "band:feishu-e66a95": "#d4628f",
-        "band:feishu-2ea44f": "#2e9e6b",
-        "band:feishu-c2185b": "#b8324f",
-        "band:feishu-757575": "#6b7785",
+        "band:feishu-d73a49": "#B33A32",
+        "band:feishu-1677ff": "#4A5E8C",
+        "band:feishu-8e44ad": "#7B5E92",
+        "band:feishu-1f5fbf": "#3F6E7A",
+        "band:feishu-e66a95": "#B96A78",
+        "band:feishu-2ea44f": "#6E8F5A",
+        "band:feishu-c2185b": "#A6553F",
+        "band:feishu-757575": "#8A6A50",
         "band:station": "#3d5a73",
         "band:utility": "#5b8aa6"
       }

@@ -129,7 +129,8 @@ dialog.mobile-sheet.sheet {
   --cell-function-bg: linear-gradient(180deg, #f9fcfd, #e4eff4);
 
   --button-enabled-bg: #4297bd;
-  --button-enabled-text: #ffffff;
+  /* 深墨青压在蓝面上：白字只有 3.3:1，不足 WCAG AA */
+  --button-enabled-text: #062430;
   --button-disabled-bg: #d5e3ea;
   --button-disabled-text: #556f79;
 
@@ -139,6 +140,7 @@ dialog.mobile-sheet.sheet {
   --banner-warning-bg: #dceef5;
   /* 错误横幅改用偏冷的浅红，脱离经典那套直接复用的暖红 */
   --banner-error-bg: #f6dfe4;
+}
 :root[data-theme='midnight'] .game-view,
 :root[data-theme='midnight'] dialog.cell-dialog-layer,
 :root[data-theme='midnight'] dialog.player-dialog-layer,
@@ -199,6 +201,7 @@ dialog.mobile-sheet.sheet {
   --banner-warning-bg: #343c58;
   /* 深色下用暗红而非浅红，否则横幅会"发光" */
   --banner-error-bg: #4a2b36;
+}
 /* 森林（#118）：深绿掌机 —— 草木棋盘 + 翠绿按键，配长城 / 山西这类山脊地图。 */
 :root[data-theme='forest'] .game-view,
 :root[data-theme='forest'] dialog.cell-dialog-layer,
@@ -249,7 +252,7 @@ dialog.mobile-sheet.sheet {
   --cell-function-bg: linear-gradient(180deg, #f9fdf5, #e2f0dd);
 
   --button-enabled-bg: #58a85f;
-  --button-enabled-text: #ffffff;
+  --button-enabled-text: #0b2a13;
   --button-disabled-bg: #d3e3d0;
   --button-disabled-text: #5b7056;
 
@@ -258,6 +261,7 @@ dialog.mobile-sheet.sheet {
 
   --banner-warning-bg: #e2f0da;
   --banner-error-bg: #f4dfd9;
+}
 /* 沙丘（#118）：暖沙掌机 —— 驼色棋盘 + 赭石按键，配丝路 / 新疆 / 黄河这类黄土地图。 */
 :root[data-theme='sand'] .game-view,
 :root[data-theme='sand'] dialog.cell-dialog-layer,
@@ -308,7 +312,7 @@ dialog.mobile-sheet.sheet {
   --cell-function-bg: linear-gradient(180deg, #fdfaf4, #f1e6ce);
 
   --button-enabled-bg: #cc8634;
-  --button-enabled-text: #ffffff;
+  --button-enabled-text: #2a1203;
   --button-disabled-bg: #e7dbc5;
   --button-disabled-text: #756450;
 
@@ -317,6 +321,7 @@ dialog.mobile-sheet.sheet {
 
   --banner-warning-bg: #f5e9d2;
   --banner-error-bg: #f3ddd6;
+}
 /* 弹层动效：260ms 跟手进场 / 160ms 快速退场；不支持的浏览器瞬开瞬关 */
 @media (prefers-reduced-motion: no-preference) {
   dialog.cell-dialog-layer,

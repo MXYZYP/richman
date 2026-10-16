@@ -2,7 +2,7 @@
   "ref": {
     "id": "china-tour",
     "version": 1,
-    "contentHash": "4e9c35091fbfb496bdbe081c8385becbd8014f73e301a31ce458dee3368a0cd3"
+    "contentHash": "3d4a7126c8c44703a94e42928f6e19e0093db90a3a40a20c0dd609574df7bf69"
   },
   "metadata": {
     "title": "中国之旅",
@@ -1052,14 +1052,14 @@
         "center": "#fff7ea"
       },
       "propertyBands": {
-        "band:feishu-d73a49": "#d73a49",
-        "band:feishu-1677ff": "#1677ff",
-        "band:feishu-8e44ad": "#8e44ad",
-        "band:feishu-1f5fbf": "#1f5fbf",
-        "band:feishu-e66a95": "#e66a95",
-        "band:feishu-2ea44f": "#2ea44f",
-        "band:feishu-c2185b": "#c2185b",
-        "band:feishu-757575": "#757575",
+        "band:feishu-d73a49": "#B33A32",
+        "band:feishu-1677ff": "#4A5E8C",
+        "band:feishu-8e44ad": "#7B5E92",
+        "band:feishu-1f5fbf": "#3F6E7A",
+        "band:feishu-e66a95": "#B96A78",
+        "band:feishu-2ea44f": "#6E8F5A",
+        "band:feishu-c2185b": "#A6553F",
+        "band:feishu-757575": "#8A6A50",
         "band:station": "#546e7a",
         "band:utility": "#8e7cc3"
       }

@@ -106,7 +106,7 @@ describe('china-tour@1 map pack', () => {
     expect(chinaTourMap.ref).toEqual({
       id: 'china-tour',
       version: 1,
-      contentHash: '4e9c35091fbfb496bdbe081c8385becbd8014f73e301a31ce458dee3368a0cd3',
+      contentHash: '3d4a7126c8c44703a94e42928f6e19e0093db90a3a40a20c0dd609574df7bf69',
     });
     expect(chinaTourMap.metadata).toEqual({
       title: '中国之旅',
