@@ -14,7 +14,7 @@ import { renderView, withLocalStorage } from './viewTestSupport';
  * 存储不可用时该说的是「同步失败」，而不是让整页凭空消失。
  */
 function renderCloud(): Promise<string> {
-  return renderView(CloudSyncView);
+  return renderView(CloudSyncView, { open: true });
 }
 
 describe('CloudSyncView 云同步（#123）', () => {
@@ -48,11 +48,11 @@ describe('CloudSyncView 云同步（#123）', () => {
     expect(html).toContain('云端的账号一年没有同步过会被清理');
   });
 
-  it('浏览器不给本地存储时页面照样可达 —— 页面壳与说明都在，不留空白', async () => {
+  it('浏览器不给本地存储时弹窗照样可达 —— 弹窗外壳与说明都在，不留空白', async () => {
     // node 环境本来就没有 localStorage：这里读到的就是「无存储」。
     const html = await renderCloud();
 
-    expect(html).toContain('class="view-bar"');
+    expect(html).toContain('data-variant="modal"');
     expect(html).toContain('class="cloud-sync"');
     expect(html).toContain('这台设备还没有绑定云端账号');
   });

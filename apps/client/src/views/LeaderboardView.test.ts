@@ -14,7 +14,7 @@ import { renderView, withLocalStorage } from './viewTestSupport';
  * 拿文案当标记，两条方向相反的断言会**同时**变得没有判别力。
  */
 function renderLeaderboard(): Promise<string> {
-  return renderView(LeaderboardView);
+  return renderView(LeaderboardView, { open: true });
 }
 
 describe('LeaderboardView 排行榜（#116）', () => {
@@ -39,11 +39,11 @@ describe('LeaderboardView 排行榜（#116）', () => {
     expect(html).not.toContain('你目前第');
   });
 
-  it('没有本机存储时页面照样可达 —— 只是没法上榜，榜单本身仍要能拉', async () => {
+  it('没有本机存储时弹窗照样可达 —— 只是没法上榜，榜单本身仍要能拉', async () => {
     // node 环境本来就没有 localStorage：这里读到的就是「无存储」。
     const html = await renderLeaderboard();
 
-    expect(html).toContain('class="view-bar"');
+    expect(html).toContain('data-variant="modal"');
     expect(html).toContain('id="leaderboard-title"');
     expect(html).toContain('正在加载榜单…');
   });

@@ -329,6 +329,17 @@ const snapshot = computed<AppFlowSnapshot>(() => ({
 
 const page = computed(() => resolvePage(snapshot.value));
 const pageKind = computed(() => page.value.kind);
+/**
+ * 首页壳（10-16 第四版）：`'home'` 与四个图标详情都被它罩住。
+ *
+ * 四个详情（战绩 / 成就 / 云同步 / 排行榜）从「整页第二屏」改成弹窗之后，首页必须
+ * **保持挂载** —— 否则弹窗背后是一片空白，反而比整页跳转更突兀。所以这五种 kind
+ * 走同一个分支：先渲染首页，再把当前详情作为弹窗盖上去。
+ */
+const homeShellKinds = ['stats', 'achievements', 'cloud', 'leaderboard'] as const;
+const isHomeShell = computed(
+  () => pageKind.value === 'home' || (homeShellKinds as readonly string[]).includes(pageKind.value),
+);
 const restoreFailure = computed(() => (page.value.kind === 'restoring' ? page.value.failure : null));
 // 两块「续上一局」提示现在住在在线对战页（`online`），不再是首页。
 const resumeOffer = computed(() => (page.value.kind === 'online' ? page.value.resume : null));
@@ -869,15 +880,46 @@ onBeforeUnmount(() => {
     @defer="handleRestoreDefer"
   />
   <!-- 首页 = 纯入口页（《UI 改造方案》§二）：hero + 两个等宽主按钮 + 三个胶囊入口 +
-       一排成果图标 + 页脚。明细全部在下面这些二级页 / 详情页里。 -->
-  <HomeView
-    v-else-if="pageKind === 'home'"
-    :submitting="submitting"
-    @navigate="handleNavigate"
-    @open-guide="openGuide"
-    @open-replay="replayImportOpen = true"
-    @open-workshop="openWorkshop"
-  />
+       一排成果图标 + 页脚。明细全部在下面这些二级页 / 详情页里。
+
+       10-16 第四版：四个图标详情改成**压在首页上的弹窗**（用户：「跳到第二屏感觉很突兀，
+       而且显示内容也不是很多」）。它们与首页归在同一个分支里，首页始终挂载在背后 ——
+       关掉弹窗就是首页，不重绘、也不闪一下白。尺寸与形态由 MobileSheet 的 modal 变体
+       统一决定，这里一个宽高都不写。 -->
+  <template v-else-if="isHomeShell">
+    <HomeView
+      :submitting="submitting"
+      @navigate="handleNavigate"
+      @open-guide="openGuide"
+      @open-replay="replayImportOpen = true"
+      @open-workshop="openWorkshop"
+    />
+    <StatsView
+      v-if="pageKind === 'stats'"
+      :open="true"
+      :nickname="nickname"
+      :active-maps="activeMaps"
+      @close="handleBackToHome"
+    />
+    <AchievementsView
+      v-else-if="pageKind === 'achievements'"
+      :open="true"
+      :active-maps="activeMaps"
+      @close="handleBackToHome"
+    />
+    <CloudSyncView
+      v-else-if="pageKind === 'cloud'"
+      :open="true"
+      :nickname="nickname"
+      @close="handleBackToHome"
+    />
+    <LeaderboardView
+      v-else-if="pageKind === 'leaderboard'"
+      :open="true"
+      :nickname="nickname"
+      @close="handleBackToHome"
+    />
+  </template>
   <!-- 在线对战页：建房 / 加入 / 公开房间列表，以及两块「续上一局」。 -->
   <OnlineEntryView
     v-else-if="pageKind === 'online'"
@@ -902,28 +944,7 @@ onBeforeUnmount(() => {
     @abandon-active="handleAbandonActive"
     @back="handleBackToHome"
   />
-  <!-- 四个成果详情页（《UI 改造方案》§四）：首页只留图标入口，明细点进来再看。 -->
-  <StatsView
-    v-else-if="pageKind === 'stats'"
-    :nickname="nickname"
-    :active-maps="activeMaps"
-    @back="handleBackToHome"
-  />
-  <AchievementsView
-    v-else-if="pageKind === 'achievements'"
-    :active-maps="activeMaps"
-    @back="handleBackToHome"
-  />
-  <CloudSyncView
-    v-else-if="pageKind === 'cloud'"
-    :nickname="nickname"
-    @back="handleBackToHome"
-  />
-  <LeaderboardView
-    v-else-if="pageKind === 'leaderboard'"
-    :nickname="nickname"
-    @back="handleBackToHome"
-  />
+
   <GameSetup
     v-else-if="pageKind === 'local_setup'"
     :initial-setup="setup"

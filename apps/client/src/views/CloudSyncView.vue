@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import ViewShell from './ViewShell.vue';
+import DetailSheet from '../components/DetailSheet.vue';
 import { browserStorage, loadPlayerStats, savePlayerStats } from '../session/playerStats';
 import {
   clearCloudLink,
@@ -37,11 +37,13 @@ const props = withDefaults(defineProps<{
    * 由 App 持有、在线对战页输入，与首页那版行为一致。
    */
   nickname?: string;
+  /** 弹窗是否打开。四个图标入口改成弹窗后由 App 传 true（本详情只在该面板激活时挂载）。 */
+  open: boolean;
 }>(), {
   nickname: '',
 });
 
-const emit = defineEmits<{ back: [] }>();
+const emit = defineEmits<{ close: [] }>();
 
 function readCloudLink(): CloudAccountLink | null {
   const storage = browserStorage();
@@ -193,7 +195,7 @@ async function copyCloudCode(): Promise<void> {
 </script>
 
 <template>
-  <ViewShell title="云同步" :aside="cloudSummary ? '已绑定' : '未绑定'" @back="emit('back')">
+  <DetailSheet :open="open" title="云同步" :aside="cloudSummary ? '已绑定' : '未绑定'" @close="emit('close')">
     <div class="cloud-sync">
       <h3 class="cloud-sync-title">恢复码账号</h3>
       <p class="cloud-sync-hint">
@@ -264,7 +266,7 @@ async function copyCloudCode(): Promise<void> {
         role="status"
       >{{ cloudNotice.message }}</p>
     </div>
-  </ViewShell>
+  </DetailSheet>
 </template>
 
 <style scoped>

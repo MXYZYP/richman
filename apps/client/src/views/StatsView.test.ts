@@ -12,7 +12,7 @@ import { PLAYER_STATS_KEY, renderView, statsJson, withStorageValues } from './vi
  * 没有战绩也要能进来，并说清「还没有战绩」该怎么办。
  */
 function renderStats(): Promise<string> {
-  return renderView(StatsView);
+  return renderView(StatsView, { open: true });
 }
 
 describe('StatsView 战绩与战绩码', () => {
@@ -54,7 +54,7 @@ describe('StatsView 战绩与战绩码', () => {
     expect(html).toContain('这台设备上还没有战绩');
     expect(html).not.toContain('导出战绩码');
     expect(html).not.toContain('导入战绩码');
-    // 页面壳还在：它是一张可达的页面，不是「没有数据就整页消失」。
-    expect(html).toContain('class="view-bar"');
+    // 弹窗外壳还在：它是一个可达的弹窗，不是「没有数据就整块消失」。
+    expect(html).toContain('data-variant="modal"');
   });
 });

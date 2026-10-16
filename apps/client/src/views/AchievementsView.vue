@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { listActiveMaps, type MapCatalogEntry } from '@richman/board-data';
-import ViewShell from './ViewShell.vue';
+import DetailSheet from '../components/DetailSheet.vue';
 import { deriveAchievements, describeNextAchievement, type AchievementGroup } from '../session/achievements';
 import { browserStorage, loadPlayerStats, type PlayerStats } from '../session/playerStats';
 
@@ -15,11 +15,13 @@ import { browserStorage, loadPlayerStats, type PlayerStats } from '../session/pl
 const props = withDefaults(defineProps<{
   /** 收集类成就按「当前已发布」的地图算 —— 下架的地图不该继续挂在待完成项里。 */
   activeMaps?: readonly MapCatalogEntry[];
+  /** 弹窗是否打开。四个图标入口改成弹窗后由 App 传 true（本详情只在该面板激活时挂载）。 */
+  open: boolean;
 }>(), {
   activeMaps: () => listActiveMaps(),
 });
 
-const emit = defineEmits<{ back: [] }>();
+const emit = defineEmits<{ close: [] }>();
 
 function readPlayerStats(): PlayerStats | null {
   const storage = browserStorage();
@@ -51,10 +53,11 @@ const achievementGroups = computed(() => {
 </script>
 
 <template>
-  <ViewShell
+  <DetailSheet
+    :open="open"
     title="成就"
     :aside="achievementSummary ? `${achievementSummary.unlockedCount} / ${achievementSummary.total}` : ''"
-    @back="emit('back')"
+    @close="emit('close')"
   >
     <p v-if="!achievementSummary" class="view-empty" role="status">
       这台设备上还没有战绩，成就也就无从算起。打完一局（联机或单机都可以）再回来看看。
@@ -90,7 +93,7 @@ const achievementGroups = computed(() => {
         <p class="achievements-note">成就全部由本机战绩算出，不会上传到服务器。</p>
       </div>
     </details>
-  </ViewShell>
+  </DetailSheet>
 </template>
 
 <style scoped>

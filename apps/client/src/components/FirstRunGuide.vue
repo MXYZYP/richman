@@ -115,7 +115,7 @@ const SECTIONS: readonly { title: string; items: readonly string[] }[] = [
   border-radius: 12px;
   background: var(--button-enabled-bg);
   color: var(--button-enabled-text);
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 900;
   cursor: pointer;
 }

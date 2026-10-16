@@ -10,6 +10,10 @@ import './ui/darkMode.css';
 // 那批死规则里混进了 .game-shell{display:grid} —— 浏览器匹配不到就退回 display:block，
 // 桌面整��塌成竖排（侧栏掉到棋盘下方全宽、无法上滑）。改为全局引入后产物 70 KB。
 import './ui/gameTheme.css';
+// 二级整页（在线联网对战 / 单机模式）共用的排版与控件样式。
+// 同样必须全局引入：这两页都用 <style scoped>，一旦各自持有副本就会漂移
+// （单机卡片 720px 对在线卡片 560px 就是这么来的）。改动说明见文件头。
+import './ui/entryPage.css';
 import { setupPwaInstall } from './pwaInstall';
 
 const app = createApp(App);

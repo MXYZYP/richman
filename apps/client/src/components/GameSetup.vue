@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { getActiveMapPack, listActiveMaps } from '@richman/board-data';
 import type { BotDifficulty } from '@richman/engine';
 import MapPicker from './MapPicker.vue';
+import ViewShell from '../views/ViewShell.vue';
 import {
   BOT_DIFFICULTY_OPTIONS,
   createDefaultGameSetup,
@@ -171,228 +172,208 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
 }
 </script>
 
+<!--
+  10-16 第五版（用户：「返回首页位置要一致，在线在左上角、单机跑到最下面不合适」
+                  +「里面的样式也统一，操作逻辑要符合人类直觉，布局要好看规整」）：
+
+  1. 壳换成与在线页同一个 `ViewShell` ⇒ 返回首页**一律在左上角的返回条上**，
+     底部不再重复一个「返回首页」；卡片宽 / 圆角 / 间距两页逐字节相同。
+  2. 「继续单机 · 本机存档」从页面最底**提到最前**：有存档的人进来十有八九是想接着玩，
+     却要先把整张新开局表单滚一遍才看得见「继续游戏」—— 这是在惩罚最常用的那条路。
+     提到最前之后，这一页与在线页的顺位完全一致：
+     续玩提示 → 主行动 → 表单 → （在线多一段公开房间列表）。
+  3. 表单收进「开一局新的」分区，页面上第一次出现「我到底在干哪件事」的小标题。
+     「无需联网 · 随时开局」那行角标删掉：壳右上角的状态字已经是「无需联网」，
+     同一句话说两遍只是噪音。
+-->
 <template>
-  <main class="setup-shell">
-    <section class="setup-card" aria-labelledby="setup-title">
-      <p class="setup-eyebrow">无需联网 · 随时开局</p>
-      <h1 id="setup-title">单机模式</h1>
+  <ViewShell title="单机模式" aside="无需联网" @back="emit('back')">
+    <div class="entry-body">
       <p class="setup-copy">选地图、真人和电脑数量（最多 6 人），确认昵称后进入棋盘。不需要登录，也不需要网络。</p>
 
-      <fieldset class="setup-fields" :disabled="dialogOpen">
-        <MapPicker
-          :model-value="setup.mapId"
-          :maps="setupDependencies.catalog"
-          label="地图"
-          @update:model-value="selectMap"
-        />
-
-        <div class="setup-counts" aria-label="玩家数量">
-        <label>
-          <span>真人玩家</span>
-          <select :value="setup.humanCount" @change="setHumanCount">
-            <option v-for="count in humanOptions" :key="count" :value="count" :disabled="isHumanOptionDisabled(count)">
-              {{ count }} 人
-            </option>
-          </select>
-        </label>
-        <label>
-          <span>电脑玩家</span>
-          <select :value="setup.botCount" @change="setBotCount">
-            <option v-for="count in botOptions" :key="count" :value="count" :disabled="isBotOptionDisabled(count)">
-              {{ count }} 人
-            </option>
-          </select>
-        </label>
-        <strong>{{ totalPlayers }} 人开局</strong>
-        </div>
-
-        <div class="setup-roster" aria-label="玩家昵称">
-        <label v-for="(player, index) in setup.players" :key="player.id" class="setup-player">
-          <span>{{ player.isBot ? '电脑' : '真人' }} {{ index + 1 }}</span>
-          <input :value="player.nickname" maxlength="12" @input="updateNickname(index, $event)" />
-        </label>
-        </div>
-
-        <!-- #6：难度只在真的有电脑玩家时才出现 —— 没选电脑就问难度是问不出所以然的。 -->
-        <section v-if="setup.botCount > 0" class="setup-difficulty" aria-label="电脑玩家难度">
-          <span class="setup-difficulty-label">电脑玩家难度</span>
-          <div class="setup-difficulty-options" role="radiogroup" aria-label="电脑玩家难度">
-            <button
-              v-for="option in botDifficultyOptions"
-              :key="option.value"
-              type="button"
-              class="setup-difficulty-option"
-              :class="{ active: setup.botDifficulty === option.value }"
-              :aria-pressed="setup.botDifficulty === option.value"
-              @click="setBotDifficulty(option.value)"
-            >{{ option.label }}</button>
-          </div>
-          <p class="setup-difficulty-hint">{{ botDifficultyHint }}仅影响电脑决策，不影响真人玩家。</p>
-        </section>
-
-        <section class="setup-rule-card" aria-label="房规">
-        <label class="setup-checkbox">
-          <input v-model="setup.cashGoalEnabled" type="checkbox" />
-          <span>开启现金目标</span>
-        </label>
-        <label class="setup-cash-goal" :class="{ disabled: !setup.cashGoalEnabled }">
-          <span>现金目标</span>
-          <input
-            type="number"
-            :min="minCashGoal"
-            step="1000"
-            :disabled="!setup.cashGoalEnabled"
-            :value="setup.cashGoal"
-            @input="updateCashGoal"
-          />
-        </label>
-        </section>
-
-        <section class="setup-rules" aria-label="规则自定义">
-          <h2>规则自定义</h2>
-          <label class="setup-rule-field">
-            <span>初始资金</span>
-            <input type="number" :min="1000" :step="1000" :value="setup.config.initialCash" @input="updateRuleConfig('initialCash', $event)" />
-          </label>
-          <label class="setup-rule-field">
-            <span>最高房级</span>
-            <input type="number" min="1" :max="mapMaxHouseLevel" step="1" :value="setup.config.maxHouseLevel" @input="updateRuleConfig('maxHouseLevel', $event)" />
-          </label>
-          <label class="setup-rule-field">
-            <span>抵押利率（%）</span>
-            <input type="number" min="0" max="100" :step="5" :value="Math.round(setup.config.mortgageInterestRate * 100)" @input="updateMortgageRate" />
-          </label>
-        </section>
-      </fieldset>
-
-      <p v-if="!validation.ok" class="setup-error" role="alert">{{ validation.message }}</p>
-      <p v-if="storageUnavailable" class="setup-warning" role="alert">本浏览器无法保存进度，关闭页面后这局无法恢复</p>
-      <p v-if="saveError" class="setup-error" role="alert">{{ saveError }}</p>
-
-      <section v-if="replacementSummary" class="setup-confirm" role="dialog" aria-modal="true" aria-labelledby="replace-save-title">
-        <h2 id="replace-save-title">将替换最旧存档</h2>
-        <p>{{ replacementSummary.title }} · 第 {{ replacementSummary.turn }} 回合</p>
-        <p>{{ replacementSummary.players.map((player) => player.nickname).join('、') }}</p>
-        <div class="setup-confirm-actions">
-          <button type="button" class="setup-start" @click="emit('confirmReplacement')">确认替换并开始</button>
-          <button ref="replacementCancelButton" type="button" class="setup-secondary" @click="emit('cancelReplacement')">取消</button>
-        </div>
-      </section>
-
-      <section v-if="storagePrompt" class="setup-confirm" role="dialog" aria-modal="true" aria-labelledby="storage-prompt-title">
-        <h2 id="storage-prompt-title">无法保存这局</h2>
-        <p>你可以重试存储，或开始一局仅存在于本机内存的临时游戏（关闭页面即丢失，与在线房间无关）。</p>
-        <div class="setup-confirm-actions">
-          <button ref="storageRetryButton" type="button" class="setup-start" @click="emit('retryStorage')">重试保存</button>
-          <button type="button" class="setup-secondary" @click="emit('startTemporary')">开始临时游戏</button>
-        </div>
-      </section>
-      <div class="setup-actions">
-        <button type="button" class="setup-secondary" @click="emit('back')">返回首页</button>
-        <button ref="startButton" type="button" class="setup-start" :disabled="!validation.ok || dialogOpen" @click="submitSetup">开始新对局</button>
-      </div>
-
-      <!-- 继续单机（原首页中部那块）：存档跟着「要玩什么」走，不再和首页别的内容抢位置。 -->
-      <section v-if="localSaveCards && localSaveCards.length > 0" class="local-saves" aria-labelledby="local-saves-title">
-        <h2 id="local-saves-title">继续单机 · 本机存档</h2>
-        <p class="local-saves-hint">以下为本机存档，仅保存在这台设备上，与在线房间互不影响。</p>
-        <article v-for="card in localSaveCards" :key="localCardKey(card)" class="local-save-card">
+      <!-- 续玩优先（见上方注释 2）：与在线页两块「续上一局」同一个位置、同一个形状。 -->
+      <section
+        v-if="localSaveCards && localSaveCards.length > 0"
+        class="entry-section"
+        aria-labelledby="local-saves-title"
+      >
+        <h2 id="local-saves-title" class="entry-section-title">继续单机 · 本机存档</h2>
+        <p class="entry-section-hint">以下为本机存档，仅保存在这台设备上，与在线房间互不影响。</p>
+        <article
+          v-for="card in localSaveCards"
+          :key="localCardKey(card)"
+          class="entry-resume"
+          :class="{ 'setup-save--broken': card.kind !== 'valid' }"
+        >
           <template v-if="card.kind === 'valid'">
-            <div class="local-save-copy">
+            <div class="entry-resume__copy">
               <strong>{{ card.summary.title }}</strong>
               <span>{{ card.summary.players.map((player) => `${player.nickname}${player.isBot ? '（电脑）' : ''}`).join('、') }}</span>
               <span>第 {{ card.summary.turn }} 回合 · 保存于 {{ formatSavedAt(card.summary.updatedAt) }}</span>
             </div>
-            <div class="local-save-actions">
-              <button type="button" class="setup-start" @click="emit('resumeLocal', card.summary)">继续游戏</button>
-              <button type="button" class="setup-secondary" @click="requestLocalDelete(card)">
+            <div class="entry-row">
+              <button type="button" class="entry-primary" @click="emit('resumeLocal', card.summary)">继续游戏</button>
+              <button type="button" class="entry-secondary" @click="requestLocalDelete(card)">
                 {{ confirmingLocalDelete?.key === localCardKey(card) ? '确认删除' : '删除存档' }}
               </button>
               <button
                 v-if="confirmingLocalDelete?.key === localCardKey(card)"
                 type="button"
-                class="setup-secondary"
+                class="entry-secondary"
                 @click="confirmingLocalDelete = null"
               >取消</button>
             </div>
           </template>
           <template v-else>
-            <div class="local-save-copy">
+            <div class="entry-resume__copy">
               <strong>无法恢复的本机存档</strong>
               <span>{{ card.reason }}</span>
             </div>
-            <div class="local-save-actions">
-              <button type="button" class="setup-secondary" :disabled="card.recordToken === undefined" @click="requestLocalDelete(card)">
+            <div class="entry-row">
+              <button type="button" class="entry-secondary" :disabled="card.recordToken === undefined" @click="requestLocalDelete(card)">
                 {{ confirmingLocalDelete?.key === localCardKey(card) ? '确认删除' : '删除存档' }}
               </button>
               <button
                 v-if="confirmingLocalDelete?.key === localCardKey(card)"
                 type="button"
-                class="setup-secondary"
+                class="entry-secondary"
                 @click="confirmingLocalDelete = null"
               >取消</button>
             </div>
           </template>
         </article>
       </section>
-    </section>
-  </main>
+
+      <p v-if="!validation.ok" class="entry-error" role="alert">{{ validation.message }}</p>
+      <p v-if="storageUnavailable" class="entry-hint entry-hint--invalid" role="alert">本浏览器无法保存进度，关闭页面后这局无法恢复</p>
+      <p v-if="saveError" class="entry-error" role="alert">{{ saveError }}</p>
+
+      <section class="entry-section" aria-labelledby="setup-new-title">
+        <h2 id="setup-new-title" class="entry-section-title">开一局新的</h2>
+
+        <fieldset class="setup-fields" :disabled="dialogOpen">
+          <MapPicker
+            :model-value="setup.mapId"
+            :maps="setupDependencies.catalog"
+            label="地图"
+            @update:model-value="selectMap"
+          />
+
+          <div class="setup-counts" aria-label="玩家数量">
+            <label class="entry-field">
+              <span>真人玩家</span>
+              <select :value="setup.humanCount" @change="setHumanCount">
+                <option v-for="count in humanOptions" :key="count" :value="count" :disabled="isHumanOptionDisabled(count)">
+                  {{ count }} 人
+                </option>
+              </select>
+            </label>
+            <label class="entry-field">
+              <span>电脑玩家</span>
+              <select :value="setup.botCount" @change="setBotCount">
+                <option v-for="count in botOptions" :key="count" :value="count" :disabled="isBotOptionDisabled(count)">
+                  {{ count }} 人
+                </option>
+              </select>
+            </label>
+            <strong class="setup-total">{{ totalPlayers }} 人开局</strong>
+          </div>
+
+          <div class="setup-roster" aria-label="玩家昵称">
+            <label v-for="(player, index) in setup.players" :key="player.id" class="entry-field">
+              <span>{{ player.isBot ? '电脑' : '真人' }} {{ index + 1 }}</span>
+              <input :value="player.nickname" maxlength="12" @input="updateNickname(index, $event)" />
+            </label>
+          </div>
+
+          <!-- #6：难度只在真的有电脑玩家时才出现 —— 没选电脑就问难度是问不出所以然的。 -->
+          <section v-if="setup.botCount > 0" class="setup-difficulty" aria-label="电脑玩家难度">
+            <span class="setup-difficulty-label">电脑玩家难度</span>
+            <div class="setup-difficulty-options" role="radiogroup" aria-label="电脑玩家难度">
+              <button
+                v-for="option in botDifficultyOptions"
+                :key="option.value"
+                type="button"
+                class="setup-difficulty-option"
+                :class="{ active: setup.botDifficulty === option.value }"
+                :aria-pressed="setup.botDifficulty === option.value"
+                @click="setBotDifficulty(option.value)"
+              >{{ option.label }}</button>
+            </div>
+            <p class="setup-difficulty-hint">{{ botDifficultyHint }}仅影响电脑决策，不影响真人玩家。</p>
+          </section>
+
+          <section class="setup-rule-card" aria-label="房规">
+            <label class="setup-checkbox">
+              <input v-model="setup.cashGoalEnabled" type="checkbox" />
+              <span>开启现金目标</span>
+            </label>
+            <label class="entry-field setup-cash-goal" :class="{ disabled: !setup.cashGoalEnabled }">
+              <span>现金目标</span>
+              <input
+                type="number"
+                :min="minCashGoal"
+                step="1000"
+                :disabled="!setup.cashGoalEnabled"
+                :value="setup.cashGoal"
+                @input="updateCashGoal"
+              />
+            </label>
+          </section>
+
+          <section class="setup-rules" aria-label="规则自定义">
+            <h3 class="setup-rules-title">规则自定义</h3>
+            <label class="entry-field setup-rule-field">
+              <span>初始资金</span>
+              <input type="number" :min="1000" :step="1000" :value="setup.config.initialCash" @input="updateRuleConfig('initialCash', $event)" />
+            </label>
+            <label class="entry-field setup-rule-field">
+              <span>最高房级</span>
+              <input type="number" min="1" :max="mapMaxHouseLevel" step="1" :value="setup.config.maxHouseLevel" @input="updateRuleConfig('maxHouseLevel', $event)" />
+            </label>
+            <label class="entry-field setup-rule-field">
+              <span>抵押利率（%）</span>
+              <input type="number" min="0" max="100" :step="5" :value="Math.round(setup.config.mortgageInterestRate * 100)" @input="updateMortgageRate" />
+            </label>
+          </section>
+        </fieldset>
+      </section>
+
+      <section v-if="replacementSummary" class="setup-confirm" role="dialog" aria-modal="true" aria-labelledby="replace-save-title">
+        <h2 id="replace-save-title" class="setup-confirm-title">将替换最旧存档</h2>
+        <p>{{ replacementSummary.title }} · 第 {{ replacementSummary.turn }} 回合</p>
+        <p>{{ replacementSummary.players.map((player) => player.nickname).join('、') }}</p>
+        <div class="entry-row setup-confirm-actions">
+          <button type="button" class="entry-primary" @click="emit('confirmReplacement')">确认替换并开始</button>
+          <button ref="replacementCancelButton" type="button" class="entry-secondary" @click="emit('cancelReplacement')">取消</button>
+        </div>
+      </section>
+
+      <section v-if="storagePrompt" class="setup-confirm" role="dialog" aria-modal="true" aria-labelledby="storage-prompt-title">
+        <h2 id="storage-prompt-title" class="setup-confirm-title">无法保存这局</h2>
+        <p>你可以重试存储，或开始一局仅存在于本机内存的临时游戏（关闭页面即丢失，与在线房间无关）。</p>
+        <div class="entry-row setup-confirm-actions">
+          <button ref="storageRetryButton" type="button" class="entry-primary" @click="emit('retryStorage')">重试保存</button>
+          <button type="button" class="entry-secondary" @click="emit('startTemporary')">开始临时游戏</button>
+        </div>
+      </section>
+
+      <div class="entry-actions">
+        <button ref="startButton" type="button" class="entry-primary" :disabled="!validation.ok || dialogOpen" @click="submitSetup">开始新对局</button>
+      </div>
+    </div>
+  </ViewShell>
 </template>
 
 <style scoped>
-.setup-shell {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 18px;
-}
-
-.setup-card {
-  width: min(720px, 100%);
-  display: grid;
-  gap: 18px;
-  padding: clamp(20px, 4vw, 34px);
-  border: 1px solid var(--color-border);
-  border-radius: 28px;
-  background:
-    var(--surface-card),
-    var(--board-surface);
-  box-shadow: 0 18px 48px rgb(53 39 20 / 14%);
-}
-
-.setup-eyebrow,
-.setup-copy,
-.setup-map-field span,
-.setup-counts span,
-.setup-player span,
-.setup-rule-card span {
-  color: var(--color-muted);
-}
-
-.setup-eyebrow {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.2em;
-}
-
-.setup-card h1 {
-  margin: 0;
-  color: var(--color-primary);
-  font-size: clamp(30px, 6vw, 52px);
-  line-height: 1;
-}
+/* 本页只保留「单机模式独有」的东西：人数 / 昵称 / 难度 / 房规这几块内容自身的排版。
+   壳、卡片、控件、按钮、分区小标题、续玩卡 —— 全部在 ViewShell 与 ui/entryPage.css 里，
+   两页共用一份（见那两个文件头部的说明）。 */
 
 .setup-copy {
   margin: 0;
+  color: var(--color-muted);
   line-height: 1.6;
-}
-
-.setup-counts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
-  gap: 12px;
-  align-items: end;
 }
 
 .setup-fields {
@@ -404,43 +385,21 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
   border: 0;
 }
 
-.setup-counts label,
-.setup-map-field,
-.setup-player,
-.setup-cash-goal {
+.setup-counts {
   display: grid;
-  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
 }
 
-.setup-counts strong {
+.setup-total {
   padding: 11px 14px;
   border-radius: 999px;
   background: var(--color-accent);
   color: var(--color-text);
-  font-size: 13px;
+  font-size: var(--text-body-size);
   text-align: center;
   white-space: nowrap;
-}
-
-.setup-card select,
-.setup-card input[type='text'],
-.setup-card input:not([type]),
-.setup-card input[type='number'] {
-  min-height: 44px;
-  width: 100%;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 8px 10px;
-  background: var(--surface-input);
-  color: var(--color-text);
-  font-weight: 800;
-}
-
-.setup-card select:focus-visible,
-.setup-card input:focus-visible,
-.setup-start:focus-visible {
-  outline: 3px solid var(--color-accent);
-  outline-offset: 2px;
 }
 
 .setup-roster {
@@ -449,23 +408,74 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
   gap: 12px;
 }
 
+/* ---- 电脑难度（#6）---- */
+.setup-difficulty {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+}
+
+.setup-difficulty-label {
+  color: var(--color-muted);
+  font-size: var(--text-meta-size);
+  font-weight: 800;
+}
+
+.setup-difficulty-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.setup-difficulty-option {
+  min-height: 44px;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--board-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--text-body-size);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.setup-difficulty-option.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff4ec;
+}
+
+.setup-difficulty-hint {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-meta-size);
+  line-height: 1.6;
+}
+
+/* ---- 现金目标 ---- */
 .setup-rule-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 180px;
   gap: 12px;
   align-items: center;
   padding: 12px;
-  border-radius: 18px;
-  background: rgb(255 255 255 / 58%);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
 }
 
 .setup-checkbox {
   display: flex;
   gap: 10px;
   align-items: center;
+  font-size: var(--text-body-size);
   font-weight: 900;
 }
 
+/* 18×18 的复选框：靠这条压过 ui/entryPage.css 里那组 44px 高的输入框规则。
+   entryPage 的否定选择器写了 :where()，特异度是 (0,1,1)，这里 (0,2,1) 稳稳压住。 */
 .setup-checkbox input {
   width: 18px;
   height: 18px;
@@ -476,44 +486,32 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
   opacity: 0.56;
 }
 
+/* ---- 规则自定义 ---- */
 .setup-rules {
   display: grid;
   gap: 12px;
   padding: 14px 12px;
-  border-radius: 18px;
-  background: rgb(255 255 255 / 58%);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
 }
 
-.setup-rules h2 {
+.setup-rules-title {
   margin: 0;
-  font-size: 15px;
-  font-weight: 900;
   color: var(--color-primary);
+  font-size: var(--text-section-size);
+  font-weight: 900;
 }
 
 .setup-rule-field {
-  display: grid;
   grid-template-columns: 1fr 160px;
   gap: 12px;
   align-items: center;
 }
 
-.setup-rule-field span {
-  color: var(--color-muted);
-  font-weight: 800;
-}
-
-.setup-error {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--color-error-bg);
-  color: var(--color-primary);
-  font-weight: 900;
-}
-
-.setup-warning,
+/* ---- 存档替换 / 存储不可用确认 ---- */
 .setup-confirm {
+  display: grid;
+  gap: 8px;
   margin: 0;
   padding: 12px;
   border-radius: 16px;
@@ -521,73 +519,29 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
   color: var(--event-text);
 }
 
-.setup-confirm {
-  display: grid;
-  gap: 8px;
+.setup-confirm-title {
+  margin: 0;
+  font-size: var(--text-section-size);
+  font-weight: 900;
 }
 
-.setup-confirm h2,
 .setup-confirm p {
   margin: 0;
+  font-size: var(--text-body-size);
 }
 
-.setup-confirm-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.setup-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  gap: 10px;
-}
-
-.setup-actions .setup-secondary {
-  min-height: 48px;
-}
-
-.setup-secondary {
-  min-height: 44px;
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  padding: 8px 14px;
-  background: var(--board-surface);
+/* ---- 损坏 / 不兼容的存档卡：从暖黄票根降级成普通描边，别和「可继续」的长得一样 ---- */
+.setup-save--broken {
+  border-color: var(--color-border);
+  background: var(--surface-raised);
   color: var(--color-text);
-  font-weight: 900;
-  cursor: pointer;
 }
 
-.setup-start {
-  min-height: 48px;
-  border: 0;
-  border-radius: 16px;
-  background: var(--button-enabled-bg);
-  color: var(--button-enabled-text);
-  font-size: 1rem;
-  font-weight: 900;
-  cursor: pointer;
+.setup-save--broken .entry-resume__copy {
+  color: inherit;
 }
 
-.setup-start:disabled {
-  background: var(--button-disabled-bg);
-  color: var(--button-disabled-text);
-  cursor: not-allowed;
-}
-
-/* 阈值与首页 / GameView 统一到 1024px：折叠屏内屏与小平板竖屏常落在 768–1024，
-   用 767 会让它们拿到桌面版的多列布局，选项与规则卡被挤成窄条。 */
 @media (max-width: 1024px) {
-  .setup-shell {
-    padding: 10px;
-    place-items: start center;
-  }
-
-  .setup-card {
-    gap: 14px;
-    border-radius: 22px;
-  }
-
   .setup-counts,
   .setup-roster,
   .setup-rule-card,
@@ -595,53 +549,4 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
     grid-template-columns: 1fr;
   }
 }
-
-/* 本机存档卡：原样从首页搬来（配色边条取自 P2「视觉层次」那一组）。 */
-.local-saves {
-  display: grid;
-  gap: 10px;
-}
-
-.local-saves h2 {
-  margin: 0;
-  color: var(--color-primary);
-  font-size: 18px;
-}
-
-.local-saves-hint {
-  margin: -4px 0 0;
-  font-size: 12px;
-  color: var(--color-muted);
-}
-
-.local-save-card {
-  min-width: 0;
-  display: grid;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--color-accent);
-  border-radius: 16px;
-  background: var(--event-bg);
-}
-
-.local-save-copy {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-  color: var(--event-text);
-}
-
-.local-save-copy span {
-  overflow-wrap: anywhere;
-  font-size: 13px;
-}
-
-.local-save-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.local-save-card { border-left: 4px solid var(--mode-local); }
-
 </style>

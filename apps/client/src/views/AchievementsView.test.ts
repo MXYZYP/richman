@@ -10,7 +10,7 @@ import { PLAYER_STATS_KEY, renderView, statsJson, withStorageValues } from './vi
  * 「一进来就看到几项」才是这一页存在的意义，折叠只是顺手留着的收纳。
  */
 function renderAchievements(): Promise<string> {
-  return renderView(AchievementsView);
+  return renderView(AchievementsView, { open: true });
 }
 
 function withStats(raw: string): Promise<string> {
@@ -62,12 +62,12 @@ describe('AchievementsView 成就明细（#116）', () => {
     expect(html).toContain('富甲一方');
   });
 
-  it('没有本机存储时落在「还没有战绩」的空态上，页面壳仍在', async () => {
+  it('没有本机存储时落在「还没有战绩」的空态上，弹窗外壳仍在', async () => {
     // node 环境本来就没有 localStorage：这里读到的就是「无存储」。
     const html = await renderAchievements();
 
     expect(html).toContain('这台设备上还没有战绩');
     expect(html).not.toContain('class="achievements"');
-    expect(html).toContain('class="view-bar"');
+    expect(html).toContain('data-variant="modal"');
   });
 });

@@ -4,6 +4,7 @@ import type { PublicRoomSummary, RoomRole } from '@richman/protocol';
 import { ROOM_PASSWORD_MAX_LENGTH, ROOM_PASSWORD_MIN_LENGTH } from '@richman/protocol';
 import { listActiveMaps, type MapCatalogEntry } from '@richman/board-data';
 import MapPicker from '../components/MapPicker.vue';
+import ViewShell from './ViewShell.vue';
 import {
   capRoomCode,
   isValidRoomCode,
@@ -262,47 +263,43 @@ function jumpToForm(): void {
 </script>
 
 <template>
-  <main class="home-shell">
-    <section class="home-card" aria-labelledby="online-title">
-      <header class="view-bar">
-        <button type="button" class="view-bar__back" @click="emit('back')">返回首页</button>
-        <h1 id="online-title" class="view-bar__title">在线联网对战</h1>
-        <span class="view-bar__aside">6 位房间码</span>
-      </header>
-
-      <!-- 两块「续上一局」提示都住在这一页：它们是联机的续玩入口，跟着来源走，不再和首页别的内容抢位置。 -->
-      <section v-if="canResumeActive" class="home-resume" aria-label="回到上一局">
-        <div>
+  <ViewShell title="在线联网对战" aside="6 位房间码" @back="emit('back')">
+    <div class="entry-body">
+      <!-- 两块「续上一局」提示都住在这一页：它们是联机的续玩入口，跟着来源走，不再和首页别的内容抢位置。
+           10-16 第五版：形状换成与单机页「继续单机」同一种 `.entry-resume`，顺位也统一成
+           「续玩 → 主行动 → 表单 →（本页多一段）列表」。 -->
+      <section v-if="canResumeActive" class="entry-resume" aria-label="回到上一局">
+        <div class="entry-resume__copy">
           <strong>你还有一局进行中</strong>
           <span>已选择暂不恢复，可随时回到上一局。</span>
         </div>
-        <div class="home-resume-actions">
-          <button type="button" class="home-resume-button" :disabled="submitting" @click="emit('resumeActive')">
+        <div class="entry-row">
+          <button type="button" class="entry-primary" :disabled="submitting" @click="emit('resumeActive')">
             回到上一局
           </button>
-          <button type="button" class="home-resume-abandon" :disabled="submitting" @click="emit('abandonActive')">
+          <button type="button" class="entry-secondary" :disabled="submitting" @click="emit('abandonActive')">
             放弃这局
           </button>
         </div>
       </section>
 
-      <section v-if="resume" class="home-resume" aria-label="上次操作">
-        <div>
+      <section v-if="resume" class="entry-resume" aria-label="上次操作">
+        <div class="entry-resume__copy">
           <strong>上次操作未完成</strong>
           <span>{{ resumeLabel }}</span>
           <span v-if="!pendingRetryable" class="home-resume-note">该房间已无法进入，请放弃后重新开始。</span>
         </div>
-        <div class="home-resume-actions">
-          <button v-if="pendingRetryable" type="button" class="home-resume-button" :disabled="submitting" @click="emit('resume')">
+        <div class="entry-row">
+          <button v-if="pendingRetryable" type="button" class="entry-primary" :disabled="submitting" @click="emit('resume')">
             继续上次操作
           </button>
-          <button type="button" class="home-resume-abandon" :disabled="submitting" @click="emit('abandonPending')">
+          <button type="button" class="entry-secondary" :disabled="submitting" @click="emit('abandonPending')">
             放弃上次操作
           </button>
         </div>
       </section>
 
-      <p v-if="error" class="home-error" role="alert">{{ error }}</p>
+      <p v-if="error" class="entry-error" role="alert">{{ error }}</p>
 
       <!-- 一键开房：进来就能开，不必先填表。下面的完整表单一个入口都没少。 -->
       <div class="home-main-actions">
@@ -317,108 +314,117 @@ function jumpToForm(): void {
         </button>
       </div>
 
+      <!-- 建房与加入拆成两个带标题的分区（10-16 第五版）：原来这两件事混在一个 form 里，
+           中间只隔一段提示文字，第一次进来的人得读完才知道「创建房间」和「加入房间」
+           是两个不同的动作。现在各有一行小标题，页面上第一次看得出「我到底在干哪件事」。 -->
       <form id="home-form" class="home-form" @submit.prevent>
-        <label class="home-field">
-          <span>你的昵称</span>
-          <input
-            v-model="nicknameModel"
-            type="text"
-            maxlength="12"
-            autocomplete="nickname"
-            placeholder="例如：小明"
+        <section class="entry-section">
+          <h2 class="entry-section-title">开一间新房</h2>
+
+          <label class="entry-field">
+            <span>你的昵称</span>
+            <input
+              v-model="nicknameModel"
+              type="text"
+              maxlength="12"
+              autocomplete="nickname"
+              placeholder="例如：小明"
+              :disabled="submitting"
+              @keydown.enter.prevent="submitCreate"
+            />
+          </label>
+
+          <MapPicker
+            v-if="showMapSelector"
+            v-model="selectedMapId"
+            :maps="activeMaps"
             :disabled="submitting"
-            @keydown.enter.prevent="submitCreate"
           />
-        </label>
 
-        <MapPicker
-          v-if="showMapSelector"
-          v-model="selectedMapId"
-          :maps="activeMaps"
-          :disabled="submitting"
-        />
-
-        <div class="home-actions">
-          <button type="button" class="home-primary" :disabled="!canCreate" @click="submitCreate">
+          <button type="button" class="entry-primary" :disabled="!canCreate" @click="submitCreate">
             创建房间
           </button>
-          <p class="home-hint">
+          <p class="entry-hint">
             建房后进入房间大厅：房主可添加电脑玩家并设定其难度、自定义初始资金等规则；
             皮肤与深色模式在设置里随时切换。
           </p>
-        </div>
+        </section>
 
-        <div class="home-join">
-          <!-- 房间码与房间密码同排（#23 ③）：它们是「进哪间房」的两个输入，天然属于一组；
-                身份选择与提交按钮留在同一行的右侧，保持原有的单行操作节奏。 -->
-          <div class="home-join__fields">
-            <label class="home-field">
-              <span>房间码</span>
-              <input
-                :value="roomCode"
-                type="text"
-                inputmode="numeric"
-                autocomplete="off"
-                placeholder="6 位数字"
-                aria-describedby="home-room-hint"
-                :aria-invalid="showRoomError"
+        <section class="entry-section">
+          <h2 class="entry-section-title">加入一间房</h2>
+
+          <div class="home-join">
+            <!-- 房间码与房间密码同排（#23 ③）：它们是「进哪间房」的两个输入，天然属于一组；
+                 身份选择与提交按钮留在同一行的右侧，保持原有的单行操作节奏。 -->
+            <div class="home-join__fields">
+              <label class="entry-field">
+                <span>房间码</span>
+                <input
+                  :value="roomCode"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="off"
+                  placeholder="6 位数字"
+                  aria-describedby="home-room-hint"
+                  :aria-invalid="showRoomError"
+                  :disabled="submitting"
+                  @keydown.enter.prevent="submitJoin"
+                  @input="onRoomInput"
+                />
+              </label>
+              <!-- 房间密码（#23 ③）：可选。只有知道密码的人才需要填；留空 = 直接尝试进入。
+                   用 `type="password"` 让屏幕外的旁观者看不到内容，`autocomplete="off"` 避免
+                   浏览器把「房间密码」错当成某个账号密码去自动填充。 -->
+              <label class="entry-field">
+                <span>房间密码</span>
+                <input
+                  v-model="roomPassword"
+                  type="password"
+                  autocomplete="off"
+                  :placeholder="`可选，${ROOM_PASSWORD_MIN_LENGTH}-${ROOM_PASSWORD_MAX_LENGTH} 位`"
+                  :maxlength="ROOM_PASSWORD_MAX_LENGTH"
+                  :disabled="submitting"
+                  @keydown.enter.prevent="submitJoin"
+                />
+              </label>
+            </div>
+            <div class="home-role-field" role="radiogroup" aria-label="加入身份">
+              <button
+                type="button"
+                class="home-role-option"
+                :class="{ active: joinRole === 'player' }"
+                :aria-pressed="joinRole === 'player'"
                 :disabled="submitting"
-                @keydown.enter.prevent="submitJoin"
-                @input="onRoomInput"
-              />
-            </label>
-            <!-- 房间密码（#23 ③）：可选。只有知道密码的人才需要填；留空 = 直接尝试进入。
-                 用 `type="password"` 让屏幕外的旁观者看不到内容，`autocomplete="off"` 避免
-                 浏览器把「房间密码」错当成某个账号密码去自动填充。 -->
-            <label class="home-field home-field--password">
-              <span>房间密码</span>
-              <input
-                v-model="roomPassword"
-                type="password"
-                autocomplete="off"
-                :placeholder="`可选，${ROOM_PASSWORD_MIN_LENGTH}-${ROOM_PASSWORD_MAX_LENGTH} 位`"
-                :maxlength="ROOM_PASSWORD_MAX_LENGTH"
+                @click="joinRole = 'player'"
+              >参赛</button>
+              <button
+                type="button"
+                class="home-role-option"
+                :class="{ active: joinRole === 'spectator' }"
+                :aria-pressed="joinRole === 'spectator'"
                 :disabled="submitting"
-                @keydown.enter.prevent="submitJoin"
-              />
-            </label>
+                @click="joinRole = 'spectator'"
+              >观战</button>
+            </div>
+            <button type="button" class="entry-secondary" :disabled="!canJoin" @click="submitJoin">
+              {{ joinRole === 'spectator' ? '以观战身份加入' : '加入房间' }}
+            </button>
           </div>
-          <div class="home-role-field" role="radiogroup" aria-label="加入身份">
-            <button
-              type="button"
-              class="home-role-option"
-              :class="{ active: joinRole === 'player' }"
-              :aria-pressed="joinRole === 'player'"
-              :disabled="submitting"
-              @click="joinRole = 'player'"
-            >参赛</button>
-            <button
-              type="button"
-              class="home-role-option"
-              :class="{ active: joinRole === 'spectator' }"
-              :aria-pressed="joinRole === 'spectator'"
-              :disabled="submitting"
-              @click="joinRole = 'spectator'"
-            >观战</button>
-          </div>
-          <button type="button" class="home-secondary" :disabled="!canJoin" @click="submitJoin">
-            {{ joinRole === 'spectator' ? '以观战身份加入' : '加入房间' }}
-          </button>
-        </div>
-        <p
-          id="home-room-hint"
-          class="home-hint"
-          :class="{ invalid: showRoomError || passwordLengthInvalid }"
-          role="status"
-        >
-          {{ showRoomError
-            ? '房间码需为 6 位数字'
-            : passwordLengthInvalid
-              ? `房间密码需为 ${ROOM_PASSWORD_MIN_LENGTH}-${ROOM_PASSWORD_MAX_LENGTH} 个字符（留空表示这间房没设密码）`
-              : (joinRole === 'spectator'
-                ? '观战仅查看棋盘、资产与战报；满员或已开局的房间也可加入'
-                : '输入好友分享的 6 位房间码；房间设了密码时一并填入密码') }}
-        </p>
+          <p
+            id="home-room-hint"
+            class="entry-hint"
+            :class="{ 'entry-hint--invalid': showRoomError || passwordLengthInvalid }"
+            role="status"
+          >
+            {{ showRoomError
+              ? '房间码需为 6 位数字'
+              : passwordLengthInvalid
+                ? `房间密码需为 ${ROOM_PASSWORD_MIN_LENGTH}-${ROOM_PASSWORD_MAX_LENGTH} 个字符（留空表示这间房没设密码）`
+                : (joinRole === 'spectator'
+                  ? '观战仅查看棋盘、资产与战报；满员或已开局的房间也可加入'
+                  : '输入好友分享的 6 位房间码；房间设了密码时一并填入密码') }}
+          </p>
+        </section>
       </form>
 
       <!-- 公开房间列表（#108）：默认展开，紧跟房间码输入框下方 —— 它是「加入房间」的第二种填法，
@@ -482,180 +488,92 @@ function jumpToForm(): void {
           {{ roomListHint.message }}
         </p>
       </section>
-    </section>
-  </main>
+    </div>
+  </ViewShell>
 </template>
 
 <style scoped>
 
-/* ---- 二级页返回条（与 ViewShell 的 .view-bar 同一套视觉）---- */
-/* 本页刻意**不用** ViewShell：它的表单控件样式整段挂在 `.home-card` 容器上（从首页原样搬来的），
-   而 ViewShell 的卡片在子组件里 —— 父组件的 scoped 选择器穿不过组件边界。
-   所以这一页自己持有一份壳，返回条也跟着写在本地。 */
-.view-bar {
+/* ---- 本页只保留「联机独有」的东西 ----
+   一键开房那颗贴纸按钮、建房 / 加入两块的横向排布、公开房间列表。
+   壳、卡片、返回条、输入框、按钮、分区小标题、续玩提示块 —— 全部在 ViewShell 与
+   ui/entryPage.css 里，与单机模式页共用同一份（见那两个文件头部的说明）。
+   ★ 别在本文件里再写一遍那些共用值，否则「两页统一」又变回两份。 */
+
+/* ---- 一键开房：与首页那两颗大按钮同一套贴纸工艺（5px 实体底边）---- */
+.home-main-actions {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--color-border);
+  gap: 16px;
+  width: 100%;
+  /* 与上方内容之间也放开一点：4px 叠在 .entry-body 自己的 gap 上仍偏紧。 */
+  margin-top: 4px;
 }
 
-.view-bar__back {
-  min-height: 36px;
-  padding: 4px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--color-text);
-  font-size: 13px;
-  font-weight: 800;
+.home-main {
+  /* 纵向 flex 是为副行留位：按钮带一行副行，高度要算上它。
+     与首页同一套贴纸按钮：下缘多了 5px 厚底边，高度要补回来。 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-height: 58px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--radius-control);
+  font-family: inherit;
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
   cursor: pointer;
 }
 
-.view-bar__back:hover {
-  border-color: var(--color-accent);
+/* 副行：0.72rem 而不是更小，手机上也读得清。 */
+.home-main__hint {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  opacity: 0.85;
 }
 
-.view-bar__title {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 900;
-  text-align: center;
+/* 与首页 HomeView 保持一致：纯色平涂 -> 同色渐变 + 深色底边的厚贴纸按钮。
+   「一键开房」用的就是这个 --online，不该和首页那两个大按钮长得不一样。 */
+.home-main--online {
+  --mode-deep: color-mix(in srgb, var(--mode-online) 62%, #000);
+  color: #fff4ec;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--mode-online) 76%, #fff) 0%,
+    var(--mode-online) 58%,
+    color-mix(in srgb, var(--mode-online) 88%, #000) 100%
+  );
 }
 
-.view-bar__aside {
-  color: var(--color-muted);
-  font-size: 12px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
+.home-main--online {
+  box-shadow:
+    0 5px 0 var(--mode-deep),
+    0 12px 22px rgb(53 39 20 / 22%);
 }
 
-.home-shell {
-  /* 100dvh 而非 100vh：移动端地址栏伸缩时 vh 不变、dvh 跟随可视区，
-     用 vh 会让内容高度与实际可视区脱节（对局页 .game-view 早已因此改为钉死视口）。
-     安全区：index.html 开了 viewport-fit=cover，内容会延伸到刘海/圆角区域，
-     故四边都要让出 inset，否则底部按钮会被 Home 指示条压住。*/
-  position: relative;
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding:
-    max(18px, env(safe-area-inset-top))
-    max(18px, env(safe-area-inset-right))
-    max(18px, env(safe-area-inset-bottom))
-    max(18px, env(safe-area-inset-left));
+.home-main:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    0 2px 0 var(--mode-deep),
+    0 6px 12px rgb(53 39 20 / 18%);
 }
 
-.home-card {
-  position: relative;
-  z-index: 1;
-  width: min(560px, 100%);
-  display: grid;
-  gap: 18px;
-  padding: clamp(20px, 4vw, 34px);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  background:
-    var(--surface-card),
-    var(--board-surface);
-  box-shadow: 0 18px 48px rgb(53 39 20 / 14%);
+.home-main:disabled {
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
-
-.home-eyebrow,
-.home-copy,
-.home-field span,
-.home-hint {
-  color: var(--color-muted);
-}
-
-.home-eyebrow {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.2em;
-}
-
-/* 字号由 .home-sticker__char 各自给出：贴纸逐字微旋转，字号必须落在字上才不会被旋转带歪。 */
-.home-card h1 {
-  margin: 0;
-  color: var(--title-color);
-}
-
-.home-copy {
-  margin: 0;
-  line-height: 1.6;
-}
-
-.home-error {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--color-error-bg);
-  color: var(--color-pay);
-  font-weight: 900;
-}
-
-.home-resume {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid var(--color-accent);
-  background: var(--event-bg);
-  color: var(--event-text);
-}
-
-.home-resume div {
-  display: grid;
-  gap: 2px;
-}
-
-.home-resume strong {
-  font-size: 14px;
-}
-
-.home-resume span {
-  font-size: 13px;
-}
-
+/* ---- 建房 / 加入：两个分区 ---- */
 .home-form {
   display: grid;
-  gap: 12px;
-}
-
-.home-field {
-  display: grid;
-  gap: 6px;
-  font-weight: 800;
-}
-
-.home-card input,
-.home-card select {
-  min-height: 44px;
-  width: 100%;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 8px 10px;
-  background: var(--surface-input);
-  color: var(--color-text);
-  font-weight: 800;
-}
-
-.home-card input[aria-invalid='true'] {
-  border-color: var(--color-pay);
-}
-
-.home-card input:focus-visible,
-.home-card select:focus-visible,
-.home-card button:focus-visible {
-  outline: 3px solid var(--color-accent);
-  outline-offset: 2px;
+  gap: 18px;
+  min-width: 0;
 }
 
 .home-join {
@@ -689,13 +607,14 @@ function jumpToForm(): void {
 
 .home-role-option {
   flex: 1;
-  min-height: 48px;
+  min-height: 44px;
   padding-inline: 14px;
   border: 0;
   background: transparent;
   color: var(--color-text);
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-family: inherit;
+  font-size: var(--text-body-size);
+  font-weight: 800;
   cursor: pointer;
 }
 
@@ -708,167 +627,9 @@ function jumpToForm(): void {
   opacity: 0.6;
 }
 
-.home-actions {
-  display: grid;
-  gap: 8px;
-}
-
-.home-hint {
-  margin: 0;
-  font-size: 12px;
-}
-
-.home-hint.invalid {
-  color: var(--color-pay);
-  font-weight: 900;
-}
-
-.home-primary,
-.home-secondary,
-.home-local,
-.home-resume-button {
-  min-height: 48px;
-  border: 0;
-  border-radius: 16px;
-  font-size: 1rem;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.home-primary {
-  width: 100%;
-  background: var(--button-enabled-bg);
-  color: var(--button-enabled-text);
-}
-
-.home-secondary {
-  padding-inline: 18px;
-  background: var(--color-accent);
-  color: var(--color-text);
-}
-
-.home-resume-button {
-  padding-inline: 16px;
-  background: var(--color-primary);
-  color: #fff4ec;
-}
-
-.home-resume-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.home-resume-abandon {
-  min-height: 48px;
-  padding-inline: 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 16px;
-  background: transparent;
-  color: var(--event-text);
-  font-size: 1rem;
-  font-weight: 900;
-  cursor: pointer;
-}
-
 .home-resume-note {
   color: var(--color-pay);
   font-weight: 900;
-}
-
-.home-primary:disabled,
-.home-secondary:disabled,
-.home-resume-button:disabled,
-.home-resume-abandon:disabled,
-.home-local:disabled {
-  background: var(--button-disabled-bg);
-  color: var(--button-disabled-text);
-  cursor: not-allowed;
-}
-
-/* 两个等宽主按钮、上下相邻、两种色、地位对等（手法 3）。
-   10-16 第四版（用户：「这几个按钮上下距离…有点拥挤」）：
-   主按钮各带一条 5px 实体底边（box-shadow: 0 5px 0），目看的白色间隔
-   = gap - 5px，原来 10px 只剩 5px，两个按钮像粘在一起 ⇒ gap 提到 16px。 */
-.home-main-actions {
-  display: grid;
-  gap: 16px;
-  width: 100%;
-  /* 与上方角标（.home-sticker__sub）之间也放开一点：4px 叠在 hero 自己的 10px
-     gap 上仍偏紧。 */
-  margin-top: 10px;
-}
-
-.home-main {
-  /* 纵向 flex 是为副行留位：两个按钮各带一行**同样字数**的副行，高度才不会参差 ——
-     「两个等宽主按钮」这条视觉承诺里，也含「等高」这半边。 */
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  /* 与首页同一套贴纸按钮：下缘多了 5px 厚底边，高度要补回来，两个按钮才等高。 */
-  min-height: 58px;
-  padding: 8px 12px;
-  border: 0;
-  border-radius: var(--radius-control);
-  font-size: 1.05rem;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-}
-
-/* 副行：0.72rem 而不是更小，手机上也读得清。 */
-.home-main__hint {
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0;
-  opacity: 0.85;
-}
-
-/* 与首页 HomeView 保持一致：纯色平涂 -> 同色渐变 + 深色底边的厚贴纸按钮。
-   「一键开房」用的就是这个 --online，不该和首页那两个大按钮长得不一样。 */
-.home-main--online {
-  --mode-deep: color-mix(in srgb, var(--mode-online) 62%, #000);
-  color: #fff4ec;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--mode-online) 76%, #fff) 0%,
-    var(--mode-online) 58%,
-    color-mix(in srgb, var(--mode-online) 88%, #000) 100%
-  );
-}
-
-.home-main--local {
-  --mode-deep: color-mix(in srgb, var(--mode-local) 62%, #000);
-  color: #f1fbf4;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--mode-local) 76%, #fff) 0%,
-    var(--mode-local) 58%,
-    color-mix(in srgb, var(--mode-local) 88%, #000) 100%
-  );
-}
-
-.home-main--online,
-.home-main--local {
-  box-shadow:
-    0 5px 0 var(--mode-deep),
-    0 12px 22px rgb(53 39 20 / 22%);
-}
-
-.home-main:active:not(:disabled) {
-  transform: translateY(3px);
-  box-shadow:
-    0 2px 0 var(--mode-deep),
-    0 6px 12px rgb(53 39 20 / 18%);
-}
-
-.home-main:disabled {
-  background: var(--button-disabled-bg);
-  color: var(--button-disabled-text);
-  box-shadow: none;
-  cursor: not-allowed;
 }
 
 /* ---- 公开房间列表（#108）---- */
@@ -878,8 +639,8 @@ function jumpToForm(): void {
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--color-border);
-  border-radius: 14px;
-  background: var(--color-surface-muted, transparent);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
 }
 
 .home-rooms__head {
@@ -891,17 +652,20 @@ function jumpToForm(): void {
 
 .home-rooms__title {
   margin: 0;
-  font-size: 14px;
-  font-weight: 800;
+  color: var(--title-color);
+  font-size: var(--text-section-size);
+  font-weight: 900;
 }
 
 .home-rooms__refresh {
+  min-height: 32px;
   padding: 4px 10px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: transparent;
   color: var(--color-muted);
-  font-size: 12px;
+  font-family: inherit;
+  font-size: var(--text-meta-size);
   font-weight: 700;
   cursor: pointer;
 }
@@ -914,7 +678,7 @@ function jumpToForm(): void {
 .home-rooms__notice {
   margin: 0;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: var(--text-meta-size);
   line-height: 1.6;
 }
 
@@ -939,6 +703,7 @@ function jumpToForm(): void {
   padding: 8px 10px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
+  border-left: 3px solid var(--color-primary);
 }
 
 .home-rooms__meta {
@@ -947,6 +712,7 @@ function jumpToForm(): void {
 
 .home-rooms__code {
   font-variant-numeric: tabular-nums;
+  font-size: var(--text-section-size);
   font-weight: 800;
   letter-spacing: 1px;
 }
@@ -957,7 +723,7 @@ function jumpToForm(): void {
   border-radius: 999px;
   background: var(--color-border);
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--text-badge-size);
   font-weight: 700;
 }
 
@@ -965,7 +731,7 @@ function jumpToForm(): void {
   margin: 2px 0 0;
   overflow: hidden;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: var(--text-meta-size);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -977,12 +743,14 @@ function jumpToForm(): void {
 }
 
 .home-rooms__button {
+  min-height: 32px;
   padding: 5px 12px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-primary, #2563eb);
   color: #fff;
-  font-size: 12px;
+  font-family: inherit;
+  font-size: var(--text-meta-size);
   font-weight: 700;
   cursor: pointer;
 }
@@ -997,34 +765,13 @@ function jumpToForm(): void {
   cursor: not-allowed;
 }
 
-.home-rooms__item { border-left: 3px solid var(--color-primary); }
-
-/* 阈值与 GameView / MobileSheet 的紧凑布局（1024px）统一：
-   折叠屏内屏与小平板竖屏的 CSS 宽度常落在 768–1024，用 767 会把它们误判成桌面。 */
 @media (max-width: 1024px) {
-  .home-shell {
-    /* 移动形态改为顶部对齐：单列内容常高于视口，居中会让首屏上下同时被裁。 */
-    padding:
-      max(10px, env(safe-area-inset-top))
-      max(10px, env(safe-area-inset-right))
-      max(10px, env(safe-area-inset-bottom))
-      max(10px, env(safe-area-inset-left));
-    place-items: start center;
-  }
-
   .home-join {
     grid-template-columns: 1fr;
   }
 
   .home-role-field {
     align-self: start;
-  }
-}
-
-/* 矮视口（横屏手机、折叠屏半开）：一律顶部对齐，避免居中把内容上下切掉。 */
-@media (max-height: 620px) {
-  .home-shell {
-    place-items: start center;
   }
 }
 </style>

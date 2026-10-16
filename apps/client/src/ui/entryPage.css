@@ -1,0 +1,204 @@
+/* ============================================================================
+   二级整页（在线联网对战 / 单机模式）共用的一套排版与控件样式。
+
+   为什么是全局样式表而不是各页各写一份
+     用户的第三条：「在线联网、单机模式里面的样式也统一」。这两页原来各持一份壳：
+     单机页 .setup-card 宽 720px、在线页 .home-card 宽 560px；同一个「输入框」一处
+     min-height 44px、另一处 45px；同一个「小标题」一处 15px、另一处 18px —— 两页像
+     两个不同的人做的。抄两份、靠人肉保持同步，迟早漂移。
+     所以：**两页共用的东西只在这里写一次**，两页都用 .entry-* 类。
+
+   为什么由 main.ts 全局引入（而不是在 <style scoped> 里 import）
+     这是本项目最贵的那个 bug 的修法，见 ui/globalStyleBoundary.test.ts：
+     scoped 组件里 import 全局 CSS 会让 @vitejs/plugin-vue 把选择器做笛卡尔积，
+     产物一度 8.2 MB 且 .game-shell{display:grid} 落进永不匹配的死规则里。
+
+   选择器为什么用 .entry-body 包起来
+     本文件是非 scoped 的，选择器会命中全站。全都锚在 .entry-body 之下 ——
+     这个类只有这两个二级整页在用，别的页面一个都沾不到。
+     ★ 但每页自己的 <style scoped> 里**不要再写同名规则去覆盖**：要么改这里，
+     要么用页面自己的类名，否则「统一」就又变成两份。
+
+   控件尺寸与第二级页面的对应关系（改这里就是改两页，别再逐页改）
+     输入 / 下拉 ：高 44px、圆角 12px、--surface-input 底、字重 800
+     主按钮      ：高 48px、圆角 16px、--button-enabled-bg
+     次按钮      ：高 48px、圆角 16px、描边
+     分区小标题  ：--text-section-size（14px）
+     辅助说明    ：--text-meta-size（12px）
+     ========================================================================== */
+
+.entry-body {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ---- 分区：一个小标题 + 一组内容。两页的每一段都用它，节奏才一致 ---- */
+.entry-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.entry-section-title {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--title-color, var(--color-primary));
+  font-size: var(--text-section-size);
+  font-weight: 900;
+}
+
+.entry-section-hint {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-meta-size);
+  line-height: 1.6;
+}
+
+/* ---- 表单 ---- */
+.entry-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 800;
+}
+
+.entry-field > span {
+  color: var(--color-muted);
+}
+
+/* :where() 让这层否定选择器**不贡献特异度** —— 否则它会以 (0,3,1) 压过组件里
+   `.setup-checkbox input` 的 18×18px，把「开启现金目标」的复选框撑成 44px 方块。 */
+.entry-body input:where(:not([type='checkbox'], [type='radio'])),
+.entry-body select {
+  min-height: 44px;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: var(--surface-input);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--text-section-size);
+  font-weight: 800;
+}
+
+.entry-body input:focus-visible,
+.entry-body select:focus-visible,
+.entry-body button:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.entry-body input[aria-invalid='true'] {
+  border-color: var(--color-pay);
+}
+
+.entry-hint {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-meta-size);
+  line-height: 1.6;
+}
+
+.entry-hint--invalid {
+  color: var(--color-pay);
+  font-weight: 900;
+}
+
+.entry-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--color-error-bg);
+  color: var(--color-pay);
+  font-size: var(--text-body-size);
+  font-weight: 900;
+}
+
+/* ---- 按钮 ---- */
+.entry-primary,
+.entry-secondary {
+  min-height: 48px;
+  border: 0;
+  border-radius: 16px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.entry-primary {
+  width: 100%;
+  background: var(--button-enabled-bg);
+  color: var(--button-enabled-text);
+}
+
+.entry-secondary {
+  padding-inline: 18px;
+  border: 1px solid var(--color-border);
+  background: var(--board-surface);
+  color: var(--color-text);
+}
+
+.entry-primary:disabled,
+.entry-secondary:disabled {
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
+  border-color: transparent;
+  cursor: not-allowed;
+}
+
+/* 竖向排一列按钮（表单底部的「开始新对局」等） */
+.entry-actions {
+  display: grid;
+  gap: 10px;
+}
+
+/* 横向排一行按钮（「继续 / 放弃」这种成对动作）：这里的按钮不该再撑满整行 */
+.entry-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.entry-row .entry-primary {
+  width: auto;
+  flex: 0 1 auto;
+  padding-inline: 18px;
+}
+
+/* ---- 「接着上一局」提示块 / 本机存档卡 ----
+   在线页的两块「续上一局」与单机页的存档卡是同一件事（都问「要不要接着玩那局」），
+   形状必须一样：暖黄票根底 + 金描边，右侧一组成对动作。 */
+.entry-resume {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-accent);
+  border-radius: 16px;
+  background: var(--event-bg);
+  color: var(--event-text);
+}
+
+.entry-resume__copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.entry-resume__copy strong {
+  font-size: var(--text-section-size);
+}
+
+.entry-resume__copy span {
+  overflow-wrap: anywhere;
+  font-size: var(--text-body-size);
+}

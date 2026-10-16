@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { listActiveMaps, type MapCatalogEntry } from '@richman/board-data';
-import ViewShell from './ViewShell.vue';
+import DetailSheet from '../components/DetailSheet.vue';
 import { DEFAULT_ONLINE_NICKNAME } from '../session/appFlow';
 import {
   browserStorage,
@@ -31,12 +31,14 @@ const props = withDefaults(defineProps<{
   nickname?: string;
   /** 用来把 `favoriteMaps` 里的地图 id 翻译成人读的名字。 */
   activeMaps?: readonly MapCatalogEntry[];
+  /** 弹窗是否打开。四个图标入口改成弹窗后由 App 传 true（本详情只在该面板激活时挂载）。 */
+  open: boolean;
 }>(), {
   nickname: '',
   activeMaps: () => listActiveMaps(),
 });
 
-const emit = defineEmits<{ back: [] }>();
+const emit = defineEmits<{ close: [] }>();
 
 // 本地战绩（路线图 #12）：无存储时为 null，界面据此给出「还没打过」的说明。
 // 用 ref 而不是 computed：导入战绩码之后要主动刷新结果（storage 本身不是响应式的）。
@@ -118,7 +120,7 @@ function importStats(): void {
 </script>
 
 <template>
-  <ViewShell title="我的战绩" aside="本机" @back="emit('back')">
+  <DetailSheet :open="open" title="我的战绩" aside="本机" @close="emit('close')">
     <p v-if="!playerStats" class="view-empty" role="status">
       这台设备上还没有战绩。打完一局（联机或单机都可以）就会记在这里。
     </p>
@@ -179,7 +181,7 @@ function importStats(): void {
         >{{ statsNotice.message }}</p>
       </div>
     </div>
-  </ViewShell>
+  </DetailSheet>
 </template>
 
 <style scoped>
@@ -201,7 +203,7 @@ function importStats(): void {
 
 .player-stats h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--text-section-size);
   color: var(--color-muted);
   font-weight: 600;
 }
@@ -260,7 +262,7 @@ function importStats(): void {
   border-radius: 14px;
   background: var(--color-primary);
   color: #fff4ec;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 900;
   cursor: pointer;
 }

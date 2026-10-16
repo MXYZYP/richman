@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import ViewShell from './ViewShell.vue';
+import DetailSheet from '../components/DetailSheet.vue';
 import {
   buildLeaderboardSubmission,
   describeLeaderboardFailure,
@@ -28,11 +28,13 @@ import { formatMoney } from '../ui/format';
 const props = withDefaults(defineProps<{
   /** 上榜时用的昵称。由 App 持有、在线对战页输入，与首页那版行为一致。 */
   nickname?: string;
+  /** 弹窗是否打开。四个图标入口改成弹窗后由 App 传 true（本详情只在该面板激活时挂载）。 */
+  open: boolean;
 }>(), {
   nickname: '',
 });
 
-const emit = defineEmits<{ back: [] }>();
+const emit = defineEmits<{ close: [] }>();
 
 const leaderboardEntries = ref<readonly LeaderboardEntry[]>([]);
 const leaderboardRank = ref<number | null>(null);
@@ -99,10 +101,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <ViewShell
+  <DetailSheet
+    :open="open"
     title="成就排行榜"
     :aside="leaderboardRank === null ? '' : `第 ${leaderboardRank} 名`"
-    @back="emit('back')"
+    @close="emit('close')"
   >
     <div class="leaderboard">
       <div class="leaderboard-head">
@@ -155,7 +158,7 @@ onMounted(() => {
         </li>
       </ol>
     </div>
-  </ViewShell>
+  </DetailSheet>
 </template>
 
 <style scoped>
@@ -179,7 +182,7 @@ onMounted(() => {
 
 .leaderboard h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--text-section-size);
   font-weight: 600;
   color: var(--color-muted);
 }

@@ -15,8 +15,12 @@ const props = withDefaults(defineProps<{
   open: boolean;
   title: string;
   layout?: 'inline' | 'modal';
+  /** 标题右侧的一小段状态文字（「本机」/「8 / 12」/「已绑定」…）。
+      以前在 ViewShell 的返回条上，详情页改成弹窗后跟着搬进弹窗头部。 */
+  aside?: string;
 }>(), {
   layout: 'inline',
+  aside: '',
 });
 
 const emit = defineEmits<{ close: [] }>();
@@ -87,7 +91,7 @@ function closeFromBackdrop(event: MouseEvent): void {
   >
     <section class="mobile-sheet-panel">
       <header class="mobile-sheet-head">
-        <h2 :id="titleId">{{ props.title }}</h2>
+        <h2 :id="titleId">{{ props.title }}<span v-if="props.aside !== ''" class="mobile-sheet-aside">{{ props.aside }}</span></h2>
         <button
           ref="closeButton"
           type="button"
@@ -133,31 +137,51 @@ function closeFromBackdrop(event: MouseEvent): void {
   max-height: calc(100dvh - 40px);
 }
 
+/* 10-16 第四版：头部改成「标题**居中** + 关闭按钮贴右上」，照参考图把弹窗做成真正的对话框。
+   三列等分栅格让标题落在水平中轴上（左右两侧 1fr 相等），
+   不会因为右边多了一个按钮而整体左偏。 */
 .mobile-sheet-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px 8px;
+  gap: 10px;
+  padding: 12px 14px 10px;
   border-bottom: 1px solid var(--color-border);
   margin-bottom: 12px;
 }
 
 .mobile-sheet-head h2 {
+  grid-column: 2;
   margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
   color: var(--title-color);
-  font-size: 1.15rem;
+  font-size: var(--text-sheet-title);
   font-weight: 800;
+  text-align: center;
+}
+
+.mobile-sheet-aside {
+  color: var(--color-muted);
+  font-size: var(--text-meta-size);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .mobile-sheet-close {
+  grid-column: 3;
+  justify-self: end;
   min-height: 44px;
   padding: 0 14px;
   border: 1px solid var(--color-border);
   border-radius: 9px;
   background: transparent;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: var(--text-meta-size);
   font-weight: 700;
   cursor: pointer;
   flex-shrink: 0;
@@ -191,31 +215,33 @@ function closeFromBackdrop(event: MouseEvent): void {
   }
 }
 
-/* modal 变体：居中弹窗，保留头部标题与关闭按钮。
-   断点是 768px 而非 1025px：GameView 的紧凑布局上限是 1024px，两边必须对齐。
-   此前这里挂 min-width:1025px，于是 974px 的笔记本拿不到居中形态，退回底部抽屉——
-   弹窗贴着屏幕底边、顶部却是直角（底 18px 圆角 + 上直角），看着像没做完。 */
-@media (min-width: 768px) {
-  .mobile-sheet[data-variant='modal'] {
-    top: 50%;
-    bottom: auto;
-    left: 50%;
-    right: auto;
-    translate: -50% -50%;
-    width: min(92vw, 520px);
-    /* 居中弹窗上下都要留呼吸位：此前 88vh 在矮视口（如笔记本 974×664）下
-       几乎顶满，把内容挤成一条细长的滚动条。收到 84vh 换取上下留白。 */
-    max-height: min(84vh, 720px);
-    border: 1px solid var(--center-border);
-    /* 四角都圆：底部抽屉是 18px 18px 0 0（底边贴屏幕），居中弹窗不该留直角。 */
-    border-radius: 16px;
-    border-bottom: 1px solid var(--center-border);
-    box-shadow: 0 24px 64px rgb(53 39 20 / 28%);
-  }
+/* modal 变体：**任何屏宽**都居中（10-16 第四版）。
+   用户拿了参考图（手机上也居中弹窗）+「所有弹窗大小显示方式都要保持一致」。
+   此前这段挂在 @media (min-width: 768px) 里：手机上退回底部抽屉、桌面上才居中 ——
+   同一套弹窗两种长相，正是「不一致」的来源。现在整段提到顶层。
+   ★ 宽度与高度**只在这里写一次**：谁都不许在别处再给弹窗改宽高，
+   否则「所有弹窗尺寸一致」当场作废（components/sheetVariant.test.ts 会扫全仓）。 */
+.mobile-sheet[data-variant='modal'] {
+  top: 50%;
+  bottom: auto;
+  left: 50%;
+  right: auto;
+  translate: -50% -50%;
+  width: min(92vw, 520px);
+  max-width: 92vw;
+  /* 上下都要留呼吸位：86dvh 在矮视口（笔记本 974×664 / 横屏手机）下也留出余量；
+     dvh 而非 vh —— 移动端地址栏伸缩时 vh 不变、dvh 跟随可视区。 */
+  max-height: min(86dvh, 720px);
+  margin: 0;
+  border: 1px solid var(--center-border);
+  /* 四角都圆：底部抽屉是 18px 18px 0 0（底边贴屏幕），居中弹窗不该留直角。 */
+  border-radius: 16px;
+  border-bottom: 1px solid var(--center-border);
+  box-shadow: 0 24px 64px rgb(53 39 20 / 28%);
+}
 
-  .mobile-sheet[data-variant='modal'] .mobile-sheet-panel {
-    max-height: min(84vh, 720px);
-  }
+.mobile-sheet[data-variant='modal'] .mobile-sheet-panel {
+  max-height: min(86dvh, 720px);
 }
 
 /* 抽屉上滑进场：服务于「底部抽屉」形态，因此阈值必须与上面的形态分界互为补集。

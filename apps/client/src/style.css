@@ -121,6 +121,18 @@
   --text-l3-size: 11px;      /* L3 元信息 */
   --text-l3-weight: 400;
 
+  /* ---- 弹窗 / 二级整页的正文阶（10-16 第五版）----
+     用户的第二条：弹窗「样式大小统一、字体大小统一」。原来同一个「小标题」在更新说明里
+     22px、在设置面板里 14px、在战绩页里 15px —— 同一个东西三种字号，一看就不是一套。
+     这里只留四档正文：徽标 11 / 元信息 12 / 正文 13 / 小标题 14；标题单独一档，
+     且**弹窗标题与二级页标题同号**（都是 1.15rem），点开哪个都不跳字号。
+     新增弹窗 / 二级页请引用这些变量；components/sheetTypography.test.ts 扫全仓守着。 */
+  --text-sheet-title: 1.15rem;
+  --text-section-size: 14px;
+  --text-body-size: 13px;
+  --text-meta-size: 12px;
+  --text-badge-size: 11px;
+
   /* 功能格背景（机会/命运/税/机场/起点/特殊/支线）*/
   --cell-function-bg: linear-gradient(180deg, #fffdf8, #f4ecdd);
 

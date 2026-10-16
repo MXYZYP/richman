@@ -29,11 +29,15 @@ $files = @(
   # ---------- Client source ----------
   "apps/client/index.html",
   "apps/client/src/main.ts",
-  # main.ts imports these two stylesheets directly. They are not referenced by any .vue file,
+  # main.ts imports these three stylesheets directly. They are not referenced by any .vue file,
   # so nothing else would pull them in: leave one out and the server vite build dies with
-  # `Could not resolve "./style.css"` / `"./ui/darkMode.css"`.
+  # `Could not resolve "./style.css"` / `"./ui/darkMode.css"` / `"./ui/entryPage.css"`.
   "apps/client/src/style.css",
   "apps/client/src/ui/darkMode.css",
+  # 10-16 fifth pass: shared typography + control stylesheet for the two full-page entries
+  # (OnlineEntryView / GameSetup). Only main.ts imports it -- leave it out and the server
+  # vite build dies with `Could not resolve "./ui/entryPage.css"`.
+  "apps/client/src/ui/entryPage.css",
   "apps/client/src/env.d.ts",
   "apps/client/src/pwaInstall.ts",
   "apps/client/src/audio/bgm.ts",
@@ -98,9 +102,15 @@ $files = @(
   "apps/client/src/views/AchievementsView.vue",
   "apps/client/src/views/CloudSyncView.vue",
   "apps/client/src/views/LeaderboardView.vue",
-  # Shared card shell for the four detail pages (a child's scoped styles do reach slot content,
-  # which is why the shell is reusable while the online page keeps its own card wrapper).
+  # Shared shell; its role changed in the 10-16 fifth pass. It is now the shell for BOTH
+  # full-page entries, OnlineEntryView and GameSetup: the back-home button sits on the
+  # top-left return bar and the card size is declared exactly once, here. The four icon
+  # detail pages moved to components/DetailSheet.vue (a modal).
   "apps/client/src/views/ViewShell.vue",
+  # Modal shell for the four icon detail pages (a thin wrapper over MobileSheet that writes
+  # no width/height of its own). A missing entry means
+  # `Could not resolve "../components/DetailSheet.vue"`.
+  "apps/client/src/components/DetailSheet.vue",
   "apps/client/src/game/clientGame.ts",
   "apps/client/src/game/gameSetup.ts",
   "apps/client/src/session/gamePresenter.ts",
@@ -430,10 +440,17 @@ $files = @(
   # tile centres) and below the centre art. Without it, a z-index slip hides every map's
   # track behind its own tiles and only fragments show in the gaps.
   "apps/client/src/components/boardRouteLayer.test.ts",
-  # Pins the two MobileSheet shapes: the centred dialog must start at 768px (not 1025px,
-  # otherwise a 974px laptop falls back to the bottom drawer) and the slide-in animation
-  # must skip the modal variant (its translate carries the centring).
+  # Pins the shared dialog shape: every `layout="modal"` sheet is a centred dialog on every
+  # width (it used to start at 768px, so a phone got the bottom drawer while a laptop got the
+  # centred one), width/max-height are declared exactly once, and the slide-in animation must
+  # skip the modal variant (its translate carries the centring).
   "apps/client/src/components/sheetVariant.test.ts",
+  # Added in the 10-16 fifth pass: the entry-page shell contract (both pages share ViewShell,
+  # the back button lives only in the shell, the card size is declared once) and the type
+  # scale contract (modals and detail pages may only use the named font-size steps). A
+  # stale server copy means neither contract is pinned any more.
+  "apps/client/src/views/entryPageShell.test.ts",
+  "apps/client/src/ui/sheetTypography.test.ts",
   "apps/client/src/components/SettingsDialog.test.ts",
   "apps/client/src/ui/mapRules.test.ts",
   # Guards the global/scoped CSS boundary: importing a global stylesheet from a

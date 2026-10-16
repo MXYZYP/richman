@@ -14,7 +14,10 @@ describe('ReleaseNotesDialog', () => {
   it('renders the current player version and every historical release', async () => {
     const html = await renderDialog();
 
-    expect(html).toContain('aria-labelledby="release-notes-title"');
+    // 10-16 第五版：这一页换成了 MobileSheet 的 modal 变体（原来是全项目唯一一个自带
+    // <dialog> 的首页弹窗，宽 720 / 圆角 24 / 自绘大标题，与其余五个弹窗两套长相）。
+    // 断言改成「押在统一壳上」这件事本身，而不是它的 aria 名。
+    expect(html).toContain('data-variant="modal"');
     expect(html).toContain(`当前版本 v${releaseNotes.releases[0].version}`);
     expect(html).toContain('role="region" aria-label="更新说明列表" tabindex="0"');
     for (const release of releaseNotes.releases) {
@@ -60,7 +63,10 @@ describe('ReleaseNotesDialog', () => {
 
     expect(html).toContain('更新说明');
     expect(html).toContain(`v${releaseNotes.releases[0].version}`);
-    expect(html).toContain('aria-labelledby="release-notes-title"');
+    // 10-16 第五版：这一页换成了 MobileSheet 的 modal 变体（原来是全项目唯一一个自带
+    // <dialog> 的首页弹窗，宽 720 / 圆角 24 / 自绘大标题，与其余五个弹窗两套长相）。
+    // 断言改成「押在统一壳上」这件事本身，而不是它的 aria 名。
+    expect(html).toContain('data-variant="modal"');
     expect(html).not.toContain('role="region" aria-label="更新说明列表"');
     for (const release of releaseNotes.releases) {
       for (const change of release.changes) expect(html).not.toContain(change);
