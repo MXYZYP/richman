@@ -30,11 +30,43 @@ export interface AppFlowSnapshot {
    * touching storage. The stored session survives so home can still offer 回到上一局.
    */
   restoreDeferred: boolean;
+  /**
+   * 首页壳内的子页面（《UI 改造方案》§三）。首页从「什么都在一页上」拆成「入口页 + 若干子页」之后，
+   * 这一项就是那一层子路由；`'main'` 即瘦身后的纯入口页。
+   */
+  homePane: HomePane;
 }
 
+/**
+ * 首页壳下的子页面。
+ * - `main`         — 纯入口页：hero + 两个等宽主按钮 + 三个胶囊入口 + 成果图标行 + 页脚。
+ * - `online`       — 在线对战页：昵称/地图/建房 + 加房（房间码/密码/身份）+ 公开房间列表。
+ * - `stats`        — 战绩详情页（含战绩码导入导出）。
+ * - `achievements` — 成就详情页。
+ * - `cloud`        — 云同步详情页。
+ * - `leaderboard`  — 成就排行榜页。
+ */
+export type HomePane = 'main' | 'online' | 'stats' | 'achievements' | 'cloud' | 'leaderboard';
+
+/**
+ * 首页壳里的「非入口」子页各自是**独立的 `AppPage.kind`**，而不是 `{ kind: 'home'; pane }`
+ * 一个变体。
+ *
+ * 理由：`App.vue` 用 `v-else-if="pageKind === …"` 分派视图，`pageKind` 必须是「现在是哪一页」
+ * 的唯一真相源。把 pane 塞进 `home` 的载荷里，模板就得再套一层 `page.pane === …` 的条件 ——
+ * 同一件事有了两个判据，早晚会分叉。
+ *
+ * 注意 `home` 不再带 `resume` / `canResumeActive`：两块「续上一局」的提示都搬去了在线对战页，
+ * 而入口页位置上永远不会有它们（有东西可续时 `resolvePage` 直接落到 `online`，见 `resolveHomePane`）。
+ */
 export type AppPage =
   | { kind: 'restoring'; failure: RestoreFailure | null }
-  | { kind: 'home'; resume: PendingRoomRequest | null; canResumeActive: boolean }
+  | { kind: 'home' }
+  | { kind: 'online'; resume: PendingRoomRequest | null; canResumeActive: boolean }
+  | { kind: 'stats' }
+  | { kind: 'achievements' }
+  | { kind: 'cloud' }
+  | { kind: 'leaderboard' }
   | { kind: 'local_setup' }
   | { kind: 'game' }
   | { kind: 'lobby' }
@@ -68,7 +100,37 @@ export function resolvePage(snapshot: AppFlowSnapshot): AppPage {
     return { kind: 'restoring', failure: snapshot.connection === 'failed' ? 'transient' : null };
   }
 
-  return { kind: 'home', resume: snapshot.pending, canResumeActive: snapshot.storedActive };
+  return resolveHomePane(snapshot);
+}
+
+/**
+ * 首页壳内的落点判定。到达这里时已经确定：不在本地局里、不在房间里、也不必走恢复页。
+ *
+ * 两条规则，顺序有意义：
+ *  1. **用户点了哪个子页就给哪个** —— 显式导航压过下面的自动落点。否则「有待续请求时点开战绩」
+ *     会被立刻弹回在线页，那个入口按钮看上去就是坏的。
+ *  2. 停在入口页（`'main'`）时，**有东西可续就自动落到在线页**。待续的建房/加房请求与
+ *     「回到上一局」两块提示都住在在线页，而瘦身后的入口页没有位置挂它们；不这样兜的话，
+ *     「请求还存着、首页却一字不提」就成了功能黑洞 —— 玩家没有任何路径回到自己那一局。
+ */
+function resolveHomePane(snapshot: AppFlowSnapshot): AppPage {
+  switch (snapshot.homePane) {
+    case 'online':
+      return { kind: 'online', resume: snapshot.pending, canResumeActive: snapshot.storedActive };
+    case 'stats':
+      return { kind: 'stats' };
+    case 'achievements':
+      return { kind: 'achievements' };
+    case 'cloud':
+      return { kind: 'cloud' };
+    case 'leaderboard':
+      return { kind: 'leaderboard' };
+    case 'main':
+      if (snapshot.pending !== null || snapshot.storedActive) {
+        return { kind: 'online', resume: snapshot.pending, canResumeActive: snapshot.storedActive };
+      }
+      return { kind: 'home' };
+  }
 }
 
 const ROOM_CODE_PATTERN = /^\d{6}$/;

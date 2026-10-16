@@ -39,6 +39,7 @@ function online(overrides: Partial<AppFlowSnapshot> = {}): AppFlowSnapshot {
     room: null,
     gameOver: false,
     restoreDeferred: false,
+    homePane: 'main',
     ...overrides,
   };
 }
@@ -63,38 +64,40 @@ describe('resolvePage — page-state reducer', () => {
       expect(page).toEqual({ kind: 'restoring', failure: null });
     });
 
-    it('falls back to home once a permanent failure has cleared the stored session', () => {
+    it('falls back to the pure entry page once a permanent failure has cleared the stored session', () => {
       // Permanent failures (INVALID_TOKEN / ROOM_NOT_FOUND) clear storage before the
-      // connection settles as failed, so storedActive is false here.
+      // connection settles as failed, so storedActive is false here. Nothing is left to
+      // resume, so the landing spot is the entry page itself rather than the online pane.
       const page = resolvePage(online({ storedActive: false, connection: 'failed', pending: null }));
-      expect(page).toEqual({ kind: 'home', resume: null, canResumeActive: false });
+      expect(page).toEqual({ kind: 'home' });
     });
   });
 
   describe('deferred restore (user chose 暂不恢复 — non-destructive)', () => {
-    it('routes to home while the stored session survives, offering an independent 回到上一局', () => {
+    it('routes to the online pane while the stored session survives, offering an independent 回到上一局', () => {
+      // 「回到上一局」这块提示住在在线页 ⇒ 停在入口页时自动落到那里。
       const page = resolvePage(online({ storedActive: true, restoreDeferred: true, connection: 'failed' }));
-      expect(page).toEqual({ kind: 'home', resume: null, canResumeActive: true });
+      expect(page).toEqual({ kind: 'online', resume: null, canResumeActive: true });
     });
 
-    it('defers to home even before the connection has settled as failed', () => {
+    it('lands on the online pane even before the connection has settled as failed', () => {
       const page = resolvePage(online({ storedActive: true, restoreDeferred: true, connection: 'reconnecting' }));
-      expect(page).toEqual({ kind: 'home', resume: null, canResumeActive: true });
+      expect(page).toEqual({ kind: 'online', resume: null, canResumeActive: true });
     });
 
-    it('stays home after a later transport connect while recovery remains deferred', () => {
+    it('stays on the online pane after a later transport connect while recovery remains deferred', () => {
       const page = resolvePage(online({ storedActive: true, restoreDeferred: true, connection: 'connected' }));
-      expect(page).toEqual({ kind: 'home', resume: null, canResumeActive: true });
+      expect(page).toEqual({ kind: 'online', resume: null, canResumeActive: true });
     });
 
     it('still surfaces a leftover pending request alongside the deferred active session', () => {
       const page = resolvePage(online({ storedActive: true, restoreDeferred: true, pending: joinRequest, connection: 'failed' }));
-      expect(page).toEqual({ kind: 'home', resume: joinRequest, canResumeActive: true });
+      expect(page).toEqual({ kind: 'online', resume: joinRequest, canResumeActive: true });
     });
 
     it('never defers when there is no stored session to return to', () => {
       const page = resolvePage(online({ storedActive: false, restoreDeferred: true, connection: 'failed' }));
-      expect(page).toEqual({ kind: 'home', resume: null, canResumeActive: false });
+      expect(page).toEqual({ kind: 'home' });
     });
 
     it('resumes the restore screen once the defer latch is cleared', () => {
@@ -103,20 +106,53 @@ describe('resolvePage — page-state reducer', () => {
     });
   });
 
-  describe('home flow (no active session, not in a room)', () => {
-    it('offers to continue a pending create request', () => {
+  describe('home / online landing (no active session, not in a room)', () => {
+    it('auto-lands on the online pane to offer a pending create request', () => {
+      // 待续请求的提示住在在线页 ⇒ 停在入口页时自动落到那里，玩家才回得到自己那一局。
       const page = resolvePage(online({ storedActive: false, pending: createRequest }));
-      expect(page).toEqual({ kind: 'home', resume: createRequest, canResumeActive: false });
+      expect(page).toEqual({ kind: 'online', resume: createRequest, canResumeActive: false });
     });
 
-    it('offers to continue a pending join request', () => {
+    it('auto-lands on the online pane to offer a pending join request', () => {
       const page = resolvePage(online({ storedActive: false, pending: joinRequest }));
-      expect(page).toEqual({ kind: 'home', resume: joinRequest, canResumeActive: false });
+      expect(page).toEqual({ kind: 'online', resume: joinRequest, canResumeActive: false });
     });
 
-    it('shows a plain home when nothing is stored', () => {
+    it('shows the pure entry page when nothing is stored', () => {
       const page = resolvePage(online({ storedActive: false, pending: null, connection: 'connected' }));
-      expect(page).toEqual({ kind: 'home', resume: null, canResumeActive: false });
+      expect(page).toEqual({ kind: 'home' });
+    });
+  });
+
+  describe('home pane routing (《UI 改造方案》§三)', () => {
+    it.each(['online', 'stats', 'achievements', 'cloud', 'leaderboard'] as const)(
+      'routes to the %s pane when the user navigated there',
+      (pane) => {
+        const page = resolvePage(online({ homePane: pane, connection: 'connected' }));
+        expect(page.kind).toBe(pane);
+      },
+    );
+
+    it('carries the resume payload when the online pane was opened explicitly', () => {
+      const page = resolvePage(online({ homePane: 'online', pending: joinRequest }));
+      expect(page).toEqual({ kind: 'online', resume: joinRequest, canResumeActive: false });
+    });
+
+    it('lets explicit navigation win over the resume auto-landing', () => {
+      // 有东西可续、用户却点了「战绩」：必须真的去战绩页。不让导航压过自动落点的话，
+      // 有待续请求时那个入口按钮看上去就是坏的。
+      const page = resolvePage(online({ homePane: 'stats', pending: joinRequest, storedActive: false }));
+      expect(page).toEqual({ kind: 'stats' });
+    });
+
+    it('lets explicit navigation win even with a deferred stored session', () => {
+      const page = resolvePage(online({ homePane: 'leaderboard', storedActive: true, restoreDeferred: true }));
+      expect(page).toEqual({ kind: 'leaderboard' });
+    });
+
+    it('keeps the entry page as the paneless default', () => {
+      const page = resolvePage(online({ homePane: 'main', pending: null, storedActive: false }));
+      expect(page).toEqual({ kind: 'home' });
     });
   });
 

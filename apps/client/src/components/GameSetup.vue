@@ -14,7 +14,19 @@ import {
   type GameSetupDependencies,
   type GameSetupForm,
 } from '../game/gameSetup';
-import type { LocalSaveSummary } from '../session/localGameSave';
+import type {
+  LocalSaveCard,
+  LocalSaveIdentity,
+  LocalSaveObservedRecord,
+  LocalSaveSummary,
+} from '../session/localGameSave';
+// 删除确认是纯决策逻辑（「这一下该不该真的删」），与存档读写同源；
+// 它现在只服务这一页 —— 首页那版随本机存档一起搬了过来。
+import {
+  localCardKey,
+  requestLocalDelete as planLocalDelete,
+  type LocalDeleteConfirmation,
+} from '../views/localDeleteConfirmation';
 
 const defaultSetupDependencies = { catalog: listActiveMaps(), resolveActive: getActiveMapPack };
 
@@ -25,6 +37,8 @@ const props = defineProps<{
   storageUnavailable?: boolean;
   storagePrompt?: boolean;
   saveError?: string | null;
+  /** 本机存档卡（「继续单机」）。原来挂在首页中部，现在跟着「要玩什么」一起落到这一页。 */
+  localSaveCards?: readonly LocalSaveCard[];
 }>();
 const setupDependencies = props.dependencies ?? defaultSetupDependencies;
 
@@ -35,6 +49,8 @@ const emit = defineEmits<{
   cancelReplacement: [];
   retryStorage: [];
   startTemporary: [];
+  resumeLocal: [observed: LocalSaveIdentity];
+  deleteLocal: [observed: LocalSaveObservedRecord];
 }>();
 
 const setup = ref(cloneSetup(props.initialSetup ?? createDefaultGameSetup(setupDependencies)));
@@ -60,6 +76,22 @@ const dialogOpen = computed(() => props.replacementSummary != null || props.stor
 const replacementCancelButton = ref<HTMLButtonElement | null>(null);
 const storageRetryButton = ref<HTMLButtonElement | null>(null);
 const startButton = ref<HTMLButtonElement | null>(null);
+
+// ---- 继续单机 · 本机存档 ----
+// 两次点击确认删除：planLocalDelete 第一次只把这张卡标成「待确认」，
+// 第二次（同一张卡）才真的把 observed 交给上层去删。逻辑在 localDeleteConfirmation.ts 里，
+// 与「存档列表可能已经变了」的复核对齐同一套判据。
+const confirmingLocalDelete = ref<LocalDeleteConfirmation | null>(null);
+
+function requestLocalDelete(card: LocalSaveCard): void {
+  const request = planLocalDelete(confirmingLocalDelete.value, card);
+  confirmingLocalDelete.value = request.confirmation;
+  if (request.observed !== null) emit('deleteLocal', request.observed);
+}
+
+function formatSavedAt(timestamp: number): string {
+  return new Date(timestamp).toLocaleString('zh-CN', { hour12: false });
+}
 
 watch(dialogOpen, async (open, wasOpen) => {
   await nextTick();
@@ -142,9 +174,9 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
 <template>
   <main class="setup-shell">
     <section class="setup-card" aria-labelledby="setup-title">
-      <p class="setup-eyebrow">单机游玩 · 无需联网</p>
-      <h1 id="setup-title">开始一局大富翁</h1>
-      <p class="setup-copy">选择真人和电脑数量（最多 6 人），确认昵称后进入棋盘。单机游玩，不需要登录。</p>
+      <p class="setup-eyebrow">无需联网 · 随时开局</p>
+      <h1 id="setup-title">单机模式</h1>
+      <p class="setup-copy">选地图、真人和电脑数量（最多 6 人），确认昵称后进入棋盘。不需要登录，也不需要网络。</p>
 
       <fieldset class="setup-fields" :disabled="dialogOpen">
         <MapPicker
@@ -257,8 +289,52 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
       </section>
       <div class="setup-actions">
         <button type="button" class="setup-secondary" @click="emit('back')">返回首页</button>
-        <button ref="startButton" type="button" class="setup-start" :disabled="!validation.ok || dialogOpen" @click="submitSetup">开始游戏</button>
+        <button ref="startButton" type="button" class="setup-start" :disabled="!validation.ok || dialogOpen" @click="submitSetup">开始新对局</button>
       </div>
+
+      <!-- 继续单机（原首页中部那块）：存档跟着「要玩什么」走，不再和首页别的内容抢位置。 -->
+      <section v-if="localSaveCards && localSaveCards.length > 0" class="local-saves" aria-labelledby="local-saves-title">
+        <h2 id="local-saves-title">继续单机 · 本机存档</h2>
+        <p class="local-saves-hint">以下为本机存档，仅保存在这台设备上，与在线房间互不影响。</p>
+        <article v-for="card in localSaveCards" :key="localCardKey(card)" class="local-save-card">
+          <template v-if="card.kind === 'valid'">
+            <div class="local-save-copy">
+              <strong>{{ card.summary.title }}</strong>
+              <span>{{ card.summary.players.map((player) => `${player.nickname}${player.isBot ? '（电脑）' : ''}`).join('、') }}</span>
+              <span>第 {{ card.summary.turn }} 回合 · 保存于 {{ formatSavedAt(card.summary.updatedAt) }}</span>
+            </div>
+            <div class="local-save-actions">
+              <button type="button" class="setup-start" @click="emit('resumeLocal', card.summary)">继续游戏</button>
+              <button type="button" class="setup-secondary" @click="requestLocalDelete(card)">
+                {{ confirmingLocalDelete?.key === localCardKey(card) ? '确认删除' : '删除存档' }}
+              </button>
+              <button
+                v-if="confirmingLocalDelete?.key === localCardKey(card)"
+                type="button"
+                class="setup-secondary"
+                @click="confirmingLocalDelete = null"
+              >取消</button>
+            </div>
+          </template>
+          <template v-else>
+            <div class="local-save-copy">
+              <strong>无法恢复的本机存档</strong>
+              <span>{{ card.reason }}</span>
+            </div>
+            <div class="local-save-actions">
+              <button type="button" class="setup-secondary" :disabled="card.recordToken === undefined" @click="requestLocalDelete(card)">
+                {{ confirmingLocalDelete?.key === localCardKey(card) ? '确认删除' : '删除存档' }}
+              </button>
+              <button
+                v-if="confirmingLocalDelete?.key === localCardKey(card)"
+                type="button"
+                class="setup-secondary"
+                @click="confirmingLocalDelete = null"
+              >取消</button>
+            </div>
+          </template>
+        </article>
+      </section>
     </section>
   </main>
 </template>
@@ -519,4 +595,53 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
     grid-template-columns: 1fr;
   }
 }
+
+/* 本机存档卡：原样从首页搬来（配色边条取自 P2「视觉层次」那一组）。 */
+.local-saves {
+  display: grid;
+  gap: 10px;
+}
+
+.local-saves h2 {
+  margin: 0;
+  color: var(--color-primary);
+  font-size: 18px;
+}
+
+.local-saves-hint {
+  margin: -4px 0 0;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.local-save-card {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-accent);
+  border-radius: 16px;
+  background: var(--event-bg);
+}
+
+.local-save-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  color: var(--event-text);
+}
+
+.local-save-copy span {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.local-save-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.local-save-card { border-left: 4px solid var(--mode-local); }
+
 </style>

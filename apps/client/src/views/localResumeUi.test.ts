@@ -10,7 +10,7 @@ import { buildReplayPayload, prepareReplayPlayback, type ReplayPayload } from '.
 import { toLocalSaveCards, type LocalSaveSummary } from '../session/localGameSave';
 import GameSetup from '../components/GameSetup.vue';
 import GameView from './GameView.vue';
-import HomeView from './HomeView.vue';
+import OnlineEntryView from './OnlineEntryView.vue';
 
 const newer: LocalSaveSummary = {
   slot: 2,
@@ -87,9 +87,11 @@ describe('local resume UI', () => {
     ]);
   });
 
-  it('HomeView 渲染最多两张继续单机卡、玩家 bot 标记、回合、时间和二次删除动作', async () => {
+  it('GameSetup 渲染最多两张继续单机卡、玩家 bot 标记、回合、时间和二次删除动作', async () => {
+    // 本机存档卡随「要玩什么」从首页搬到了单机模式页（《UI 改造方案》§三/§四）：
+    // 首页只剩「单机模式」一个导航按钮，卡片本体在 GameSetup 里渲染。
     const html = await renderToString(createSSRApp({
-      render: () => h(HomeView, {
+      render: () => h(GameSetup, {
         localSaveCards: [
           { kind: 'valid', summary: newer },
           { kind: 'invalid', slot: 1, reason: '存档内容已损坏，无法恢复', recordToken: 'broken' },
@@ -131,14 +133,15 @@ describe('local resume UI', () => {
     expect(chinaHtml.match(/<select/g)).toHaveLength(2);
   });
 
-  it('HomeView 保留创建房间地图入口，并恢复首页原本选择的地图', async () => {
+  it('OnlineEntryView 保留创建房间地图入口，并恢复首页原本选择的地图', async () => {
+    // 建房表单（含地图入口）整块从首页搬到「在线对战页」（《UI 改造方案》§三）。
     const html = await renderToString(createSSRApp({
-      render: () => h(HomeView, {
+      render: () => h(OnlineEntryView, {
         activeMaps: listActiveMaps(),
         initialMapId: 'world-tour',
       }),
     }));
-    // 首页本身不再使用原生 <select>（地图入口是 MapPicker），因此一个 <select> 都不应有。
+    // 这一页不用原生 <select>（地图入口是 MapPicker、身份是 radiogroup），一个 <select> 都不应有。
     expect(html.match(/<select/g)).toBeNull();
     expect(html).toContain('世界之旅');
     expect(html).toContain('map-picker-value');
@@ -171,8 +174,8 @@ describe('local resume UI', () => {
     expect(html).toContain('取消');
     expect(html).toContain('aria-modal="true"');
     expect(html).toMatch(/<fieldset[^>]*disabled/);
-    expect(html).toContain('开始游戏</button>');
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>开始游戏<\/button>/);
+    expect(html).toContain('开始新对局</button>');
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>开始新对局<\/button>/);
     expect(html).not.toMatch(/<button[^>]*disabled[^>]*>返回首页<\/button>/);
     expect(html).toContain('本浏览器无法保存进度，关闭页面后这局无法恢复');
     expect(html).toContain('重试保存');

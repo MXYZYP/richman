@@ -88,6 +88,19 @@ $files = @(
   # so local edits silently do nothing and pre-flight does not flag it.
   "apps/client/src/components/AssetPanel.vue",
   "apps/client/src/views/RestoreView.vue",
+
+  # ---- UI overhaul (2026-10-16): the homepage was slimmed to a pure entry page. This adds one
+  # online sub-page, four detail pages and one shared shell, all lazily imported by App.vue.
+  # A missing entry makes the server vite build die with
+  # `Could not resolve "../views/OnlineEntryView.vue"`.
+  "apps/client/src/views/OnlineEntryView.vue",
+  "apps/client/src/views/StatsView.vue",
+  "apps/client/src/views/AchievementsView.vue",
+  "apps/client/src/views/CloudSyncView.vue",
+  "apps/client/src/views/LeaderboardView.vue",
+  # Shared card shell for the four detail pages (a child's scoped styles do reach slot content,
+  # which is why the shell is reusable while the online page keeps its own card wrapper).
+  "apps/client/src/views/ViewShell.vue",
   "apps/client/src/game/clientGame.ts",
   "apps/client/src/game/gameSetup.ts",
   "apps/client/src/session/gamePresenter.ts",
@@ -309,8 +322,10 @@ $files = @(
   "packages/board-data/src/__tests__/greatWallMap.test.ts",
   "packages/board-data/src/__tests__/yellowRiverMap.test.ts",
   "packages/board-data/src/__tests__/mapValidation.test.ts",
-  # 色带守卫：同一张图里两个色带同色 = 棋盘上分不出边界，而校验器对此完全沉默。
-  # 也钉住 classic-tour（世界名城）不复用 china-tour 的地区色板。
+  # Band guard: two bands sharing one colour inside a single map means the board has no visible
+  # border, and the validator stays completely silent about it. Also pins that classic-tour does
+  # not reuse china-tour's region palette. (Kept ASCII on purpose -- this script has no BOM, so a
+  # non-ASCII comment read as code page 936 swallows the following line and silently drops a file.)
   "packages/board-data/src/__tests__/bandPalette.test.ts",
   "packages/board-data/src/__tests__/mapTypes.test.ts",
   "packages/board-data/src/__tests__/registry.test.ts",
@@ -385,6 +400,17 @@ $files = @(
   "apps/client/src/components/ReleaseNotesDialog.test.ts",
   "apps/client/src/session/invitation.test.ts",
   "apps/client/src/views/localResumeUi.test.ts",
+
+  # Tests and the shared SSR helper for the new views. The server keeps stale copies of anything
+  # missing from this manifest, so vue-tsc fails there with TS2739/TS2307 against the new
+  # props/emits contract even though everything is green locally.
+  "apps/client/src/views/OnlineEntryView.test.ts",
+  "apps/client/src/views/StatsView.test.ts",
+  "apps/client/src/views/AchievementsView.test.ts",
+  "apps/client/src/views/CloudSyncView.test.ts",
+  "apps/client/src/views/LeaderboardView.test.ts",
+  # SSR render helper shared by every view test (renderView / withLocalStorage / PLAYER_STATS_KEY).
+  "apps/client/src/views/viewTestSupport.ts",
   "apps/client/src/session/localGameSave.test.ts",
   "apps/client/src/session/localSession.botFailure.test.ts",
   "apps/client/src/session/localSession.test.ts",

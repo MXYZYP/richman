@@ -2,6 +2,14 @@
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import HomeView from './views/HomeView.vue';
 import RestoreView from './views/RestoreView.vue';
+// 二级页与 4 个详情页同样走异步（《UI 改造方案》§二、§四）：首页把它原本摊在身上的
+// 「明细」（本机存档、战绩、成就、云同步、排行榜、建房/加入表单、公开房间列表）全部交了出去，
+// 那些模块与它们的独占依赖也该跟着离开首屏包 —— 否则这次瘦身只是搬了位置。
+const OnlineEntryView = defineAsyncComponent(() => import('./views/OnlineEntryView.vue'));
+const StatsView = defineAsyncComponent(() => import('./views/StatsView.vue'));
+const AchievementsView = defineAsyncComponent(() => import('./views/AchievementsView.vue'));
+const CloudSyncView = defineAsyncComponent(() => import('./views/CloudSyncView.vue'));
+const LeaderboardView = defineAsyncComponent(() => import('./views/LeaderboardView.vue'));
 // 首屏分包（待-10）：首页只做「创建/加入/本机同乐」这一层，不需要对局 UI 与音频。
 // 三个页面级视图改为异步组件后，它们各自的代码与独占依赖（棋盘/资产面板/结算弹层/
 // 音效与 BGM/MobileSheet…）会切到独立 chunk，进入对应流程时才加载。
@@ -27,7 +35,7 @@ import {
 } from './session/localSession';
 import { createOnlineSession, type OnlineGameSession } from './session/onlineSession';
 import type { GameSession } from './session/gameSession';
-import { resolvePage, type AppFlowSnapshot, type AppShellStage } from './session/appFlow';
+import { resolvePage, type AppFlowSnapshot, type AppShellStage, type HomePane } from './session/appFlow';
 import { createLocalStartGuard } from './session/localStartGuard';
 import { createInvitationUrlString, parseInvitationRoom } from './session/invitation';
 import {
@@ -233,6 +241,21 @@ const leaving = ref(false);
 // 「暂不恢复」 latch: route to home this session without discarding the stored session.
 const restoreDeferred = ref(false);
 
+/**
+ * 首页壳内的子页面（《UI 改造方案》§三）。`'main'` = 瘦身后的纯入口页。
+ *
+ * 放在 App 而不是首页自己身上：它决定的是**挂哪个视图**，而挂载点只有 App 有。
+ * 首页只发一个 `navigate` 事件，不需要知道「在线对战页」长什么样。
+ */
+const homePane = ref<HomePane>('main');
+
+/**
+ * 这次会话里玩家自称什么。原来由首页那个昵称输入框持有；输入框搬到在线对战页之后，
+ * 「战绩码署名」「首次建号的云端昵称」「上榜昵称」三处仍然要读它，所以提到 App 持有。
+ * 刻意**不做持久化**：那会改变「刷新一次昵称就空了」这个既有行为，不属于本次改造的范围。
+ */
+const nickname = ref('');
+
 const setup = ref(createDefaultGameSetup());
 const homeMapId = ref(setup.value.mapId);
 const localGame = shallowRef<LocalSession | null>(null);
@@ -301,13 +324,15 @@ const snapshot = computed<AppFlowSnapshot>(() => ({
   room: onlineSession.room.value?.status ?? null,
   gameOver: gameOver.value,
   restoreDeferred: restoreDeferred.value,
+  homePane: homePane.value,
 }));
 
 const page = computed(() => resolvePage(snapshot.value));
 const pageKind = computed(() => page.value.kind);
 const restoreFailure = computed(() => (page.value.kind === 'restoring' ? page.value.failure : null));
-const resumeOffer = computed(() => (page.value.kind === 'home' ? page.value.resume : null));
-const canResumeActive = computed(() => (page.value.kind === 'home' ? page.value.canResumeActive : false));
+// 两块「续上一局」提示现在住在在线对战页（`online`），不再是首页。
+const resumeOffer = computed(() => (page.value.kind === 'online' ? page.value.resume : null));
+const canResumeActive = computed(() => (page.value.kind === 'online' ? page.value.canResumeActive : false));
 const pendingRetryable = computed(() => onlineSession.entryFailure.value !== 'definitive');
 
 // ---- 新手引导（#109） ----
@@ -432,12 +457,23 @@ async function refreshPublicRooms(): Promise<void> {
   }
 }
 
-// 回到首页就刷新一次：刚打完的那局若已结束会从列表里消失，别人新开的房也该出现。
-// 只在真正切到 home 时触发，避免在对局中反复请求（服务端有按 IP 的限流）。
-// `immediate` 是必需的：没有存档时首屏直接就是 home，那次「切换」根本不会发生。
+// 进到「在线对战页」就刷新一次：列表本来就长在那页上，刚打完的那局若已结束会从列表里消失，
+// 别人新开的房也该出现。只在真正切到那一页时触发，避免在对局中反复请求（服务端有按 IP 的限流）。
+// `immediate` 是必需的：有待续请求或有「暂不恢复」的存档时，首屏会直接落在在线页上，
+// 那次「切换」根本不会发生。
 watch(pageKind, (kind) => {
-  if (kind === 'home') void refreshPublicRooms();
+  if (kind === 'online') void refreshPublicRooms();
 }, { immediate: true });
+
+// 离开首页壳（进恢复页 / 大厅 / 对局 / 单机设置）时把子页归位。
+// 不打这一枪的话，「从在线对战页开了一局、打完退出」会让人落在在线页上 ——
+// 一局之后想看到的是首页，不是上次离开前停着的那张表单。
+watch(pageKind, (kind) => {
+  if (kind !== 'home' && kind !== 'online' && kind !== 'stats' && kind !== 'achievements'
+    && kind !== 'cloud' && kind !== 'leaderboard') {
+    homePane.value = 'main';
+  }
+});
 
 async function handleResumePending() {
   if (submitting.value) return;
@@ -516,6 +552,23 @@ function handleStartRoom() {
 // ---- Local hot-seat flow ----
 function resetPageScroll() {
   void nextTick(() => globalThis.scrollTo?.({ top: 0, left: 0 }));
+}
+
+/** 首页那一排入口的唯一出口：六个落点，全部只改「壳的状态」，不碰会话。 */
+function handleNavigate(target: 'online' | 'local' | 'stats' | 'achievements' | 'cloud' | 'leaderboard'): void {
+  if (target === 'local') {
+    // 单机模式：进设置页。地图沿用上次那张（`homeMapId`），进页后仍可改。
+    chooseLocal(homeMapId.value);
+    return;
+  }
+  homePane.value = target;
+  resetPageScroll();
+}
+
+/** 二级页 / 详情页顶部的「返回首页」。 */
+function handleBackToHome(): void {
+  homePane.value = 'main';
+  resetPageScroll();
 }
 
 function chooseLocal(mapId: string) {
@@ -815,16 +868,26 @@ onBeforeUnmount(() => {
     @retry="handleRestoreRetry"
     @defer="handleRestoreDefer"
   />
+  <!-- 首页 = 纯入口页（《UI 改造方案》§二）：hero + 两个等宽主按钮 + 三个胶囊入口 +
+       一排成果图标 + 页脚。明细全部在下面这些二级页 / 详情页里。 -->
   <HomeView
     v-else-if="pageKind === 'home'"
+    :submitting="submitting"
+    @navigate="handleNavigate"
+    @open-guide="openGuide"
+    @open-replay="replayImportOpen = true"
+    @open-workshop="openWorkshop"
+  />
+  <!-- 在线对战页：建房 / 加入 / 公开房间列表，以及两块「续上一局」。 -->
+  <OnlineEntryView
+    v-else-if="pageKind === 'online'"
+    v-model:nickname="nickname"
     :submitting="submitting"
     :resume="resumeOffer"
     :pending-retryable="pendingRetryable"
     :can-resume-active="canResumeActive"
     :initial-room-code="inviteRoomCode"
     :error="onlineError"
-    :local-save-error="localSaveError"
-    :local-save-cards="localSaveCards"
     :active-maps="activeMaps"
     :initial-map-id="homeMapId"
     :public-rooms="publicRooms"
@@ -833,16 +896,33 @@ onBeforeUnmount(() => {
     @create="handleCreate"
     @join="handleJoin"
     @refresh-rooms="refreshPublicRooms"
-    @open-guide="openGuide"
-    @open-replay="replayImportOpen = true"
-    @open-workshop="openWorkshop"
-    @local="chooseLocal"
     @resume="handleResumePending"
     @abandon-pending="handleAbandonPending"
     @resume-active="handleRestoreRetry"
     @abandon-active="handleAbandonActive"
-    @resume-local="resumeLocalGame"
-    @delete-local="deleteLocalGame"
+    @back="handleBackToHome"
+  />
+  <!-- 四个成果详情页（《UI 改造方案》§四）：首页只留图标入口，明细点进来再看。 -->
+  <StatsView
+    v-else-if="pageKind === 'stats'"
+    :nickname="nickname"
+    :active-maps="activeMaps"
+    @back="handleBackToHome"
+  />
+  <AchievementsView
+    v-else-if="pageKind === 'achievements'"
+    :active-maps="activeMaps"
+    @back="handleBackToHome"
+  />
+  <CloudSyncView
+    v-else-if="pageKind === 'cloud'"
+    :nickname="nickname"
+    @back="handleBackToHome"
+  />
+  <LeaderboardView
+    v-else-if="pageKind === 'leaderboard'"
+    :nickname="nickname"
+    @back="handleBackToHome"
   />
   <GameSetup
     v-else-if="pageKind === 'local_setup'"
@@ -852,7 +932,10 @@ onBeforeUnmount(() => {
     :storage-unavailable="!storageAvailable"
     :storage-prompt="storagePrompt"
     :save-error="localSaveError"
+    :local-save-cards="localSaveCards"
     @back="returnHome"
+    @resume-local="resumeLocalGame"
+    @delete-local="deleteLocalGame"
     @start="startLocalGame"
     @confirm-replacement="confirmReplacement"
     @cancel-replacement="cancelReplacement"
