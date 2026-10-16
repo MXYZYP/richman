@@ -786,12 +786,17 @@ function jumpToForm(): void {
   cursor: not-allowed;
 }
 
-/* 两个等宽主按钮、上下相邻、两种色、地位对等（手法 3）。 */
+/* 两个等宽主按钮、上下相邻、两种色、地位对等（手法 3）。
+   10-16 第四版（用户：「这几个按钮上下距离…有点拥挤」）：
+   主按钮各带一条 5px 实体底边（box-shadow: 0 5px 0），目看的白色间隔
+   = gap - 5px，原来 10px 只剩 5px，两个按钮像粘在一起 ⇒ gap 提到 16px。 */
 .home-main-actions {
   display: grid;
-  gap: 10px;
+  gap: 16px;
   width: 100%;
-  margin-top: 4px;
+  /* 与上方角标（.home-sticker__sub）之间也放开一点：4px 叠在 hero 自己的 10px
+     gap 上仍偏紧。 */
+  margin-top: 10px;
 }
 
 .home-main {

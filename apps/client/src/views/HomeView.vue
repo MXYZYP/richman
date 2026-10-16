@@ -145,8 +145,10 @@ const emit = defineEmits<{
   z-index: 1;
   width: min(560px, 100%);
   display: grid;
-  /* 块间距随屏宽微调：折叠屏外屏（~320px）上省下的这几点高度，正好够首屏不被裁。 */
-  gap: clamp(14px, 2.4vw, 18px);
+  /* 块间距随屏宽微调：折叠屏外屏（~320px）上省下的这几点高度，正好够首屏不被裁。
+     10-16 第四版：主按钮组下缘带 5px 底边，「按钮组 ↔ 三条小入口」这段的实际留白
+     也比 gap 看着少 5px ⇒ 再放开一档。 */
+  gap: clamp(16px, 2.6vw, 22px);
   padding: clamp(20px, 4vw, 34px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
@@ -349,12 +351,17 @@ const emit = defineEmits<{
   transform: rotate(-1.5deg);
 }
 
-/* 两个等宽主按钮、上下相邻、两种色、地位对等（手法 3）。 */
+/* 两个等宽主按钮、上下相邻、两种色、地位对等（手法 3）。
+   10-16 第四版（用户：「这几个按钮上下距离…有点拥挤」）：
+   主按钮各带一条 5px 实体底边（box-shadow: 0 5px 0），目看的白色间隔
+   = gap - 5px，原来 10px 只剩 5px，两个按钮像粘在一起 ⇒ gap 提到 16px。 */
 .home-main-actions {
   display: grid;
-  gap: 10px;
+  gap: 16px;
   width: 100%;
-  margin-top: 4px;
+  /* 与上方角标（.home-sticker__sub）之间也放开一点：4px 叠在 hero 自己的 10px
+     gap 上仍偏紧。 */
+  margin-top: 10px;
 }
 
 .home-main {
