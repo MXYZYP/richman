@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createSSRApp, h } from 'vue';
 import { renderToString } from '@vue/server-renderer';
 import { getActiveMapPack } from '@richman/board-data';
 import type { PublicRoomSummary } from '@richman/protocol';
 import releaseNotes from '../../../../release-notes.json';
 import HomeView from './HomeView.vue';
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 async function renderHome(): Promise<string> {
   return renderToString(createSSRApp({
@@ -442,6 +447,9 @@ describe('HomeView 首页场景化（P1）', () => {
     expect(html).toContain('class="home-main home-main--local"');
     expect(html).toContain('在线联网对战');
     expect(html).toContain('单机模式');
+    // 各带一行同样字数的副行 ⇒ 高度不参差（「等宽」这条承诺的等高半边）。
+    expect(html).toContain('一键开房');
+    expect(html).toContain('无需联网');
   });
 
   it('有本机存储时图标栈出现，四个入口各有可读的名字', async () => {
@@ -460,5 +468,25 @@ describe('HomeView 首页场景化（P1）', () => {
     const html = await renderHomeHtml();
 
     expect(html).not.toContain('class="home-quick"');
+  });
+
+  /**
+   * 一键开房的**接线**守卫。
+   *
+   * 为什么读源码而不是点一下：SSR 渲染里没有点击，本项目也没装 @vue/test-utils，
+   * 所以「按钮绑了哪个 handler」在渲染结果里根本观察不到。判定**逻辑**由
+   * `session/appFlow.test.ts` 的 planQuickCreate 纯函数用例覆盖，这里只钉住
+   * 「首页那个大按钮确实接到了它」。
+   *
+   * 这条值得钉：它走过一次倒退 —— 按钮上写着「一键」，按下去只是把人送去填表，
+   * 而那种倒退 SSR 断言和 tsc 都看不见。
+   */
+  it('在线主按钮绑的是 quickCreate，不再是「滚到表单」', () => {
+    const source = readFileSync(resolve(here, 'HomeView.vue'), 'utf8');
+    const tag = /<button[^>]*home-main--online[^>]*>/.exec(source);
+    if (tag === null) throw new Error('首页应当有一个 home-main--online 按钮');
+
+    expect(tag[0]).toContain('@click="quickCreate"');
+    expect(tag[0]).not.toContain('jumpToOnlineForm');
   });
 });

@@ -6,7 +6,14 @@ import { listActiveMaps, type MapCatalogEntry } from '@richman/board-data';
 import MapPicker from '../components/MapPicker.vue';
 import PwaInstallRow from '../components/PwaInstallRow.vue';
 import ReleaseNotesDialog from '../components/ReleaseNotesDialog.vue';
-import { capRoomCode, isValidRoomCode, planCreateSubmission, planJoinSubmission } from '../session/appFlow';
+import {
+  DEFAULT_ONLINE_NICKNAME,
+  capRoomCode,
+  isValidRoomCode,
+  planCreateSubmission,
+  planJoinSubmission,
+  planQuickCreate,
+} from '../session/appFlow';
 import type { PendingRoomRequest } from '../session/sessionStorage';
 import type { LocalSaveCard, LocalSaveIdentity, LocalSaveObservedRecord } from '../session/localGameSave';
 import { deriveAchievements, describeNextAchievement, type AchievementGroup } from '../session/achievements';
@@ -189,6 +196,27 @@ function submitCreate() {
   }
 }
 
+/**
+ * 「在线联网对战」= 真一键开房。
+ *
+ * 建房只强制两件输入（昵称 + 地图），而地图已有默认选中项、昵称有约定俗成的兜底名，
+ * 没有非问不可的字段 —— 所以这里直接开房，房间码随后在大厅里出现。
+ *
+ * 兜底名会**写回输入框**：房间列表与大厅显示的就是它，玩家得看见自己叫什么。
+ * 没有可选地图时回落到表单（不硬发请求，让玩家看见该选一张图）。
+ * 想改名 / 换图 / 加入别人的房间，都仍然走下面那张表单 —— 一键开房没有删掉任何入口。
+ */
+function quickCreate(): void {
+  const payload = planQuickCreate(nickname.value, props.submitting);
+  if (payload === null) return;
+  if (!props.activeMaps.some((entry) => entry.ref.id === selectedMapId.value)) {
+    jumpToOnlineForm();
+    return;
+  }
+  nickname.value = payload.nickname;
+  emit('create', payload.nickname, selectedMapId.value);
+}
+
 function submitJoin() {
   const payload = planJoinSubmission(
     roomCode.value,
@@ -305,7 +333,7 @@ function exportStatsCode(): void {
     return;
   }
   statsCode.value = encodeStatsCode({
-    nickname: nickname.value.trim() === '' ? '大富翁玩家' : nickname.value.trim(),
+    nickname: nickname.value.trim() === '' ? DEFAULT_ONLINE_NICKNAME : nickname.value.trim(),
     stats: loadPlayerStats(storage),
   });
   statsNotice.value = { kind: 'ok', message: '已生成战绩码，复制后可在别的设备导入。' };
@@ -605,13 +633,14 @@ async function publishMyStats(): Promise<void> {
 }
 
 // ───────────── 首页场景的页内跳转（P1 视觉升级） ─────────────
-// hero 的两个主按钮与左上图标栈都指向页内已有的区块，不新增任何「只有首页才有」的入口。
-// 联机需要先填昵称与房间码，所以「在线联网对战」把玩家送到表单并聚焦第一个输入框。
+// 图标栈与「第一次玩」那排入口都指向页内已有的区块，不新增任何「只有首页才有」的入口。
+// 注意「在线联网对战」**不再**走这里 —— 它已经改成真一键开房（见 quickCreate）。
 function jumpTo(id: string): void {
   const target = document.getElementById(id);
   if (target !== null) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+/** 把玩家送到联机表单并聚焦第一个输入框。现在只剩「没有可选地图」这一条兜底路径会用。 */
 function jumpToOnlineForm(): void {
   const form = document.getElementById('home-form');
   if (form === null) return;
@@ -708,14 +737,16 @@ onMounted(() => {
         <p class="home-copy">用 6 位房间码和好友同桌，或单机游玩开一局。手机、电脑浏览器皆可。</p>
         <!-- 两个等宽主按钮、两种色、地位对等：在线=朱砂，单机=竹青。
              刻意不用 --color-pay / --color-gain 给模式上色 —— 那两个是「钱在动」的语义色。
-             「在线联网对战」把玩家送到下面的表单并聚焦昵称：联机本来就需要昵称与房间码，
-             伪造一个不存在的「一键开房」反而更让人困惑。 -->
+             两个按钮各带一行同样字数的副行，把「按下去会发生什么」写在按钮上：
+             「在线联网对战」是**真一键开房**（见 quickCreate），不是把人送去填表。 -->
         <div class="home-main-actions">
-          <button type="button" class="home-main home-main--online" :disabled="submitting" @click="jumpToOnlineForm">
+          <button type="button" class="home-main home-main--online" :disabled="submitting" @click="quickCreate">
             在线联网对战
+            <span class="home-main__hint">一键开房</span>
           </button>
           <button type="button" class="home-main home-main--local" :disabled="submitting" @click="submitLocal">
             单机模式
+            <span class="home-main__hint">无需联网</span>
           </button>
         </div>
       </header>
@@ -2396,6 +2427,13 @@ onMounted(() => {
 }
 
 .home-main {
+  /* 纵向 flex 是为副行留位：两个按钮各带一行**同样字数**的副行，高度才不会参差 ——
+     「两个等宽主按钮」这条视觉承诺里，也含「等高」这半边。 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
   min-height: 54px;
   border: 0;
   border-radius: var(--radius-control);
@@ -2403,6 +2441,14 @@ onMounted(() => {
   font-weight: 900;
   letter-spacing: 0.02em;
   cursor: pointer;
+}
+
+/* 副行：0.72rem 而不是更小，手机上也读得清。 */
+.home-main__hint {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  opacity: 0.85;
 }
 
 .home-main--online { background: var(--mode-online); color: #fff4ec; }

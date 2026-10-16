@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_ONLINE_NICKNAME,
   capRoomCode,
   classifyEntryFailure,
   isValidNickname,
@@ -8,6 +9,7 @@ import {
   normalizeRoomCode,
   planCreateSubmission,
   planJoinSubmission,
+  planQuickCreate,
   resolvePage,
   type AppFlowSnapshot,
 } from './appFlow';
@@ -280,4 +282,31 @@ describe('classifyEntryFailure — definitive vs transient entry errors', () => 
       expect(classifyEntryFailure(code)).toBe('transient');
     },
   );
+});
+
+/**
+ * 首页「在线联网对战」的一键开房判定。
+ *
+ * 与 planCreateSubmission 的差别只有一处，但正是那一处决定了按钮是「一键」还是「两步」：
+ * 空昵称在这里是**合法**输入，会被补成默认名。
+ */
+describe("planQuickCreate（首页一键开房）", () => {
+  it('昵称留空时补默认名，而不是拒绝 —— 否则一键就退化成两步', () => {
+    expect(planQuickCreate('', false)).toEqual({ nickname: DEFAULT_ONLINE_NICKNAME });
+    expect(planQuickCreate('   ', false)).toEqual({ nickname: DEFAULT_ONLINE_NICKNAME });
+    expect(planQuickCreate('\t\n', false)).toEqual({ nickname: DEFAULT_ONLINE_NICKNAME });
+  });
+
+  it('填了昵称就用填的（去首尾空白），与手动建房完全一致', () => {
+    expect(planQuickCreate('  阿蒙 ', false)).toEqual({ nickname: '阿蒙' });
+  });
+
+  it('正在提交时返回 null，连点开不出两间房', () => {
+    expect(planQuickCreate('阿蒙', true)).toBeNull();
+    expect(planQuickCreate('', true)).toBeNull();
+  });
+
+  it('默认名与战绩提交的兜底是同一个 —— 两处一漂移，排行榜上就认不出自己', () => {
+    expect(DEFAULT_ONLINE_NICKNAME).toBe('大富翁玩家');
+  });
 });

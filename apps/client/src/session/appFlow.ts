@@ -115,6 +115,25 @@ export function planCreateSubmission(rawNickname: string, submitting: boolean): 
 }
 
 /**
+ * 昵称留空时的兜底称号。首页「一键开房」与「提交战绩」都用它 ——
+ * 两处若各写一个字面量，早晚会漂移到不同取值，玩家就会在排行榜上认不出自己。
+ */
+export const DEFAULT_ONLINE_NICKNAME = '大富翁玩家';
+
+/**
+ * 首页那个大按钮的判定：把留空的昵称补成默认名，其余只做 trim。
+ *
+ * 与 `planCreateSubmission` 只差一处 —— 空昵称在这里**不是**错误。首页大按钮的语义是
+ * 「先开起来」：逼玩家先回表单填名字，就把一键变成了两步，那正是这条路走过一次的倒退。
+ * `submitting` 仍然拦住，所以连点也开不出两间房。
+ */
+export function planQuickCreate(rawNickname: string, submitting: boolean): { nickname: string } | null {
+  if (submitting) return null;
+  const nickname = normalizeNickname(rawNickname);
+  return { nickname: nickname.length > 0 ? nickname : DEFAULT_ONLINE_NICKNAME };
+}
+
+/**
  * Resolve an explicit join submission into its emit payload, or null when it must not
  * fire — already submitting, an invalid room code, or an invalid nickname.
  *

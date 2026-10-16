@@ -309,6 +309,9 @@ $files = @(
   "packages/board-data/src/__tests__/greatWallMap.test.ts",
   "packages/board-data/src/__tests__/yellowRiverMap.test.ts",
   "packages/board-data/src/__tests__/mapValidation.test.ts",
+  # 色带守卫：同一张图里两个色带同色 = 棋盘上分不出边界，而校验器对此完全沉默。
+  # 也钉住 classic-tour（世界名城）不复用 china-tour 的地区色板。
+  "packages/board-data/src/__tests__/bandPalette.test.ts",
   "packages/board-data/src/__tests__/mapTypes.test.ts",
   "packages/board-data/src/__tests__/registry.test.ts",
   "packages/board-data/src/__tests__/testMap.test.ts",
