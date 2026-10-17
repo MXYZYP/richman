@@ -1,0 +1,163 @@
+# 手动触发：把客户端构建产物套上 Capacitor 安卓壳，产出一个可上传 TapTap 的签名 APK。
+#
+# 为什么不提交 android/ 工程：它是 `cap add android` 生成物（几百个文件、跟着 Capacitor 版本变），
+# 每次构建现场生成反而更稳，也避免和 @capacitor/android 的版本对不上。
+#
+# 签名怎么给（二选一）：
+#   A. 正式做法 —— 仓库 Settings → Secrets and variables → Actions 添加 4 个 Secret：
+#        ANDROID_KEYSTORE_BASE64     release.keystore 的 base64（`base64 -w0 release.keystore`）
+#        ANDROID_KEYSTORE_PASSWORD   密钥库口令
+#        ANDROID_KEY_ALIAS           别名，例如 richman
+#        ANDROID_KEY_PASSWORD        别名口令
+#      ★ 这个 keystore 必须永久保存：TapTap 后续更新版本，必须用同一个签名，丢了只能换包名重来。
+#   B. 先跑通 —— 不配 Secret 也能跑：本次现场生成一个临时 keystore，连同 APK 一起产出到 artifact。
+#      **只适合自己装到手机上看效果**，别拿它去上架（下次构建换了签名就覆盖不了）。
+#
+# 产物：Actions 运行页底部 Artifacts → richman-apk / richman-keystore（仅 B 模式）。
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      versionName:
+        description: '版本名（玩家看到的），留空则用 package.json 的 version'
+        required: false
+        default: ''
+      versionCode:
+        description: '版本号（整数，每次上架必须比上一版大）'
+        required: false
+        default: '1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 先把 webDir（apps/client/dist）做出来：cap add android 要按它生成工程。
+      - name: Build web bundle
+        run: pnpm --filter @richman/client build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager --install "platforms;android-34" "build-tools;34.0.0" > /dev/null
+
+      - name: Generate Capacitor android project
+        working-directory: apps/client
+        run: npx cap add android
+
+      - name: Stamp version
+        working-directory: apps/client/android
+        env:
+          VERSION_NAME: ${{ inputs.versionName }}
+          VERSION_CODE: ${{ inputs.versionCode }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VERSION_NAME}" ]; then
+            VERSION_NAME=$(node -p "require('../../../package.json').version")
+          fi
+          # 只改这两行：Capacitor 模板里它们是字面量，sed 比手写 gradle 插件可靠。
+          sed -i -E "s/versionCode [0-9]+/versionCode ${VERSION_CODE}/" app/build.gradle
+          sed -i -E "s/versionName \"[^\"]*\"/versionName \"${VERSION_NAME}\"/" app/build.gradle
+          echo "APK_VERSION_NAME=${VERSION_NAME}" >> "$GITHUB_ENV"
+          grep -nE 'versionCode|versionName' app/build.gradle
+
+      - name: Assemble release APK
+        working-directory: apps/client/android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Sign APK
+        id: sign
+        working-directory: apps/client/android
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME/build-tools/"* | sort -V | tail -1)
+          APK_DIR=app/build/outputs/apk/release
+          UNSIGNED=$(ls "$APK_DIR"/*unsigned*.apk 2>/dev/null | head -1 || true)
+          [ -n "$UNSIGNED" ] || UNSIGNED=$(ls "$APK_DIR"/*.apk | head -1)
+
+          if [ -n "${KEYSTORE_B64}" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > release.keystore
+            ALIAS="${KEY_ALIAS:-richman}"
+            echo "MODE=secret" >> "$GITHUB_ENV"
+          else
+            # 没配 Secret：现场生成一个，连 keystore 一起产出，明确标注「别拿去上架」。
+            ALIAS=richman
+            STORE_PASS=richman-ci-keystore
+            KEY_PASS=richman-ci-keystore
+            keytool -genkeypair -v -keystore release.keystore -alias "$ALIAS" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$STORE_PASS" -keypass "$KEY_PASS" \
+              -dname "CN=Richman Game, OU=Client, O=Richman, L=Yuncheng, ST=Shanxi, C=CN" > /dev/null 2>&1
+            echo "MODE=generated" >> "$GITHUB_ENV"
+          fi
+
+          OUT="$RUNNER_TEMP/richman-${APK_VERSION_NAME:-1.0.0}.apk"
+          "$BUILD_TOOLS/zipalign" -f -p 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks release.keystore --ks-key-alias "$ALIAS" \
+            --ks-pass "pass:$STORE_PASS" --key-pass "pass:$KEY_PASS" \
+            --out "$OUT" "$RUNNER_TEMP/aligned.apk"
+          "$BUILD_TOOLS/apksigner" verify --print-certs "$OUT" | head -5 || true
+
+          echo "APK_PATH=$OUT" >> "$GITHUB_ENV"
+          cp release.keystore "$RUNNER_TEMP/release.keystore"
+          du -h "$OUT"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: richman-apk
+          path: ${{ env.APK_PATH }}
+          retention-days: 30
+
+      - name: Upload generated keystore (only when no secret was configured)
+        if: env.MODE == 'generated'
+        uses: actions/upload-artifact@v4
+        with:
+          name: richman-keystore-keep-it
+          path: ${{ runner.temp }}/release.keystore
+          retention-days: 30
+
+      - name: Summary
+        run: |
+          if [ "$MODE" = "generated" ]; then
+            {
+              echo "### ⚠️ 这个包用的是本次临时生成的签名"
+              echo ""
+              echo "只适合自己装上手机试玩，**不要拿去上架**：下次构建会换签名，覆盖安装会失败。"
+              echo "要出正式包，请把 richman-keystore-keep-it 里的 release.keystore 存好，"
+              echo "并按 workflow 顶部注释配好 4 个 Secret 后重新运行。"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### 已用仓库 Secret 里的 keystore 签名，可直接上架" >> "$GITHUB_STEP_SUMMARY"
+          fi
