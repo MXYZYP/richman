@@ -1,4 +1,18 @@
 <script setup lang="ts">
+/**
+ * 结算弹窗。
+ *
+ * 11-17 统一版：与「我的资产 / 玩家资产 / 格子详情」同一套长相 —— 520px 宽、
+ * `--radius-dialog` 圆角、标题居中 + 右侧「关闭」、正文按 13/12/11 三档字号、
+ * 排名块 10px 圆角。改造前它自带一个 56px 的「胜利旗」头图、标题 clamp(1.4rem,5vw,1.7rem)、
+ * 圆角 14px、没有任何关闭控件，遮罩也不带模糊 —— 同一局里它和另外三个浮层一眼就不是一套。
+ *
+ * 为什么这里仍是 `<div>` 遮罩 + `<section>`，而不是像另外三个那样换成 `MobileSheet`：
+ * 这层遮罩必须**压在离开房间的二次确认之下**（`GameView` 的 `.confirm-backdrop` 是普通
+ * 定位层，z-index 高于本层）。一旦本弹窗进 native dialog 的 top layer，普通定位层的确认框
+ * 就会被压在它后面 —— 玩家点「离开房间」看起来毫无反应。这条层级契约由
+ * `game/settlementExitWiring.test.ts` 守着，所以外壳保持不动，只把**壳里的东西**统一。
+ */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { RenderableGameState } from '../session/gameSession';
 import { getSettlementSummary } from '../game/settlement';
@@ -7,7 +21,7 @@ import { formatMoney } from '../ui/format';
 const props = withDefaults(defineProps<{
   state: RenderableGameState;
   primaryLabel?: string;
-  /** Whether "查看棋盘" is offered. False hides the button entirely. */
+  /** 是否给「关闭（回棋盘看一眼）」这条路。false 时整颗按钮都不渲染。 */
   canInspectBoard?: boolean;
 }>(), {
   primaryLabel: '返回首页',
@@ -44,44 +58,52 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
 <template>
   <div class="settlement-backdrop" role="presentation">
     <section class="settlement-dialog" role="dialog" aria-modal="true" aria-labelledby="settlement-title">
-      <div class="settlement-mark" aria-hidden="true">
-        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" focusable="false">
-          <circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="1.6" stroke-opacity="0.28" />
-          <path d="M18.5 35.5V13.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" />
-          <path d="M18.5 15h13.2l-3 5.2 3 5.2H18.5z" fill="currentColor" />
-          <path d="M14 35.5h9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" />
-        </svg>
-      </div>
-      <h2 id="settlement-title">{{ summary.title }}</h2>
-      <p class="settlement-reason">{{ summary.reason }}</p>
+      <!-- 头部与 MobileSheet 的 `.mobile-sheet-head` 同构：三列等分栅格，标题恒在水平中轴，
+           关闭贴右上。左右两格等宽，标题不会因为右边多了一颗按钮而整体左偏。 -->
+      <header class="settlement-head">
+        <h2 id="settlement-title">{{ summary.title }}</h2>
+        <button
+          v-if="props.canInspectBoard"
+          type="button"
+          class="settlement-close"
+          aria-label="关闭结算，查看棋盘"
+          @click="emit('close')"
+        >关闭</button>
+      </header>
 
-      <ol class="settlement-list" aria-label="结算排名">
-        <li
-          v-for="row in summary.rows"
-          :key="row.id"
-          class="settlement-row"
-          :class="{ winner: row.isWinner, bankrupt: row.isBankrupt }"
-        >
-          <span class="rank">{{ row.rank }}</span>
-          <div class="row-main">
-            <span class="name">
-              {{ row.name }}
-              <em v-if="row.isBot">电脑</em>
-              <span v-if="row.isWinner" class="winner-tag">冠军</span>
+      <!-- 正文区自己滚：弹窗这一层 overflow:hidden 把滚动条裁进圆角，
+           否则内容一长，右边又会出现那条盖掉圆角的直角滚动条。 -->
+      <div class="settlement-body">
+        <p class="settlement-reason">{{ summary.reason }}</p>
+
+        <h3 class="section-title">结算排名</h3>
+        <ol class="settlement-list" aria-label="结算排名">
+          <li
+            v-for="row in summary.rows"
+            :key="row.id"
+            class="settlement-row"
+            :class="{ winner: row.isWinner, bankrupt: row.isBankrupt }"
+          >
+            <span class="rank">{{ row.rank }}</span>
+            <div class="row-main">
+              <span class="name">
+                {{ row.name }}
+                <em v-if="row.isBot">电脑</em>
+                <span v-if="row.isWinner" class="winner-tag">冠军</span>
+              </span>
+              <small>存活 {{ row.survivedTurns }} 回合 · 地产：{{ formatPropertySummary(row.propertyNames) }}</small>
+            </div>
+            <span class="row-money">
+              <small>现金</small>
+              <strong>¥{{ formatMoney(row.cash) }}</strong>
+              <em v-if="row.isBankrupt">{{ row.status }}</em>
             </span>
-            <small>存活 {{ row.survivedTurns }} 回合 · 地产：{{ formatPropertySummary(row.propertyNames) }}</small>
-          </div>
-          <span class="row-money">
-            <small>现金</small>
-            <strong>¥{{ formatMoney(row.cash) }}</strong>
-            <em v-if="row.isBankrupt">{{ row.status }}</em>
-          </span>
-        </li>
-      </ol>
+          </li>
+        </ol>
 
-      <div class="settlement-actions">
-        <button ref="primaryAction" type="button" class="primary" @click="emit('restart')">{{ props.primaryLabel }}</button>
-        <button v-if="props.canInspectBoard" type="button" class="secondary" @click="emit('close')">查看棋盘</button>
+        <div class="settlement-actions">
+          <button ref="primaryAction" type="button" class="primary" @click="emit('restart')">{{ props.primaryLabel }}</button>
+        </div>
       </div>
     </section>
   </div>
@@ -98,52 +120,103 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
   background: var(--overlay-scrim);
 }
 
+/* 尺寸、圆角、边框、落影与 MobileSheet 的 modal 变体逐项对齐 —— 四个浮层共用一套规格。 */
 .settlement-dialog {
   --settle-tile: var(--game-panel-raised);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   width: min(520px, 100%);
   max-height: calc(100dvh - 32px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 22px 20px;
+  overflow: hidden;
   border: 1px solid var(--color-border);
-  border-radius: 14px;
+  border-radius: var(--radius-dialog);
   background: var(--game-panel);
   box-shadow: var(--game-shadow-dialog);
-  text-align: center;
 }
 
-.settlement-mark {
+.settlement-head {
   display: grid;
-  width: 56px;
-  height: 56px;
-  margin: 0 auto 10px;
-  place-items: center;
-  border: 1px solid color-mix(in srgb, var(--color-accent) 50%, var(--color-border));
-  border-radius: 999px;
-  background: var(--game-panel-sunken);
-  color: var(--color-primary);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--game-line-soft);
 }
 
-.settlement-mark svg {
-  display: block;
-  width: 34px;
-  height: 34px;
-}
-
-.settlement-dialog h2 {
+.settlement-head h2 {
+  grid-column: 2;
   margin: 0;
-  color: var(--color-text);
-  font-size: clamp(1.4rem, 5vw, 1.7rem);
-  font-weight: 900;
-  line-height: 1.25;
+  color: var(--title-color);
+  font-size: var(--text-sheet-title);
+  font-weight: 800;
+  text-align: center;
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
 
-.settlement-reason {
-  margin: 6px 0 16px;
+/* 关闭控件与 MobileSheet 的同款同形：44px 高、描边胶囊、灰字。 */
+.settlement-close {
+  grid-column: 3;
+  justify-self: end;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background: transparent;
   color: var(--color-muted);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--text-meta-size);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settlement-close:hover {
+  color: var(--color-text);
+}
+
+.settlement-close:focus-visible {
+  outline: 3px solid var(--game-focus);
+  outline-offset: 2px;
+}
+
+.settlement-body {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 14px max(14px, env(safe-area-inset-bottom));
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-muted) 40%, transparent) transparent;
+}
+
+.settlement-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.settlement-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settlement-body::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-chip);
+  background: color-mix(in srgb, var(--color-muted) 40%, transparent);
+}
+
+.settlement-reason {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-body-size);
+  line-height: 1.55;
+  text-align: center;
+}
+
+/* 分组小标题：与格子详情的「完整租金表」、玩家资产的「地产明细」同档。 */
+.section-title {
+  margin: 4px 0 0;
+  color: var(--color-text);
+  font-size: var(--text-section-size);
+  font-weight: 800;
 }
 
 .settlement-list {
@@ -183,7 +256,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
   border-radius: 8px;
   background: var(--game-panel-sunken);
   color: var(--color-muted);
-  font-size: 13px;
+  font-size: var(--text-body-size);
   font-weight: 900;
 }
 
@@ -202,7 +275,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
   align-items: center;
   gap: 4px;
   min-width: 0;
-  font-size: 13.5px;
+  color: var(--color-text);
+  font-size: var(--text-body-size);
   font-weight: 800;
   overflow-wrap: anywhere;
 }
@@ -212,7 +286,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
   border-radius: 7px;
   background: var(--game-panel-sunken);
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: var(--text-badge-size);
   font-style: normal;
   font-weight: 900;
 }
@@ -222,7 +296,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
   border-radius: 7px;
   background: var(--color-primary);
   color: #fff;
-  font-size: 10px;
+  font-size: var(--text-badge-size);
   font-weight: 900;
 }
 
@@ -230,7 +304,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
   display: block;
   margin-top: 3px;
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--text-meta-size);
   font-weight: 700;
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -245,14 +319,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
 
 .row-money small {
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: var(--text-badge-size);
   font-weight: 800;
 }
 
 .row-money strong {
   color: var(--color-text);
   font-family: var(--game-mono);
-  font-size: 14px;
+  font-size: var(--text-section-size);
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -260,7 +334,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
 
 .row-money em {
   color: var(--color-pay);
-  font-size: 10px;
+  font-size: var(--text-badge-size);
   font-style: normal;
   font-weight: 900;
 }
@@ -269,13 +343,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
   display: flex;
   justify-content: center;
   gap: 10px;
-  margin-top: 16px;
+  margin-top: 6px;
 }
 
 .settlement-actions button {
-  min-height: 44px;
+  min-height: var(--control-height-md);
   padding: 10px 18px;
   border-radius: var(--game-radius-control);
+  font-size: 1rem;
   font-weight: 900;
   cursor: pointer;
 }
@@ -292,13 +367,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
   box-shadow: 0 4px 0 var(--game-action-shadow);
 }
 
-.settlement-actions .secondary {
-  border: 1px solid var(--color-border);
-  background: var(--settle-tile);
-  color: var(--color-text);
-  box-shadow: 0 4px 0 var(--game-line-soft);
-}
-
 @media (max-width: 1024px) {
   .settlement-backdrop {
     padding: 12px;
@@ -306,11 +374,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
 
   .settlement-dialog {
     max-height: calc(100dvh - 24px);
-    padding: 18px 16px;
-  }
-
-  .settlement-actions {
-    flex-direction: column;
   }
 
   .settlement-actions button {

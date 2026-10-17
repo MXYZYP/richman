@@ -108,6 +108,10 @@
   --radius-panel: 18px;     /* 卡内分组面板（统计块、排行榜、设置分组） */
   --radius-control: 10px;   /* 按钮、输入框、下拉 */
   --radius-chip: 999px;     /* 胶囊标签、徽标 */
+  /* ★ 弹窗圆角（11-17）：**所有**浮层——首页四个详情弹窗、玩法说明、成就，以及局内的
+     结算 / 我的资产 / 玩家资产 / 格子详情——四角都走这一档，别在组件里再拍一个数。
+     MobileSheet 的 modal 变体与局内三个弹窗都引用它；ui/gameDialogStyle.test.ts 守着。 */
+  --radius-dialog: 16px;
 
   --control-height-sm: 36px;   /* 次要按钮（返回、重试、取消） */
   --control-height-md: 44px;   /* 主要按钮与开关行：移动端触摸目标下限 44px */

@@ -1236,6 +1236,7 @@ function inspectFinalBoard() {
             class="sheet sheet-assets"
             :open="isMobileLayout && mobileSheet === 'assets'"
             :title="isSpectator ? '资产详情' : '我的资产'"
+            :aside="`${assetRows.length} 处`"
             @close="closeMobileSheet"
           >
             <AssetPanel
@@ -1245,6 +1246,7 @@ function inspectFinalBoard() {
               :assets="assetRows"
               :is-animating="isBusy || !interaction.canSendIntent"
               :read-only="isSpectator"
+              :show-title="!isMobileLayout"
               @action="handleAction"
             />
           </MobileSheet>
@@ -2031,7 +2033,8 @@ function inspectFinalBoard() {
   gap: 14px;
   padding: clamp(20px, 4vw, 30px);
   border: 1px solid var(--color-border);
-  border-radius: 16px;
+  /* 与结算 / 资产 / 格详情同一个圆角档位（原来写死的 16px 恰好同值，改成档位才不会漂）。 */
+  border-radius: var(--radius-dialog);
   background: var(--board-surface);
   box-shadow: 0 16px 40px rgb(53 39 20 / 18%);
 }

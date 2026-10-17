@@ -1,5 +1,16 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+/**
+ * 玩家资产弹窗（点棋盘旁某位玩家打开）。
+ *
+ * 11-17 统一版：与「我的资产 / 结算 / 格子详情」共用同一个 `MobileSheet layout="modal"`
+ * 外壳。改造前它是自持一套 `<dialog>`：720px 宽、圆角 14px、标题 clamp(1.25rem,4vw,1.55rem)
+ * 左对齐、右上角「×」、遮罩还多一层模糊 —— 同一局里四个浮层四种长相。
+ * 现在宽度 / 圆角 / 标题字号 / 关闭按钮 / 遮罩全部来自 MobileSheet 那一条规则。
+ *
+ * 文案也跟着对齐（此前两个弹窗各用一套叫法）：
+ *   房产 → 地产、「N 项」→「N 处」、「房产详情」→「地产明细」。
+ */
+import MobileSheet from './MobileSheet.vue';
 import type { PlayerColor, PlayerState } from '@richman/engine';
 import type { AssetRow } from '../game/clientGame';
 import { formatMoney } from '../ui/format';
@@ -20,184 +31,98 @@ const emit = defineEmits<{
 }>();
 
 const marks: Record<PlayerColor, string> = { red: '●', blue: '■', yellow: '▲', green: '★', purple: '◆', orange: '⬟' };
-const dialog = ref<HTMLDialogElement | null>(null);
-const closeButton = ref<HTMLButtonElement | null>(null);
-let previousBodyOverflow = '';
-let closing = false;
-let disposed = false;
 
-onMounted(() => {
-  previousBodyOverflow = document.body.style.overflow;
-  document.body.style.overflow = 'hidden';
-  dialog.value?.showModal();
-  closeButton.value?.focus();
-});
-
-onBeforeUnmount(() => {
-  disposed = true;
-  document.body.style.overflow = previousBodyOverflow;
-  if (dialog.value?.open) dialog.value.close();
-});
-
-async function requestClose(): Promise<void> {
-  if (closing) return;
-  closing = true;
-  dialog.value?.close();
-  const animations = dialog.value?.getAnimations() ?? [];
-  await Promise.all(animations.map((animation) => animation.finished.catch(() => undefined)));
-  if (!disposed) emit('close');
-}
-
-function closeFromBackdrop(event: MouseEvent): void {
-  if (event.target === dialog.value) void requestClose();
+/** 与「我的资产」同一个写法：裸地 / N 级房屋 / 旅馆 / 车站 / 公用事业。 */
+function kindLabel(asset: AssetRow): string {
+  if (asset.subtype === 'normal') {
+    if (asset.level === 5) return '旅馆';
+    return asset.level > 0 ? `${asset.level} 级房屋` : '裸地';
+  }
+  return asset.subtype === 'station' ? '车站' : '公用事业';
 }
 </script>
 
 <template>
   <Teleport to="body">
-    <dialog
-      ref="dialog"
-      class="player-dialog-layer"
-      :aria-labelledby="`player-dialog-${props.player.id}`"
-      @cancel.prevent="requestClose"
-      @click="closeFromBackdrop"
+    <MobileSheet
+      layout="modal"
+      :open="true"
+      :title="props.player.nickname"
+      aside="玩家资产"
+      @close="emit('close')"
     >
-      <section class="player-dialog">
-        <header class="dialog-header">
-          <div class="player-identity">
-            <div class="dialog-avatar" :class="`avatar-${props.player.color}`">
-              {{ marks[props.player.color] }}
-            </div>
-            <div class="identity-copy">
-              <span class="eyebrow">玩家资产</span>
-              <h2 :id="`player-dialog-${props.player.id}`">{{ props.player.nickname }}</h2>
-              <div class="status-badges" aria-label="玩家状态">
-                <span v-if="props.player.isBot">电脑</span>
-                <span v-if="props.player.id === props.currentPlayerId">当前回合</span>
-                <span v-if="!props.player.online">离线</span>
-                <span v-if="props.player.bankrupt" class="danger">破产</span>
-              </div>
-            </div>
-          </div>
-          <button
-            ref="closeButton"
-            type="button"
-            class="dialog-close"
-            aria-label="关闭玩家资产"
-            @click="requestClose"
-          >
-            ×
-          </button>
-          <button
-            v-if="props.canKick"
-            type="button"
-            class="dialog-kick"
-            @click="emit('kick')"
-          >
-            踢出对局
-          </button>
-        </header>
+      <div class="player-identity">
+        <div class="dialog-avatar" :class="`avatar-${props.player.color}`" aria-hidden="true">
+          {{ marks[props.player.color] }}
+        </div>
+        <div class="status-badges" aria-label="玩家状态">
+          <span v-if="props.player.isBot">电脑</span>
+          <span v-if="props.player.id === props.currentPlayerId">当前回合</span>
+          <span v-if="!props.player.online">离线</span>
+          <span v-if="props.player.bankrupt" class="danger">破产</span>
+        </div>
+      </div>
 
-        <dl class="player-summary">
-          <div class="summary-cell cash-summary">
-            <dt>现金</dt>
-            <dd class="cash-value">¥{{ formatMoney(props.player.cash) }}</dd>
-          </div>
-          <div class="summary-cell">
-            <dt>当前位置</dt>
-            <dd>{{ props.positionName }}</dd>
-          </div>
-          <div v-if="props.debtAmount !== null" class="summary-cell debt-summary">
-            <dt>待偿欠款</dt>
-            <dd>¥{{ formatMoney(props.debtAmount) }}</dd>
-          </div>
-        </dl>
+      <dl class="summary-strip">
+        <div class="summary-cell cash-summary">
+          <dt>可用现金</dt>
+          <dd class="cash-value">¥{{ formatMoney(props.player.cash) }}</dd>
+        </div>
+        <div class="summary-cell">
+          <dt>当前位置</dt>
+          <dd>{{ props.positionName }}</dd>
+        </div>
+        <div v-if="props.debtAmount !== null" class="summary-cell debt-summary">
+          <dt>待偿欠款</dt>
+          <dd>¥{{ formatMoney(props.debtAmount) }}</dd>
+        </div>
+      </dl>
 
-        <section class="asset-section" aria-labelledby="player-property-title">
-          <div class="asset-heading">
-            <h3 id="player-property-title">房产详情</h3>
-            <span>{{ props.assets.length }} 项</span>
-          </div>
-          <div class="asset-scroll">
-            <p v-if="props.assets.length === 0" class="empty-assets">暂无房产</p>
-            <ul v-else class="asset-grid">
-              <li
-                v-for="asset in props.assets"
-                :key="asset.cellId"
-                class="asset-card"
-                :title="asset.name"
-              >
-                <strong>{{ asset.displayName }}</strong>
-                <span class="asset-kind">
-                  {{ asset.subtype === 'normal'
-                    ? (asset.level === 5 ? '旅馆' : asset.level > 0 ? `${asset.level} 级房屋` : '裸地')
-                    : asset.subtype === 'station' ? '车站' : '公用事业' }}
-                </span>
-                <span v-if="asset.mortgaged" class="mortgaged">已抵押</span>
-              </li>
-            </ul>
-          </div>
-        </section>
+      <section class="asset-section" aria-labelledby="player-property-title">
+        <div class="section-head">
+          <h3 id="player-property-title" class="section-title">地产明细</h3>
+          <span class="section-count">{{ props.assets.length }} 处</span>
+        </div>
+        <p v-if="props.assets.length === 0" class="empty-assets">暂无地产</p>
+        <ul v-else class="asset-grid">
+          <li
+            v-for="asset in props.assets"
+            :key="asset.cellId"
+            class="asset-card"
+            :title="asset.name"
+          >
+            <strong>{{ asset.displayName }}</strong>
+            <span class="asset-kind">{{ kindLabel(asset) }}</span>
+            <span v-if="asset.mortgaged" class="mortgaged">已抵押</span>
+          </li>
+        </ul>
       </section>
-    </dialog>
+
+      <button v-if="props.canKick" type="button" class="dialog-kick" @click="emit('kick')">
+        踢出对局
+      </button>
+    </MobileSheet>
   </Teleport>
 </template>
 
 <style scoped>
-.player-dialog-layer {
-  width: min(720px, calc(100vw - 32px));
-  max-width: none;
-  max-height: none;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-text);
-  overflow: visible;
-}
-
-.player-dialog-layer::backdrop {
-  background: var(--overlay-scrim);
-  backdrop-filter: blur(3px);
-}
-
-.player-dialog {
-  --player-tile: var(--game-panel-raised);
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  width: 100%;
-  max-height: calc(100dvh - 32px);
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  background: var(--game-panel);
-  box-shadow: var(--game-shadow-dialog);
-}
-
-.dialog-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 16px 18px 13px;
-  border-bottom: 1px solid var(--game-line-soft);
-}
-
+/* ---- 抬头：棋子色圆片 + 状态徽标。昵称已经升格成弹窗标题，这里不再重复一遍。 ---- */
 .player-identity {
   display: flex;
-  min-width: 0;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .dialog-avatar {
   display: grid;
   flex: 0 0 auto;
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   place-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius-chip);
   color: #fff;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 900;
   box-shadow: 0 2px 6px rgb(44 56 36 / 18%);
 }
@@ -209,31 +134,11 @@ function closeFromBackdrop(event: MouseEvent): void {
 .avatar-purple { background: var(--player-purple); }
 .avatar-orange { background: var(--player-orange); }
 
-.identity-copy {
-  min-width: 0;
-}
-
-.eyebrow {
-  color: var(--color-muted);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-}
-
-.identity-copy h2 {
-  margin: 2px 0 0;
-  color: var(--color-text);
-  font-size: clamp(1.25rem, 4vw, 1.55rem);
-  font-weight: 900;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-
+/* 徽标与「我的资产」里的状态徽标同号同圆角（11px / 8px）。 */
 .status-badges {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  margin-top: 7px;
 }
 
 .status-badges span {
@@ -241,95 +146,42 @@ function closeFromBackdrop(event: MouseEvent): void {
   border-radius: 8px;
   background: var(--game-panel-sunken);
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: var(--text-badge-size);
   font-weight: 900;
 }
 
 .status-badges span.danger {
-  background: color-mix(in srgb, var(--color-pay) 10%, var(--player-tile));
+  background: color-mix(in srgb, var(--color-pay) 10%, var(--game-panel-raised));
   color: var(--color-pay);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-pay) 38%, transparent);
 }
 
-.dialog-close {
+/* ---- 数值条：与「我的资产」的 .cash-strip 同一张脸（12px 圆角 / 细边 / 浅底）。 ---- */
+.summary-strip {
   display: grid;
-  flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--player-tile);
-  color: var(--color-primary);
-  font: inherit;
-  font-size: 24px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.dialog-close:hover {
-  background: var(--game-panel-sunken);
-}
-
-.dialog-close:focus-visible {
-  outline: 3px solid var(--game-focus);
-  outline-offset: 2px;
-}
-
-.dialog-kick {
-  flex: 0 0 auto;
-  align-self: flex-start;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid color-mix(in srgb, var(--color-pay) 42%, var(--color-border));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-pay) 9%, var(--player-tile));
-  color: var(--color-pay);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
-  cursor: pointer;
-  transition: background 140ms ease, box-shadow 140ms ease;
-}
-
-.dialog-kick:hover {
-  background: color-mix(in srgb, var(--color-pay) 16%, var(--player-tile));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-pay) 55%, transparent);
-}
-
-.dialog-kick:focus-visible {
-  outline: 3px solid var(--game-focus);
-  outline-offset: 2px;
-}
-
-.player-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 6px;
   margin: 0;
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--game-line-soft);
+  padding: 9px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--game-panel-raised);
 }
 
 .summary-cell {
   min-width: 0;
-  padding: 9px 11px;
-  border: 1px solid var(--game-line-soft);
-  border-radius: 10px;
-  background: var(--player-tile);
 }
 
-.player-summary dt {
+.summary-strip dt {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--text-badge-size);
   font-weight: 800;
 }
 
-.player-summary dd {
-  margin: 3px 0 0;
+.summary-strip dd {
+  margin: 2px 0 0;
   color: var(--color-text);
+  font-size: var(--text-body-size);
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
@@ -337,84 +189,72 @@ function closeFromBackdrop(event: MouseEvent): void {
 
 .cash-summary dd.cash-value {
   font-family: var(--game-mono);
-  font-size: 1.2rem;
+  font-size: 1rem;
 }
 
-.player-summary .debt-summary {
-  border-color: color-mix(in srgb, var(--color-pay) 34%, var(--color-border));
-  background: color-mix(in srgb, var(--color-pay) 7%, var(--player-tile));
-}
-
-.player-summary .debt-summary dd {
+.summary-strip .debt-summary dd {
   color: var(--color-pay);
   font-family: var(--game-mono);
 }
 
+/* ---- 地产明细 ---- */
 .asset-section {
   display: grid;
-  min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr);
-  padding: 13px 18px 18px;
+  gap: 8px;
 }
 
-.asset-heading {
+.section-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 9px;
+  gap: 10px;
 }
 
-.asset-heading h3 {
+/* 分组小标题：与格子详情的「完整租金表」、结算的「结算排名」同一档。 */
+.section-title {
   margin: 0;
   color: var(--color-text);
-  font-size: 1rem;
-  font-weight: 900;
-}
-
-.asset-heading span {
-  color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--text-section-size);
   font-weight: 800;
 }
 
-.asset-scroll {
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+.section-count {
+  color: var(--color-muted);
+  font-size: var(--text-meta-size);
+  font-weight: 800;
 }
 
 .asset-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
   gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* 与「我的资产」的 .asset-row 同档：10px 圆角、细边、浅底。 */
 .asset-card {
   display: grid;
   min-width: 0;
   align-content: start;
-  gap: 5px;
-  padding: 11px;
+  gap: 3px;
+  padding: 9px 10px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
-  background: var(--player-tile);
+  background: var(--game-panel-raised);
 }
 
 .asset-card strong {
   color: var(--color-text);
-  font-size: 13.5px;
+  font-size: var(--text-body-size);
+  font-weight: 900;
   overflow-wrap: anywhere;
 }
 
 .asset-kind {
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: var(--text-meta-size);
   font-weight: 800;
 }
 
@@ -424,62 +264,41 @@ function closeFromBackdrop(event: MouseEvent): void {
   border-radius: 8px;
   background: var(--button-disabled-bg);
   color: var(--button-disabled-text);
-  font-size: 10px;
+  font-size: var(--text-badge-size);
   font-weight: 900;
 }
 
 .empty-assets {
-  display: grid;
-  min-height: 120px;
   margin: 0;
-  place-items: center;
+  padding: 12px;
   border: 1px dashed var(--color-border);
-  border-radius: 12px;
+  border-radius: 10px;
   color: var(--color-muted);
-  font-weight: 800;
+  font-size: var(--text-body-size);
+  font-weight: 700;
+  text-align: center;
 }
 
-@media (max-width: 1024px) {
-  .player-dialog-layer {
-    width: 100%;
-    margin: auto 0 0;
-  }
+/* 破坏性操作收在正文末尾，样式与「我的资产」里的「宣告破产」同一类：
+   描边红、透明底 —— 不再是抬头里那颗孤零零的胶囊。 */
+.dialog-kick {
+  min-height: var(--control-height-md);
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-pay) 55%, transparent);
+  border-radius: var(--game-radius-control);
+  background: transparent;
+  color: var(--color-pay);
+  font-size: var(--text-body-size);
+  font-weight: 900;
+  cursor: pointer;
+}
 
-  .player-dialog {
-    max-height: 80dvh;
-    border-right: 0;
-    border-bottom: 0;
-    border-left: 0;
-    border-radius: 16px 16px 0 0;
-    padding-bottom: env(safe-area-inset-bottom);
-  }
+.dialog-kick:hover {
+  background: color-mix(in srgb, var(--color-pay) 8%, transparent);
+}
 
-  .dialog-header {
-    padding: 13px 16px 11px;
-  }
-
-  .dialog-avatar {
-    width: 40px;
-    height: 40px;
-    font-size: 17px;
-  }
-
-  .player-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding: 10px 16px;
-  }
-
-  .asset-section {
-    padding: 11px 16px 14px;
-  }
-
-  .asset-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .asset-card {
-    padding: 10px;
-  }
+.dialog-kick:focus-visible {
+  outline: 3px solid var(--game-focus);
+  outline-offset: 2px;
 }
 </style>

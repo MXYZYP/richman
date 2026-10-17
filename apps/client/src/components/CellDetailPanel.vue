@@ -1,5 +1,19 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+/**
+ * 格子详情弹窗。
+ *
+ * 11-17 统一版：外壳整个交给 `MobileSheet layout="modal"`，不再自己开 `<dialog>`。
+ * 此前它是一套独立弹窗：540px 宽、圆角 14px、标题 1.24rem 左对齐、右上角一个「×」，
+ * 而同一局里的「我的资产 / 结算」各有各的宽度、圆角与关闭方式 —— 用户的原话是
+ * 「局内所有弹窗的文案与视觉风格保持一致」。
+ * 现在尺寸/圆角/标题位置/关闭按钮全部来自 MobileSheet 那一条 modal 规则（唯一事实源），
+ * 这里只负责正文：格子名当标题、类型当标题右侧的状态字，正文按「过路费 → 租金表 →
+ * 说明 → 数值 → 备注」的同一顺序排。
+ *
+ * 关窗细节仍归调用方：MobileSheet 负责锁 body、Esc、焦点归还；`close` 事件抛给 GameView，
+ * 由它清空选中格子并把焦点还给触发它的那一格。
+ */
+import MobileSheet from './MobileSheet.vue';
 import type { CellDetail } from '../game/clientGame';
 import { formatMoney } from '../ui/format';
 
@@ -10,245 +24,83 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: [];
 }>();
-
-const dialog = ref<HTMLDialogElement | null>(null);
-const closeButton = ref<HTMLButtonElement | null>(null);
-let previousBodyOverflow = '';
-let closing = false;
-let disposed = false;
-
-onMounted(() => {
-  previousBodyOverflow = document.body.style.overflow;
-  document.body.style.overflow = 'hidden';
-  dialog.value?.showModal();
-  closeButton.value?.focus();
-});
-
-onBeforeUnmount(() => {
-  disposed = true;
-  document.body.style.overflow = previousBodyOverflow;
-  if (dialog.value?.open) dialog.value.close();
-});
-
-async function requestClose(): Promise<void> {
-  if (closing) return;
-  closing = true;
-  dialog.value?.close();
-  const animations = dialog.value?.getAnimations() ?? [];
-  await Promise.all(animations.map((animation) => animation.finished.catch(() => undefined)));
-  if (!disposed) emit('close');
-}
-
-function closeFromBackdrop(event: MouseEvent): void {
-  if (event.target === dialog.value) void requestClose();
-}
 </script>
 
 <template>
+  <!-- 仍 Teleport 到 body：弹窗挂在对局页里时，任何将来给 .game-view 加的变换/裁剪
+       都不会把 fixed 浮层带偏；这条与改造前保持一致。 -->
   <Teleport to="body">
-    <dialog
-      ref="dialog"
-      class="cell-dialog-layer"
-      aria-labelledby="cell-dialog-title"
-      @cancel.prevent="requestClose"
-      @click="closeFromBackdrop"
+    <MobileSheet
+      layout="modal"
+      :open="true"
+      :title="props.detail.name"
+      :aside="props.detail.typeLabel"
+      @close="emit('close')"
     >
-      <section class="cell-dialog">
-        <header class="dialog-header">
-          <div class="cell-heading">
-            <span class="eyebrow">格子详情</span>
-            <div class="title-row">
-              <h2 id="cell-dialog-title">{{ props.detail.name }}</h2>
-              <span class="type-chip">{{ props.detail.typeLabel }}</span>
-            </div>
+      <div v-if="props.detail.currentRent" class="rent-highlight" aria-label="当前过路费">
+        <span class="rent-label">当前过路费</span>
+        <strong v-if="props.detail.currentRent.amount !== null" class="rent-amount">
+          ¥{{ formatMoney(props.detail.currentRent.amount) }}
+        </strong>
+        <strong v-else class="rent-amount pending">待本次掷骰</strong>
+        <small class="rent-note">{{ props.detail.currentRent.note }}</small>
+      </div>
+
+      <section v-if="props.detail.rentRows.length > 0" class="rent-section">
+        <h3 class="section-title">完整租金表</h3>
+        <dl class="rent-list">
+          <div v-for="row in props.detail.rentRows" :key="row.label">
+            <dt>{{ row.label }}</dt>
+            <dd>¥{{ formatMoney(row.amount) }}</dd>
           </div>
-          <button
-            ref="closeButton"
-            type="button"
-            class="dialog-close"
-            aria-label="关闭格子详情"
-            @click="requestClose"
-          >×</button>
-        </header>
-
-        <div class="cell-body">
-          <div v-if="props.detail.currentRent" class="current-rent" aria-label="当前过路费">
-            <span class="rent-label">当前过路费</span>
-            <strong v-if="props.detail.currentRent.amount !== null" class="rent-amount">
-              ¥{{ formatMoney(props.detail.currentRent.amount) }}
-            </strong>
-            <strong v-else class="rent-amount pending">待本次掷骰</strong>
-            <small class="rent-note">{{ props.detail.currentRent.note }}</small>
-          </div>
-
-          <div v-if="props.detail.rentRows.length > 0" class="rent-section">
-            <h3>完整租金表</h3>
-            <dl class="rent-list">
-              <div v-for="row in props.detail.rentRows" :key="row.label">
-                <dt>{{ row.label }}</dt>
-                <dd>¥{{ formatMoney(row.amount) }}</dd>
-              </div>
-            </dl>
-          </div>
-
-          <p class="description">{{ props.detail.description }}</p>
-
-          <dl class="facts">
-            <div v-if="props.detail.price !== null">
-              <dt>价格</dt>
-              <dd>¥{{ formatMoney(props.detail.price) }}</dd>
-            </div>
-            <div v-if="props.detail.ownerName !== null">
-              <dt>拥有者</dt>
-              <dd>{{ props.detail.ownerName }}</dd>
-            </div>
-            <div v-if="props.detail.levelLabel !== null">
-              <dt>状态</dt>
-              <dd>{{ props.detail.levelLabel }}</dd>
-            </div>
-            <div v-if="props.detail.mortgagedLabel !== null">
-              <dt>抵押</dt>
-              <dd>{{ props.detail.mortgagedLabel }}</dd>
-            </div>
-            <div v-if="props.detail.mortgageValue !== null">
-              <dt>抵押额</dt>
-              <dd>¥{{ formatMoney(props.detail.mortgageValue) }}</dd>
-            </div>
-            <div v-if="props.detail.houseCost !== null">
-              <dt>单栋建筑费</dt>
-              <dd>¥{{ formatMoney(props.detail.houseCost) }}</dd>
-            </div>
-          </dl>
-
-          <ul v-if="props.detail.notes.length > 0" class="notes">
-            <li v-for="(note, index) in props.detail.notes" :key="`${index}:${note}`">{{ note }}</li>
-          </ul>
-        </div>
+        </dl>
       </section>
-    </dialog>
+
+      <p class="description">{{ props.detail.description }}</p>
+
+      <dl class="facts">
+        <div v-if="props.detail.price !== null">
+          <dt>价格</dt>
+          <dd>¥{{ formatMoney(props.detail.price) }}</dd>
+        </div>
+        <div v-if="props.detail.ownerName !== null">
+          <dt>拥有者</dt>
+          <dd>{{ props.detail.ownerName }}</dd>
+        </div>
+        <div v-if="props.detail.levelLabel !== null">
+          <dt>状态</dt>
+          <dd>{{ props.detail.levelLabel }}</dd>
+        </div>
+        <div v-if="props.detail.mortgagedLabel !== null">
+          <dt>抵押</dt>
+          <dd>{{ props.detail.mortgagedLabel }}</dd>
+        </div>
+        <div v-if="props.detail.mortgageValue !== null">
+          <dt>抵押额</dt>
+          <dd>¥{{ formatMoney(props.detail.mortgageValue) }}</dd>
+        </div>
+        <div v-if="props.detail.houseCost !== null">
+          <dt>单栋建筑费</dt>
+          <dd>¥{{ formatMoney(props.detail.houseCost) }}</dd>
+        </div>
+      </dl>
+
+      <ul v-if="props.detail.notes.length > 0" class="notes">
+        <li v-for="(note, index) in props.detail.notes" :key="`${index}:${note}`">{{ note }}</li>
+      </ul>
+    </MobileSheet>
   </Teleport>
 </template>
 
 <style scoped>
-.cell-dialog-layer {
-  width: min(540px, calc(100vw - 32px));
-  max-width: none;
-  max-height: none;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-text);
-  overflow: visible;
-}
-
-.cell-dialog-layer::backdrop {
-  background: var(--overlay-scrim);
-  backdrop-filter: blur(3px);
-}
-
-.cell-dialog {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  width: 100%;
-  max-height: calc(100dvh - 32px);
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  background: var(--game-panel);
-  box-shadow: var(--game-shadow-dialog);
-}
-
-.dialog-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 16px 18px 13px;
-  border-bottom: 1px solid var(--game-line-soft);
-}
-
-.cell-heading {
-  display: grid;
-  min-width: 0;
-  gap: 4px;
-}
-
-.eyebrow {
-  color: var(--color-muted);
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-}
-
-.title-row {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.title-row h2 {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 1.24rem;
-  font-weight: 900;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-}
-
-.type-chip {
-  flex: 0 0 auto;
-  border: 1px solid var(--game-line-soft);
-  border-radius: 8px;
-  padding: 3px 8px;
-  background: var(--game-panel-sunken);
-  color: var(--color-muted);
-  font-size: 0.74rem;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.dialog-close {
-  display: grid;
-  flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--game-panel-raised);
-  color: var(--color-primary);
-  font-size: 1.4rem;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.dialog-close:hover {
-  background: var(--game-panel-sunken);
-}
-
-.dialog-close:focus-visible {
-  outline: 3px solid var(--game-focus);
-  outline-offset: 2px;
-}
-
-.cell-body {
-  display: grid;
-  gap: 12px;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 14px 18px 18px;
-}
-
-.current-rent {
+/* 正文分区沿用与「资产 / 结算」同一套节奏：
+   高亮块（当前值）→ 分组小标题 → 明细行 → 注释。
+   块内圆角 12 / 内层 10，与资产面板、结算排名行同档，不再各自 8/9/12 混着来。 */
+.rent-highlight {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 4px 14px;
-  padding: 12px 14px;
+  gap: 2px 12px;
+  padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
   border-inline-start: 4px solid var(--color-accent);
   border-radius: 12px;
@@ -258,14 +110,14 @@ function closeFromBackdrop(event: MouseEvent): void {
 .rent-label {
   align-self: center;
   color: var(--color-muted);
-  font-size: 0.82rem;
+  font-size: var(--text-body-size);
   font-weight: 800;
 }
 
 .rent-amount {
   color: var(--color-primary);
   font-family: var(--game-mono);
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -274,27 +126,28 @@ function closeFromBackdrop(event: MouseEvent): void {
 
 .rent-amount.pending {
   font-family: inherit;
-  font-size: 1.05rem;
+  font-size: var(--text-section-size);
 }
 
 .rent-note {
   grid-column: 1 / -1;
   color: var(--color-muted);
-  font-size: 0.78rem;
+  font-size: var(--text-meta-size);
   line-height: 1.45;
 }
 
-.rent-section h3 {
-  margin: 0 0 8px;
+/* 弹窗内的分组小标题：与资产面板的「资产总览」「可用现金」、结算的「结算排名」同号同重。 */
+.section-title {
+  margin: 0 0 6px;
   color: var(--color-text);
-  font-size: 0.92rem;
-  letter-spacing: 0.02em;
+  font-size: var(--text-section-size);
+  font-weight: 800;
 }
 
 .rent-list,
 .facts {
   display: grid;
-  gap: 6px;
+  gap: 5px;
   margin: 0;
 }
 
@@ -304,19 +157,20 @@ function closeFromBackdrop(event: MouseEvent): void {
   justify-content: space-between;
   gap: 10px;
   border-bottom: 1px dashed var(--game-line-soft);
-  padding-bottom: 5px;
+  padding-bottom: 4px;
 }
 
 .rent-list dt,
 .facts dt {
   color: var(--color-muted);
-  font-size: 0.82rem;
+  font-size: var(--text-body-size);
 }
 
 .rent-list dd,
 .facts dd {
   margin: 0;
-  font-size: 0.86rem;
+  color: var(--color-text);
+  font-size: var(--text-body-size);
   font-variant-numeric: tabular-nums;
   font-weight: 800;
   text-align: right;
@@ -328,53 +182,31 @@ function closeFromBackdrop(event: MouseEvent): void {
 }
 
 .facts {
-  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
+/* 数值块与资产面板的「卖房可得 / 抵押可得」同一张脸：浅底、细边、10px 圆角。 */
 .facts div {
   align-items: center;
   border: 1px solid var(--game-line-soft);
-  border-radius: 9px;
-  padding: 7px 9px;
+  border-bottom: 1px solid var(--game-line-soft);
+  border-radius: 10px;
+  padding: 6px 8px;
   background: var(--game-panel-raised);
 }
 
 .description {
   margin: 0;
   color: var(--color-muted);
-  font-size: 0.86rem;
-  line-height: 1.5;
+  font-size: var(--text-body-size);
+  line-height: 1.6;
 }
 
 .notes {
   margin: 0;
   padding-left: 18px;
   color: var(--color-muted);
-  font-size: 0.86rem;
-  line-height: 1.5;
-}
-
-@media (max-width: 1024px) {
-  .cell-dialog-layer {
-    width: 100%;
-    margin: auto 0 0;
-  }
-
-  .cell-dialog {
-    max-height: 80dvh;
-    border-right: 0;
-    border-bottom: 0;
-    border-left: 0;
-    border-radius: 16px 16px 0 0;
-  }
-
-  .dialog-header {
-    padding: 14px 16px 11px;
-  }
-
-  .cell-body {
-    padding: 12px 16px 16px;
-  }
+  font-size: var(--text-body-size);
+  line-height: 1.6;
 }
 </style>

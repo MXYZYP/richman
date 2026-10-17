@@ -46,7 +46,12 @@ const emit = defineEmits<{
     <div class="home-scene" aria-hidden="true"></div>
     <section class="home-card" aria-labelledby="home-title">
       <header class="home-hero">
-        <p class="home-eyebrow">纸上中国 · 一局走遍山河</p>
+        <!-- 一句话说清「这是什么游戏」。11-17 改版：原句「纸上中国 · 一局走遍山河」把棋盘
+             钉死在中国——可地图里早就有《世界之旅》，地图工坊还让玩家自己画图。
+             换成「纸上的世界 · 一局走遍四方」：既保住了「纸上」这个视觉母题，
+             又不再给棋盘划国界（世界之旅、丝路、三国、自定义地图都装得进去）。
+             字数与旧句一致（4 + 6），字距与居中排版不用动。 -->
+        <p class="home-eyebrow">纸上的世界 · 一局走遍四方</p>
         <!-- 贴纸标题（10-16 第三版）：改用 AI 生成的厚描边卡通字（/home-logo.webp）并整块放大，
              就是用户那句「大富翁那几个字一定要上部居中，放大一些，美工要好一点」。
              ★ 可访问名必须仍是「进入大富翁」：整行文字视觉隐藏留在无障碍名里，贴纸本身是

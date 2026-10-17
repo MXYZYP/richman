@@ -120,11 +120,18 @@ function closeFromBackdrop(event: MouseEvent): void {
   max-height: calc(100dvh - 40px);
   border: 1px solid var(--center-border);
   border-bottom: none;
-  border-radius: 18px 18px 0 0;
+  /* 底部抽屉：顶角与全局弹窗同档，底边贴着屏幕所以保持直角。 */
+  border-radius: var(--radius-dialog) var(--radius-dialog) 0 0;
   padding: 0;
   background: var(--board-surface);
   box-shadow: 0 -12px 36px rgb(53 39 20 / 20%);
   color: var(--color-text);
+  /* ★★ 把内部滚动区（含它的滚动条）裁进圆角 —— 这一句就是「右边直角」的解药。
+     内容一长（玩法说明、成就、云同步…），.mobile-sheet-body 出现竖向滚动条；滚动条画在
+     自己的边界盒里、右边缘正好压在弹窗的右边线上，一条通到底的直角灰条把右下角那块圆角
+     整个盖掉：左边圆、右边直。滚动条不属于弹窗的直接盒，只有父级裁切才收得住它，
+     所以裁在这一层，而不是给滚动层加 border-radius（那样会连正文首尾两行一起削角）。 */
+  overflow: hidden;
 }
 
 .mobile-sheet::backdrop {
@@ -197,6 +204,25 @@ function closeFromBackdrop(event: MouseEvent): void {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  /* 滚动条自己也要「不带直角」：细拇指 + 透明轨道（Firefox 走这两行，
+     WebKit/Blink 走下面的伪元素）。父级的 overflow:hidden 负责把角裁圆，
+     这两处负责别让一条浅灰方条先糊在右边线上。 */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-muted) 40%, transparent) transparent;
+}
+
+.mobile-sheet-body::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.mobile-sheet-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mobile-sheet-body::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-chip);
+  background: color-mix(in srgb, var(--color-muted) 40%, transparent);
 }
 
 /* 阈值从 768px 抬到 1024px，与 GameView 外壳的 isMobileLayout（max-width:1024px）一致。
@@ -234,8 +260,9 @@ function closeFromBackdrop(event: MouseEvent): void {
   max-height: min(86dvh, 720px);
   margin: 0;
   border: 1px solid var(--center-border);
-  /* 四角都圆：底部抽屉是 18px 18px 0 0（底边贴屏幕），居中弹窗不该留直角。 */
-  border-radius: 16px;
+  /* 四角都圆：底部抽屉是「上圆下直」（底边贴屏幕），居中弹窗不该留直角。
+     数值走全局档位，与局内结算 / 资产 / 格详情同一个圆角 —— 四处各写一个数就会再散开。 */
+  border-radius: var(--radius-dialog);
   border-bottom: 1px solid var(--center-border);
   box-shadow: 0 24px 64px rgb(53 39 20 / 28%);
 }

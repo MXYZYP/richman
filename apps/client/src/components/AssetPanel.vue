@@ -11,9 +11,19 @@ const props = withDefaults(defineProps<{
   actorCash?: number | null;
   /** 观战只读：标题不冒充我的资产，并且不渲染任何写操作控件。 */
   readOnly?: boolean;
+  /**
+   * 面板自己是否画一遍大标题。
+   *
+   * 手机端这块内容装在 `MobileSheet` 抽屉里，抽屉头部已经写着「我的资产 / 资产详情」+
+   * 右侧的项数，面板再写一次就是同一句话上下两遍；桌面端抽屉壳摊平成透明分组
+   * （`display: contents`，头部整块不渲染），标题只能由面板自己给。
+   * 所以由 GameView 按形态传：移动端 false、桌面端 true。
+   */
+  showTitle?: boolean;
 }>(), {
   actorCash: null,
   readOnly: false,
+  showTitle: true,
 });
 
 const emit = defineEmits<{
@@ -84,9 +94,14 @@ function confirmBankruptcy() {
   <section class="asset-panel" :aria-label="readOnly ? '资产详情' : '我的资产'">
     <header class="asset-head">
       <div class="asset-heading">
-        <span class="asset-eyebrow">{{ readOnly ? '当前玩家' : '资产总览' }}</span>
-        <h2>{{ readOnly ? '资产详情' : '我的资产' }}</h2>
-        <p><strong>{{ actorName }}</strong> · {{ assets.length }} 项资产</p>
+        <span v-if="showTitle" class="asset-eyebrow">{{ readOnly ? '当前玩家' : '资产总览' }}</span>
+        <h2 v-if="showTitle">{{ readOnly ? '资产详情' : '我的资产' }}</h2>
+        <!-- 计数只在面板自己带标题时才重复一遍：抽屉头部已经把项数放在标题右侧了。
+             术语与「玩家资产」统一成「处地产」，不再一处「项资产」一处「项」。 -->
+        <p>
+          <strong>{{ actorName }}</strong>
+          <template v-if="showTitle"> · {{ assets.length }} 处地产</template>
+        </p>
       </div>
       <button
         type="button"
@@ -248,9 +263,11 @@ function confirmBankruptcy() {
   min-width: 0;
 }
 
+/* 字号全部走 style.css 的命名档位：与结算 / 格子详情 / 玩家资产同一套 11 / 12 / 13 / 14，
+   同一个「分组小标题」在四个浮层里才是一个号。 */
 .asset-eyebrow {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--text-badge-size);
   font-weight: 800;
   letter-spacing: 0.12em;
 }
@@ -258,14 +275,14 @@ function confirmBankruptcy() {
 .asset-head h2 {
   margin: 2px 0 0;
   color: var(--color-text);
-  font-size: 1.06rem;
+  font-size: var(--text-section-size);
   font-weight: 900;
 }
 
 .asset-head p {
   margin: 3px 0 0;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: var(--text-meta-size);
   font-weight: 700;
   overflow-wrap: anywhere;
 }
@@ -279,9 +296,9 @@ function confirmBankruptcy() {
   flex: 0 0 auto;
   min-width: 44px;
   min-height: 44px;
-  padding: 6px 10px;
+  padding: 0 14px;
   border: 1px solid var(--color-border);
-  border-radius: var(--game-radius-control);
+  border-radius: 9px;
   background: var(--asset-tile);
   color: var(--color-primary);
   font-size: 12px;
@@ -308,7 +325,7 @@ function confirmBankruptcy() {
   gap: 8px;
   padding: 9px 10px;
   border: 1px solid color-mix(in srgb, var(--color-pay) 34%, var(--color-border));
-  border-radius: 10px;
+  border-radius: 12px;
   background: color-mix(in srgb, var(--color-pay) 7%, var(--game-panel));
 }
 
@@ -321,7 +338,7 @@ function confirmBankruptcy() {
 .debt-copy p {
   margin: 0;
   color: color-mix(in srgb, var(--color-pay) 46%, var(--color-text));
-  font-size: 11px;
+  font-size: var(--text-badge-size);
   font-weight: 700;
   line-height: 1.45;
 }
@@ -340,7 +357,7 @@ function confirmBankruptcy() {
   border-radius: 9px;
   background: var(--color-pay);
   color: #fff;
-  font-size: 12px;
+  font-size: var(--text-meta-size);
   line-height: 1.2;
   text-align: center;
 }
@@ -358,13 +375,13 @@ function confirmBankruptcy() {
 
 .bankruptcy-request {
   flex: 0 0 auto;
-  min-height: 44px;
+  min-height: var(--control-height-md);
   padding: 8px 12px;
   border: 1px solid color-mix(in srgb, var(--color-pay) 55%, transparent);
   border-radius: var(--game-radius-control);
   background: transparent;
   color: var(--color-pay);
-  font-size: 12px;
+  font-size: var(--text-meta-size);
   font-weight: 900;
   cursor: pointer;
 }
@@ -388,14 +405,14 @@ function confirmBankruptcy() {
   gap: 8px;
   padding: 10px;
   border: 1px solid color-mix(in srgb, var(--color-pay) 32%, transparent);
-  border-radius: 10px;
+  border-radius: 12px;
   background: color-mix(in srgb, var(--color-pay) 6%, var(--game-panel));
 }
 
 .bankruptcy-confirm p {
   margin: 0;
   color: var(--color-text);
-  font-size: 12px;
+  font-size: var(--text-meta-size);
   font-weight: 800;
   line-height: 1.45;
 }
@@ -407,7 +424,7 @@ function confirmBankruptcy() {
 }
 
 .bankruptcy-confirm button {
-  min-height: 44px;
+  min-height: var(--control-height-md);
   padding: 7px 12px;
   border: 1px solid var(--color-border);
   border-radius: var(--game-radius-control);
@@ -435,7 +452,7 @@ function confirmBankruptcy() {
   margin: 0;
   padding: 9px 10px;
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--asset-tile);
 }
 
@@ -445,14 +462,14 @@ function confirmBankruptcy() {
 
 .cash-cell dt {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--text-badge-size);
   font-weight: 800;
 }
 
 .cash-cell dd {
   margin: 2px 0 0;
   color: var(--color-text);
-  font-size: 14px;
+  font-size: var(--text-section-size);
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
@@ -460,7 +477,7 @@ function confirmBankruptcy() {
 
 .cash-cell dd.cash-value {
   font-family: var(--game-mono);
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .asset-content {
@@ -473,7 +490,7 @@ function confirmBankruptcy() {
   border: 1px dashed var(--color-border);
   border-radius: 10px;
   color: var(--color-muted);
-  font-size: 13px;
+  font-size: var(--text-body-size);
   font-weight: 700;
   text-align: center;
 }
@@ -512,7 +529,7 @@ function confirmBankruptcy() {
 .asset-title strong {
   display: block;
   color: var(--color-text);
-  font-size: 14px;
+  font-size: var(--text-section-size);
   font-weight: 900;
   overflow-wrap: anywhere;
 }
@@ -521,7 +538,7 @@ function confirmBankruptcy() {
   display: block;
   margin-top: 1px;
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--text-badge-size);
   font-weight: 700;
   overflow-wrap: anywhere;
 }
@@ -532,7 +549,7 @@ function confirmBankruptcy() {
   border-radius: 8px;
   background: var(--game-panel-sunken);
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--text-badge-size);
   font-style: normal;
   font-weight: 900;
   white-space: nowrap;
@@ -560,7 +577,7 @@ function confirmBankruptcy() {
 
 .asset-money dt {
   color: var(--color-muted);
-  font-size: 10.5px;
+  font-size: var(--text-badge-size);
   font-weight: 800;
   line-height: 1.25;
 }
@@ -569,7 +586,7 @@ function confirmBankruptcy() {
   margin: 2px 0 0;
   color: var(--color-text);
   font-family: var(--game-mono);
-  font-size: 13px;
+  font-size: var(--text-body-size);
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
@@ -595,7 +612,7 @@ function confirmBankruptcy() {
   border-radius: 7px;
   background: var(--game-panel-quiet);
   color: var(--color-muted);
-  font-size: 10.5px;
+  font-size: var(--text-badge-size);
   font-weight: 800;
   line-height: 1.3;
   text-align: center;
@@ -604,13 +621,13 @@ function confirmBankruptcy() {
 
 .asset-action button {
   min-width: 0;
-  min-height: 44px;
+  min-height: var(--control-height-md);
   padding: 8px 6px;
   border: 1px solid #bc9037;
   border-radius: var(--game-radius-control);
   background: var(--game-action-bg);
   color: var(--game-action-text);
-  font-size: 12px;
+  font-size: var(--text-meta-size);
   font-weight: 900;
   box-shadow: 0 3px 0 var(--game-action-shadow);
   cursor: pointer;
@@ -657,7 +674,7 @@ function confirmBankruptcy() {
   }
 
   .asset-action button {
-    font-size: 11.5px;
+    font-size: var(--text-badge-size);
   }
 }
 </style>

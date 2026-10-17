@@ -88,10 +88,26 @@ describe('弹窗形态：任何屏宽都是居中弹窗，且尺寸只有一处'
   });
 
   it('弹窗四角都圆（底部抽屉才是上圆下直角）', () => {
-    expect(clean).toMatch(/data-variant='modal'\][\s\S]{0,700}border-radius:\s*16px/);
+    // 11-17：圆角改走全局档位 --radius-dialog，四处不再各写一个数。
+    expect(clean).toMatch(/data-variant='modal'\][\s\S]{0,700}border-radius:\s*var\(--radius-dialog\)/);
     // The drawer keeps its flat bottom edge; that rule is fine, but the modal must not
     // inherit the `border-bottom: none` that the drawer needs.
     expect(clean).toMatch(/data-variant='modal'\][\s\S]{0,700}border-bottom:\s*1px solid/);
+    // 抽屉顶角也一样走档位（原来是写死的 18px，和居中弹窗的 16px 并存）。
+    expect(clean).toMatch(/\.mobile-sheet\s*\{[\s\S]{0,600}border-radius:\s*var\(--radius-dialog\) var\(--radius-dialog\) 0 0;/);
+  });
+
+  it('★ 内部滚动被裁进圆角：内容一长也不会出现「左边圆、右边直」', () => {
+    // 这条守的是「玩法说明 / 成就」那个真实缺陷：正文一长，.mobile-sheet-body 出现竖向
+    // 滚动条，滚动条画在自己的边界盒里、右边缘贴着弹窗右边线一路铺到底，直角把右下角
+    // 那块圆角整个盖掉。滚动条不归弹窗的直接盒管，只有父级 overflow:hidden 才裁得住；
+    // 给滚动层加 border-radius 没用（那会削掉正文首尾两行的角）。
+    const sheetRule = /\.mobile-sheet\s*\{([\s\S]*?)\n\}/.exec(clean);
+    if (sheetRule === null) throw new Error('MobileSheet 应当有 .mobile-sheet 规则');
+    expect(sheetRule[1]).toContain('overflow: hidden');
+    // 滚动条自己也要收窄、去掉浅灰轨道，否则裁切边缘仍是一条灰杠。
+    expect(clean).toMatch(/\.mobile-sheet-body::-webkit-scrollbar\s*\{\s*width:\s*8px;/);
+    expect(clean).toMatch(/\.mobile-sheet-body::-webkit-scrollbar-thumb\s*\{[^}]*border-radius:/);
   });
 
   it('抽屉上滑动画不覆盖 modal 变体（它的 translate 承担居中职责）', () => {
