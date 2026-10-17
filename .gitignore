@@ -51,6 +51,14 @@ test-results/
 *.pem
 *.key
 
+# Android 签名密钥：本仓库是公开的，keystore 一旦入库，任何人都能签出「同签名」的伪造更新包
+*.keystore
+*.jks
+
+# Capacitor 安卓工程是 `cap add android` 的生成物（几百个文件、跟着 Capacitor 版本变），
+# 由 .github/workflows/android-apk.yml 在 CI 里现场生成，不入库。
+apps/client/android/
+
 # 鸿蒙工程（apps/harmonyos）：DevEco 本地产物与签名材料，绝不入库
 oh_modules/
 .hvigor/
