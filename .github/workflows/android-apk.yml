@@ -11,9 +11,12 @@
 #        ANDROID_KEY_PASSWORD        别名口令
 #      ★ 这个 keystore 必须永久保存：TapTap 后续更新版本，必须用同一个签名，丢了只能换包名重来。
 #   B. 先跑通 —— 不配 Secret 也能跑：本次现场生成一个临时 keystore，连同 APK 一起产出到 artifact。
-#      **只适合自己装到手机上看效果**，别拿它去上架（下次构建换了签名就覆盖不了）。
+#      keystore 的口令是每次随机的，产在 richman-keystore-keep-it 的 keystore-password.txt 里。
+#      想把它变成正式签名：下载那一包 → 把 keystore 存好 → base64 后按 A 配成 4 个 Secret 即可，
+#      **不必再换签名**（换签名会导致已装机的旧包无法覆盖升级）。
+#      **只适合自己装到手机上看效果**，别拿它去上架 —— 除非你已经按上面把它固化成正式 keystore。
 #
-# 产物：Actions 运行页底部 Artifacts → richman-apk / richman-keystore（仅 B 模式）。
+# 产物：Actions 运行页底部 Artifacts → richman-apk / richman-keystore-keep-it（仅 B 模式）。
 name: Build Android APK
 
 on:
@@ -139,13 +142,20 @@ jobs:
             echo "MODE=secret" >> "$GITHUB_ENV"
           else
             # 没配 Secret：现场生成一个，连 keystore 一起产出，明确标注「别拿去上架」。
+            #
+            # ★ 口令必须是随机的，不能写字面量：本仓库是公开的，字面量口令 + 公开的 keystore
+            #   等于任何人都能签出「和正式包同签名」的 APK（安卓会把它当合法更新装上）。
+            #   口令随 keystore 一起进 artifact（只有仓库管理员能下载），不写进日志、不写进 Summary
+            #   —— 公开仓库的 run 日志和 Summary 同样是公开可见的。
             ALIAS=richman
-            STORE_PASS=richman-ci-keystore
-            KEY_PASS=richman-ci-keystore
+            STORE_PASS=$(openssl rand -hex 16)
+            KEY_PASS="$STORE_PASS"
             keytool -genkeypair -v -keystore release.keystore -alias "$ALIAS" \
               -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass "$STORE_PASS" -keypass "$KEY_PASS" \
               -dname "CN=Richman Game, OU=Client, O=Richman, L=Yuncheng, ST=Shanxi, C=CN" > /dev/null 2>&1
+            printf 'alias=%s\nstorepass=%s\nkeypass=%s\n' "$ALIAS" "$STORE_PASS" "$KEY_PASS" \
+              > "$RUNNER_TEMP/keystore-password.txt"
             echo "MODE=generated" >> "$GITHUB_ENV"
           fi
 
@@ -173,7 +183,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: richman-keystore-keep-it
-          path: ${{ runner.temp }}/release.keystore
+          # 两个文件必须一起下载：没有口令的 keystore 等于废文件。
+          path: |
+            ${{ runner.temp }}/release.keystore
+            ${{ runner.temp }}/keystore-password.txt
           retention-days: 30
 
       - name: Summary
