@@ -30,6 +30,9 @@ const GUARDED = [
   'components/MapWorkshopDialog.vue',
   'components/SettingsDialog.vue',
   'components/ReleaseNotesDialog.vue',
+  // 隐私合规（TapTap 上架）新增的两层：首启同意门 + 政策正文。
+  'components/PrivacyConsentGate.vue',
+  'components/PrivacyPolicyDialog.vue',
   'views/StatsView.vue',
   'views/AchievementsView.vue',
   'views/CloudSyncView.vue',

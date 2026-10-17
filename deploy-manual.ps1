@@ -72,6 +72,11 @@ $files = @(
   "apps/client/src/components/TurnCountdown.vue",
   # First-run guide / "how to play" modal (#109), lazily imported by App.vue. NEW component.
   "apps/client/src/components/FirstRunGuide.vue",
+  # Privacy compliance (TapTap review): the first-run consent gate and the policy body.
+  # Both are imported by App.vue; a missing upload makes the server vue-tsc/vite build fail
+  # with "Could not resolve ../components/PrivacyConsentGate.vue".
+  "apps/client/src/components/PrivacyConsentGate.vue",
+  "apps/client/src/components/PrivacyPolicyDialog.vue",
   "apps/client/src/views/HomeView.vue",
   "apps/client/src/views/LobbyView.vue",
   "apps/client/src/App.vue",
@@ -125,6 +130,9 @@ $files = @(
   # First-run guide flag (#109) and chat quick phrases (#109). Pure modules imported by App.vue
   # and ChatPanel.vue; a missing upload leaves the server building against a stale copy.
   "apps/client/src/session/firstRunGuide.ts",
+  # Privacy consent record (versioned). Imported by App.vue; a stale copy would keep asking
+  # the player to agree on every launch, or worse, accept an outdated policy version.
+  "apps/client/src/session/privacyConsent.ts",
   "apps/client/src/session/quickPhrases.ts",
   "apps/client/src/session/sessionStorage.ts",
   "apps/client/src/session/onlineSession.ts",
@@ -461,6 +469,7 @@ $files = @(
   # forbids it outright) and the unit follows the board (China maps use one unit, the
   # world map another). A stale copy means nothing pins either rule.
   "apps/client/src/ui/currency.test.ts",
+  "apps/client/src/session/privacyConsent.test.ts",
   # Guards the global/scoped CSS boundary: importing a global stylesheet from a
   # <style scoped> component made plugin-vue cross-product its selectors (8.2 MB artifact,
   # 36,608 unmatchable rules, .game-shell{display:grid} among them -> desktop layout

@@ -319,3 +319,44 @@ describe('HomeView 美工第三版（10-16）', () => {
     }
   });
 });
+
+/**
+ * 隐私合规（TapTap 上架要求）：政策必须能从 App 内打开，不能只在商店页挂外链。
+ *
+ * 位置钉在页脚：版本入口 / 隐私政策 / 备案号 三者同一行。
+ * 备案号在页脚是法定要求，隐私政策跟着它走，玩家要找合规信息时只需看一处。
+ */
+describe('HomeView 隐私政策入口', () => {
+  it('页脚里有「隐私政策」按钮，且与版本入口、备案号同处一行', async () => {
+    const html = await renderHome();
+
+    expect(html).toContain('class="home-beian"');
+    expect(html).toContain('>隐私政策</button>');
+
+    const footer = html.slice(html.indexOf('class="home-beian"'), html.indexOf('</footer>'));
+    expect(footer).toContain('class="release-notes-trigger"');
+    expect(footer).toContain('新ICP备2026008728号');
+    expect(footer).toContain('>隐私政策</button>');
+  });
+
+  it('按钮只发 openPrivacy 事件，正文由 App 层统一渲染（首页不背政策正文）', () => {
+    const source = readFileSync(resolve(here, 'HomeView.vue'), 'utf8');
+
+    expect(source).toContain("openPrivacy: [];");
+    expect(source).toContain("@click=\"emit('openPrivacy')\"");
+    // 首页自己不许内联政策正文：那会让 SSR 出来的首页 HTML 里多一整份政策。
+    expect(source).not.toContain('我们处理哪些信息');
+  });
+
+  it('首启同意门不可关闭，且只在需要时才挂载', () => {
+    const app = readFileSync(resolve(here, '../App.vue'), 'utf8');
+    const gate = readFileSync(resolve(here, '../components/PrivacyConsentGate.vue'), 'utf8');
+
+    // 门本身：dismissible=false + 只有一个「同意」出口。
+    expect(gate).toContain(':dismissible="false"');
+    expect(gate).toContain("emit('accept')");
+    // 接线：拿不到 storage 时 hasAcceptedPrivacy 返回 true ⇒ SSR 与无痕模式都不会卡住首页。
+    expect(app).toContain('v-if="consentOpen"');
+    expect(app).toContain('hasAcceptedPrivacy(browserStorage())');
+  });
+});

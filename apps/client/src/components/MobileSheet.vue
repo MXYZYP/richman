@@ -18,9 +18,17 @@ const props = withDefaults(defineProps<{
   /** 标题右侧的一小段状态文字（「本机」/「8 / 12」/「已绑定」…）。
       以前在 ViewShell 的返回条上，详情页改成弹窗后跟着搬进弹窗头部。 */
   aside?: string;
+  /**
+   * 能不能被关掉。默认可以。
+   *
+   * 只有「首次启动的隐私同意」用 false：那颗 ×、点背景板、按 Esc 都不该能把
+   * 一次尚未作出的选择糊过去 —— 玩家必须明确点「同意」或「不同意」。
+   */
+  dismissible?: boolean;
 }>(), {
   layout: 'inline',
   aside: '',
+  dismissible: true,
 });
 
 const emit = defineEmits<{ close: [] }>();
@@ -75,8 +83,21 @@ onBeforeUnmount(() => {
   hide(false);
 });
 
+/** Esc = 系统级「关闭」。不可关闭的弹窗（隐私同意）连这条也要吃掉。 */
+function onCancel(): void {
+  if (!props.dismissible) return;
+  emit('close');
+}
+
+function requestClose(): void {
+  if (!props.dismissible) return;
+  emit('close');
+}
+
 function closeFromBackdrop(event: MouseEvent): void {
-  if (event.target === dialog.value) emit('close');
+  if (event.target !== dialog.value) return;
+  // 点背景板是最容易被当成「误触」的关闭方式，不可关闭的弹窗必须拦掉。
+  requestClose();
 }
 </script>
 
@@ -86,18 +107,19 @@ function closeFromBackdrop(event: MouseEvent): void {
     class="mobile-sheet"
     :data-variant="layout"
     :aria-labelledby="titleId"
-    @cancel.prevent="emit('close')"
+    @cancel.prevent="onCancel"
     @click="closeFromBackdrop"
   >
     <section class="mobile-sheet-panel">
       <header class="mobile-sheet-head">
         <h2 :id="titleId">{{ props.title }}<span v-if="props.aside !== ''" class="mobile-sheet-aside">{{ props.aside }}</span></h2>
         <button
+          v-if="props.dismissible"
           ref="closeButton"
           type="button"
           class="mobile-sheet-close"
           :aria-label="`关闭${props.title}`"
-          @click="emit('close')"
+          @click="requestClose"
         >关闭</button>
       </header>
       <div class="mobile-sheet-body">

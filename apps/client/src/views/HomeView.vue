@@ -34,6 +34,8 @@ const emit = defineEmits<{
   openReplay: [];
   /** 打开「地图工坊」（#117）：本机装自定义地图、单机试玩、删掉不要的那张。 */
   openWorkshop: [];
+  /** 打开《隐私政策》：页脚常驻入口，首启同意弹窗里也会指向同一份正文。 */
+  openPrivacy: [];
 }>();
 </script>
 
@@ -114,6 +116,9 @@ const emit = defineEmits<{
     <footer class="home-beian">
       <!-- 更新说明入口：首页必须能看到当前版本并打开更新历史（组件自带触发按钮 + 弹层）。 -->
       <ReleaseNotesDialog />
+      <span class="home-beian-sep" aria-hidden="true">·</span>
+      <button type="button" class="home-beian-link" @click="emit('openPrivacy')">隐私政策</button>
+      <span class="home-beian-sep" aria-hidden="true">·</span>
       <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">新ICP备2026008728号</a>
     </footer>
   </main>
@@ -226,11 +231,38 @@ const emit = defineEmits<{
   margin: 14px 0 0;
   /* 12px + --color-muted 太浅 → 换正文色 → 仍觉「和背景混在一起」（其实是上面那层遮挡）。
      现在用品牌朱砂 + 加粗：与版本入口按钮同色，整条页脚读作一条，也能在纸面插画上立住。 */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   font-size: 13px;
   color: var(--color-primary);
   font-weight: 700;
-  text-align: center;
   letter-spacing: 0.02em;
+}
+
+/* 分隔点：比正文弱一档，只起断句作用，不抢版本号与备案号的注意力。 */
+.home-beian-sep {
+  color: var(--color-muted);
+}
+
+/* 「隐私政策」与版本入口同为页脚按钮：44px 高、下划线、透明底，保证触控热区够大。 */
+.home-beian-link {
+  min-height: 44px;
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.home-beian-link:hover {
+  text-decoration-thickness: 2px;
 }
 
 .home-beian a {

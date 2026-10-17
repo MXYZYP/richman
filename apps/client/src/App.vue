@@ -20,6 +20,9 @@ const GameView = defineAsyncComponent(() => import('./views/GameView.vue'));
 // 懒加载视图的独占依赖之一——静态引进来会把弹层基建重新塞回首屏包，白费掉这次分包。
 // 代价只是首次进站时引导晚一个微任务出现，肉眼看不出来。
 const FirstRunGuide = defineAsyncComponent(() => import('./components/FirstRunGuide.vue'));
+// 隐私合规：首启同意门与政策正文。两者都只在需要时挂载，不参与首屏渲染。
+const PrivacyConsentGate = defineAsyncComponent(() => import('./components/PrivacyConsentGate.vue'));
+const PrivacyPolicyDialog = defineAsyncComponent(() => import('./components/PrivacyPolicyDialog.vue'));
 // 复盘弹窗（#115）同理走异步：它也只靠 MobileSheet 撑着，静态引进来等于把弹层基建塞回首屏包。
 // 首页那一份**只用来导入**（exportOutcome 恒为 null）：别人发来一段复盘码时，
 // 不该逼玩家先随便开一局才能粘进去。
@@ -52,6 +55,7 @@ import {
   type GameSetupForm,
 } from './game/gameSetup';
 import { markFirstRunGuideSeen, shouldAutoOpenGuideHere } from './session/firstRunGuide';
+import { hasAcceptedPrivacy, markPrivacyAccepted } from './session/privacyConsent';
 import { getMapPack, listActiveMaps, type MapRef } from '@richman/board-data';
 import type { RoomRole, RoomSettingsPatch } from '@richman/protocol';
 import {
@@ -358,8 +362,16 @@ const pendingRetryable = computed(() => onlineSession.entryFailure.value !== 'de
 // 把说明永久关掉，让新玩家再也找不到它。
 const guideOpen = ref(false);
 let guideAutoOpened = false;
+
+// ---- 隐私同意（首启拦截）----
+// 与「玩法说明」同一条约定：拿不到 storage（SSR / 无痕 / 禁用存储）视为已同意，
+// 否则每次刷新都会弹一遍 —— 那是这套机制里最烦人的失败模式。
+const consentOpen = ref(!hasAcceptedPrivacy(browserStorage()));
+const privacyOpen = ref(false);
 watch(pageKind, (kind) => {
   if (guideAutoOpened) return;
+  // 隐私同意还没作答时先别叠第二层弹窗：一次只让玩家面对一件事。
+  if (consentOpen.value) return;
   // 先看一眼再落闩：`guideAutoOpened` 只在真的弹过之后才置真，
   // 否则「首屏落在恢复页」的老玩家会白白消耗掉这次机会。
   if (!shouldAutoOpenGuideHere(browserStorage(), kind, false)) return;
@@ -374,6 +386,24 @@ function openGuide(): void {
 function closeGuide(): void {
   guideOpen.value = false;
   markFirstRunGuideSeen(browserStorage());
+}
+
+/** 明确同意：落盘（带政策版本号）→ 关掉门 → 紧接着放行新手引导。 */
+function acceptPrivacy(): void {
+  markPrivacyAccepted(browserStorage());
+  consentOpen.value = false;
+  if (guideAutoOpened) return;
+  if (!shouldAutoOpenGuideHere(browserStorage(), pageKind.value, false)) return;
+  guideAutoOpened = true;
+  guideOpen.value = true;
+}
+
+function openPrivacy(): void {
+  privacyOpen.value = true;
+}
+
+function closePrivacy(): void {
+  privacyOpen.value = false;
 }
 
 // 首页的「导入复盘」（#115）：与引导同级的常驻弹层，只负责导入。
@@ -893,6 +923,7 @@ onBeforeUnmount(() => {
       @open-guide="openGuide"
       @open-replay="replayImportOpen = true"
       @open-workshop="openWorkshop"
+      @open-privacy="openPrivacy"
     />
     <StatsView
       v-if="pageKind === 'stats'"
@@ -995,6 +1026,18 @@ onBeforeUnmount(() => {
 
   <!-- 新手引导（#109）：与页面同级的常驻弹层，只在 open 时由 MobileSheet 真正 showModal()。 -->
   <FirstRunGuide :open="guideOpen" @close="closeGuide" />
+
+  <!-- 首启隐私同意：不可关闭，必须明确表态；不同意就停在拒绝态，进不了游戏。
+       只在真需要时挂载（拿不到 storage 视为已同意），免得 SSR 与每次刷新都弹。 -->
+  <PrivacyConsentGate
+    v-if="consentOpen"
+    :open="consentOpen"
+    @accept="acceptPrivacy"
+    @open-policy="openPrivacy"
+  />
+
+  <!-- 隐私政策正文：首启弹窗与首页页脚共用同一份。 -->
+  <PrivacyPolicyDialog :open="privacyOpen" @close="closePrivacy" />
 
   <!-- 复盘导入（#115）：首页这一份只给「粘码回看」用，所以 exportOutcome 恒为 null
        （弹窗据此直接落在导入页）。回看会整局换成单机会话，交给同一个 handleReplayPlay。 -->
