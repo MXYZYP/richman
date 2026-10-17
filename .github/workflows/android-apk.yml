@@ -44,6 +44,11 @@ jobs:
       STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
       KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      # ★ 直接用 runner 预装的 SDK，不用 android-actions/setup-android：
+      #   该 action 会去装早已从 SDK 仓库下线的 `tools` 包，2026-10 起必失败
+      #   （日志：Warning: Failed to find package 'tools' → exit code 1）。
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - uses: actions/checkout@v4
 
@@ -66,14 +71,37 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
-        run: sdkmanager --install "platforms;android-34" "build-tools;34.0.0" > /dev/null
+      - name: Ensure Android SDK packages
+        run: |
+          set -euo pipefail
+          SDKMANAGER=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::runner 上没有 cmdline-tools，$ANDROID_HOME 实际内容："
+            ls -la "$ANDROID_HOME" || true
+            exit 1
+          fi
+          # ubuntu-latest 通常已预装这两项；只有缺了才去装，装失败不直接判死 ——
+          # 真正的判据是下面这个目录存在性检查（比 sdkmanager 的退出码可靠）。
+          if [ ! -d "$ANDROID_HOME/platforms/android-34" ] || [ ! -d "$ANDROID_HOME/build-tools/34.0.0" ]; then
+            "$SDKMANAGER" --install "platforms;android-34" "build-tools;34.0.0" < /dev/null || true
+          fi
+          for p in platforms/android-34 build-tools/34.0.0; do
+            if [ ! -d "$ANDROID_HOME/$p" ]; then
+              echo "::error::Android SDK 缺 $p"
+              ls -la "$ANDROID_HOME" || true
+              exit 1
+            fi
+          done
+          echo "SDK_OK platforms=$(ls "$ANDROID_HOME/platforms" | tr '\n' ' ')"
+          echo "SDK_OK build-tools=$(ls "$ANDROID_HOME/build-tools" | tr '\n' ' ')"
 
       - name: Generate Capacitor android project
         working-directory: apps/client
         run: npx cap add android
+
+      - name: Make gradlew executable
+        working-directory: apps/client/android
+        run: chmod +x gradlew
 
       - name: Stamp version
         working-directory: apps/client/android
