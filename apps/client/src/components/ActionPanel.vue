@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { ClientAction, DisplayCard, PendingCardChoiceDisplay, PendingPurchaseOffer } from '../game/clientGame';
-import { formatMoney } from '../ui/format';
+import { formatCash } from '../ui/format';
 import { paceMultiplier } from '../session/playbackPace';
 
 const props = withDefaults(defineProps<{
@@ -251,7 +251,7 @@ function diePips(value: number): number[] {
           :disabled="isAnimating || diceRolling"
           @click="handleAction(action)"
         >
-          <span class="btn-label">{{ action.label }}<template v-if="compactPurchase && action.intent.type === 'buy_property' && purchaseOffer"> · ¥{{ formatMoney(purchaseOffer.price) }}</template></span>
+          <span class="btn-label">{{ action.label }}<template v-if="compactPurchase && action.intent.type === 'buy_property' && purchaseOffer"> · {{ formatCash(purchaseOffer.price) }}</template></span>
         </button>
       </template>
     </div>
@@ -287,7 +287,7 @@ function diePips(value: number): number[] {
         <article v-if="showOffer && purchaseOffer" class="purchase-offer" aria-label="当前地价">
           <span>可购买地块</span>
           <strong>{{ purchaseOffer.name }}</strong>
-          <em>¥{{ formatMoney(purchaseOffer.price) }}</em>
+          <em>{{ formatCash(purchaseOffer.price) }}</em>
         </article>
       </div>
     </Transition>

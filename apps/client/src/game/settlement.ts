@@ -1,6 +1,6 @@
 import type { PlayerState } from '@richman/engine';
 import type { RenderableGameState } from '../session/gameSession';
-import { formatMoney } from '../ui/format';
+import { formatCash } from '../ui/format';
 
 export interface SettlementRow {
   id: string;
@@ -65,7 +65,7 @@ export function getSettlementSummary(state: RenderableGameState): SettlementSumm
         id: player.id,
         rank: index + 1,
         name: player.nickname,
-        status: player.bankrupt ? '破产' : `¥${formatMoney(player.cash)}`,
+        status: player.bankrupt ? '破产' : `${formatCash(player.cash)}`,
         cash: player.cash,
         isWinner: player.id === state.winnerId,
         isBankrupt: player.bankrupt,

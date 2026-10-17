@@ -13,7 +13,7 @@
 import MobileSheet from './MobileSheet.vue';
 import type { PlayerColor, PlayerState } from '@richman/engine';
 import type { AssetRow } from '../game/clientGame';
-import { formatMoney } from '../ui/format';
+import { formatCash } from '../ui/format';
 
 const props = defineProps<{
   player: PlayerState;
@@ -66,7 +66,7 @@ function kindLabel(asset: AssetRow): string {
       <dl class="summary-strip">
         <div class="summary-cell cash-summary">
           <dt>可用现金</dt>
-          <dd class="cash-value">¥{{ formatMoney(props.player.cash) }}</dd>
+          <dd class="cash-value">{{ formatCash(props.player.cash) }}</dd>
         </div>
         <div class="summary-cell">
           <dt>当前位置</dt>
@@ -74,7 +74,7 @@ function kindLabel(asset: AssetRow): string {
         </div>
         <div v-if="props.debtAmount !== null" class="summary-cell debt-summary">
           <dt>待偿欠款</dt>
-          <dd>¥{{ formatMoney(props.debtAmount) }}</dd>
+          <dd>{{ formatCash(props.debtAmount) }}</dd>
         </div>
       </dl>
 

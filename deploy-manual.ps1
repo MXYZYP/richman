@@ -457,6 +457,10 @@ $files = @(
   "apps/client/src/ui/gameDialogStyle.test.ts",
   "apps/client/src/components/SettingsDialog.test.ts",
   "apps/client/src/ui/mapRules.test.ts",
+  # Added in the 11-17 currency pass: in-game money must not use a cash symbol (TapTap
+  # forbids it outright) and the unit follows the board (China maps use one unit, the
+  # world map another). A stale copy means nothing pins either rule.
+  "apps/client/src/ui/currency.test.ts",
   # Guards the global/scoped CSS boundary: importing a global stylesheet from a
   # <style scoped> component made plugin-vue cross-product its selectors (8.2 MB artifact,
   # 36,608 unmatchable rules, .game-shell{display:grid} among them -> desktop layout

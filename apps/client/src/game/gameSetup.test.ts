@@ -212,7 +212,7 @@ describe('game setup model', () => {
 
     expect(validateGameSetup(setup)).toEqual({
       ok: false,
-      message: `现金目标必须高于初始资金 ¥${china.game.config.initialCash.toLocaleString('zh-CN')}`,
+      message: `现金目标必须高于初始资金 ${china.game.config.initialCash.toLocaleString('zh-CN')} 两`,
     });
   });
 

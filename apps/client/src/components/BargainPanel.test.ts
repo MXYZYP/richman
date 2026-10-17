@@ -62,7 +62,7 @@ describe('BargainPanel', () => {
     expect(html).toContain('交易报价');
     expect(html).toContain('甲 → 乙');
     expect(html).toContain('甲 给出');
-    expect(html).toContain('现金 ¥500 + 外滩');
+    expect(html).toContain('现金 500 两 + 外滩');
     expect(html).toContain('乙 给出');
     expect(html).toContain('故宫');
     // 答复方拿到接受/拒绝；发起方的撤回不出现。
@@ -96,12 +96,12 @@ describe('BargainPanel', () => {
     expect(html).toContain('地产拍卖');
     expect(html).toContain('兵马俑');
     // 领先者与已退出者都要看得见：玩家据此判断这块地还剩几个对手。
-    expect(html).toContain('甲 以 ¥300 领先');
+    expect(html).toContain('甲 以 300 两 领先');
     expect(html).toContain('已退出叫价');
     expect(html).toContain('丙');
     // 出价下限 = 当前最高价 + 最小加价；上限 = 自己的现金。
-    expect(html).toContain('下限 ¥400');
-    expect(html).toContain('上限 ¥2,000');
+    expect(html).toContain('下限 400 两');
+    expect(html).toContain('上限 2,000 两');
     expect(html).toContain('出价');
     expect(html).toContain('放弃叫价');
   });
@@ -131,7 +131,7 @@ describe('BargainPanel', () => {
     });
 
     expect(html).toContain('尚无出价');
-    expect(html).toContain('下限 ¥100');
+    expect(html).toContain('下限 100 两');
   });
 
   it('没有议价进行时给出折叠的发起入口，默认不展开表单', async () => {

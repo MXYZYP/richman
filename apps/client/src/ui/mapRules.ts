@@ -7,7 +7,7 @@
 // 这里把「本局规则」做成纯函数：输入一个 MapPack，输出可直接渲染的事实清单。
 // 全部数字都从 pack 里读，不写死任何一张图的数值 —— 新增地图无需改本模块就能自动跟上。
 import { getActiveMapPack, listActiveMaps, type MapPack } from '@richman/board-data';
-import { formatMoney } from './format';
+import { cashUnitForMap, formatCash, type CashUnit } from './format';
 
 /**
  * 规则模块的中文名。引擎侧没有统一的展示名注册表，这里只登记会出现在「规则说明」里的模块；
@@ -101,7 +101,7 @@ export interface MapRulesSummary {
 type BoardCells = MapPack['game']['board']['cells'];
 
 /** 地产地价的档位摘要：`13 档（¥1,000 ~ ¥4,500）`；没有正常型地产时返回 null。 */
-function summarizePrices(cells: BoardCells): string | null {
+function summarizePrices(cells: BoardCells, unit: CashUnit): string | null {
   const prices: number[] = [];
   for (const cell of cells) {
     if (cell.type === 'property' && cell.subtype === 'normal') prices.push(cell.price);
@@ -111,8 +111,8 @@ function summarizePrices(cells: BoardCells): string | null {
   const min = Math.min(...tiers);
   const max = Math.max(...tiers);
   return min === max
-    ? `${tiers.length} 档（均 ¥${formatMoney(min)}）`
-    : `${tiers.length} 档（¥${formatMoney(min)} ~ ¥${formatMoney(max)}）`;
+    ? `${tiers.length} 档（均 ${formatCash(min, unit)}）`
+    : `${tiers.length} 档（${formatCash(min, unit)} ~ ${formatCash(max, unit)}）`;
 }
 
 function collectModuleNotes(pack: MapPack): string[] {
@@ -140,6 +140,9 @@ function collectModuleNames(pack: MapPack): string {
 export function describeMapRules(pack: MapPack): MapRulesSummary {
   const cells = pack.game.board.cells;
   const config = pack.game.config;
+  // 单位由**这张包**的 id 决定，而不是读全局：这个函数是纯查询，
+  // 调用方（大厅 / 设置 / 单机设置页）不必先替它把全局状态设对。
+  const unit = cashUnitForMap(pack.ref.id);
 
   let stationCount = 0;
   let utilityCount = 0;
@@ -172,18 +175,18 @@ export function describeMapRules(pack: MapPack): MapRulesSummary {
   }
 
   const [utilityFirst, utilitySecond] = config.utilityMultipliers;
-  const goals = config.cashGoalPresets.map((goal) => `¥${formatMoney(goal)}`).join(' 或 ');
+  const goals = config.cashGoalPresets.map((goal) => formatCash(goal, unit)).join(' 或 ');
 
   const facts: MapRuleFact[] = [
     { label: '地图', value: `${pack.metadata.title} · ${cells.length} 格` },
     { label: '规则模块', value: collectModuleNames(pack) },
-    { label: '初始资金', value: `¥${formatMoney(config.initialCash)}` },
-    { label: '过起点收入', value: `¥${formatMoney(config.passStartSalary)}` },
+    { label: '初始资金', value: formatCash(config.initialCash, unit) },
+    { label: '过起点收入', value: formatCash(config.passStartSalary, unit) },
     { label: '房屋上限', value: `每块地产最多 ${config.maxHouseLevel} 级` },
     { label: '抵押利息', value: `每回合 ${Math.round(config.mortgageInterestRate * 100)}%` },
   ];
 
-  const priceSummary = summarizePrices(cells);
+  const priceSummary = summarizePrices(cells, unit);
   if (priceSummary !== null) facts.push({ label: '地产地价', value: priceSummary });
   if (stationCount > 0) {
     // 各图命名不同（中国之旅是「XX站」、珠江/长江之旅是「XX渡」），故用并列的通用名。
@@ -205,7 +208,7 @@ export function describeMapRules(pack: MapPack): MapRulesSummary {
       label: '监狱',
       value: bailCost === undefined
         ? `${jailCount} 处进牢格`
-        : `${jailCount} 处进牢格（保释金 ¥${formatMoney(bailCost)}）`,
+        : `${jailCount} 处进牢格（保释金 ${formatCash(bailCost, unit)}）`,
     });
   }
   // 新增规则模块的格子行。表内顺序固定 → 同一张图的渲染顺序稳定，测试与截图都可复现。

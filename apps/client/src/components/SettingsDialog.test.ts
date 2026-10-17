@@ -74,7 +74,7 @@ describe('SettingsDialog', () => {
 
   it('胜利条件只在有现金目标时出现', async () => {
     const withGoal = await renderSettings({ cashGoal: 50000 });
-    expect(withGoal).toContain('胜利条件：现金达到 50,000。');
+    expect(withGoal).toContain('胜利条件：现金达到 50,000 两。');
 
     const withoutGoal = await renderSettings({ cashGoal: null });
     expect(withoutGoal).not.toContain('胜利条件');
@@ -127,17 +127,17 @@ describe('SettingsDialog：规则说明按当前地图渲染（#13）', () => {
 
     expect(html).toContain('《珠江之旅》规则要点');
     expect(html).toContain('珠江之旅 · 48 格');
-    expect(html).toContain('¥15,000');
+    expect(html).toContain('15,000 两');
     expect(html).toContain('每块地产最多 5 级');
     expect(html).toContain('每回合 10%');
-    expect(html).toContain('13 档（¥1,600 ~ ¥4,500）');
+    expect(html).toContain('13 档（1,600 两 ~ 4,500 两）');
     expect(html).toContain('4 处（租金随持有数递增）');
     // #23 起珠江之旅挂上了 port-trade：规则模块行不再是「仅核心规则」，而是模块中文名 + 玩法提示。
     expect(html).toContain('湾区口岸');
     expect(html).toContain('【湾区口岸】');
     expect(html).toContain('押注掷骰');
     expect(html).not.toContain('仅核心规则');
-    expect(html).toContain('¥30,000 或 ¥50,000');
+    expect(html).toContain('30,000 两 或 50,000 两');
     // 有地图上下文时不再提示「选好地图进入对局后…」。
     expect(html).not.toContain('选好地图进入对局后');
   });

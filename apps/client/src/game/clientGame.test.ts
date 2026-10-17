@@ -192,7 +192,7 @@ describe('player-facing UI copy', () => {
     const event = nextState.recentLog.at(-1);
     if (!event) throw new Error('Expected sell-house event');
 
-    expect(formatRecentLogEvent(nextState, event)).toBe('福建省 卖出 1 栋房屋，获得 ¥750，剩余 0 级');
+    expect(formatRecentLogEvent(nextState, event)).toBe('福建省 卖出 1 栋房屋，获得 750 两，剩余 0 级');
   });
 });
 
@@ -383,7 +383,7 @@ describe('World Tour client terminology', () => {
 
     expect(message).toContain('票号');
     expect(message).toContain('利息');
-    expect(message).toContain('¥80');
+    expect(message).toContain('80 两');
     // 本期利息才是这条战报的主角；余额不该在同一行里被读成利息。
     expect(message).not.toContain('1,080');
     // 内部契约一个字都不许露到 UI 上。
@@ -950,7 +950,7 @@ describe('getCellDetail', () => {
         cellId: 0,
         name: '起点',
         typeLabel: '起点',
-        description: '经过或停在起点时获得 2,000。',
+        description: '经过或停在起点时获得 2,000 两。',
       },
       {
         cellId: 3,
@@ -974,7 +974,7 @@ describe('getCellDetail', () => {
         cellId: 23,
         name: '所得税',
         typeLabel: '税格',
-        description: '停下时向银行缴税 1,000。',
+        description: '停下时向银行缴税 1,000 两。',
       },
       {
         cellId: 26,

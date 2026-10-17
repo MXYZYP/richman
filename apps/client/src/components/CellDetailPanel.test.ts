@@ -41,7 +41,7 @@ describe('CellDetailPanel dialog', () => {
 
     expect(html).toContain('<dialog');
     expect(html).toContain('当前过路费');
-    expect(html).toContain('¥3,000');
+    expect(html).toContain('3,000 两');
     expect(html.indexOf('当前过路费')).toBeLessThan(html.indexOf('租金表'));
   });
 

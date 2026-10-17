@@ -9,7 +9,7 @@ import {
 } from '@richman/engine';
 import type { Cell, CellEffect, DeepReadonly, PropertyCell } from '@richman/board-data';
 import type { RenderableGameState } from '../session/gameSession';
-import { formatMoney } from '../ui/format';
+import { cashUnitForMap, formatCash } from '../ui/format';
 
 export interface ClientAction {
   label: string;
@@ -157,7 +157,7 @@ export function getCellDetailSubtitle(
   if (lead === detail.name) return '';
   const parts = [lead];
   if (detail.levelLabel !== null) parts.push(detail.levelLabel);
-  if (rent !== null) parts.push(`${rent.label} ¥${rent.amount}`);
+  if (rent !== null) parts.push(`${rent.label} ${formatCash(rent.amount)}`);
   return parts.join(' · ');
 }
 
@@ -379,18 +379,23 @@ function nonPropertyTypeLabel(cell: Exclude<Cell, PropertyCell>): string {
   }
 }
 
+/** 格内说明属于「这一局」，金额单位必须跟着本局棋盘走，不能读全局默认值。 */
+function cellCash(state: GameState | RenderableGameState, value: number): string {
+  return formatCash(value, cashUnitForMap(state.mapRef.id));
+}
+
 function describeCellEffect(effect: CellEffect, state: GameState | RenderableGameState): string {
   switch (effect.type) {
     case 'pay_bank':
-      return `停下时向银行支付 ${formatMoney(effect.amount ?? 0)}。`;
+      return `停下时向银行支付 ${cellCash(state, effect.amount ?? 0)}。`;
     case 'receive_bank':
-      return `停下时从银行获得 ${formatMoney(effect.amount ?? 0)}。`;
+      return `停下时从银行获得 ${cellCash(state, effect.amount ?? 0)}。`;
     case 'skip_turn':
       return `停下时暂停 ${effect.turns ?? 1} 回合。`;
     case 'pay_each_player':
-      return `停下时向每位其他玩家支付 ${formatMoney(effect.amount ?? 0)}。`;
+      return `停下时向每位其他玩家支付 ${cellCash(state, effect.amount ?? 0)}。`;
     case 'receive_from_each_player':
-      return `停下时从每位其他玩家处获得 ${formatMoney(effect.amount ?? 0)}。`;
+      return `停下时从每位其他玩家处获得 ${cellCash(state, effect.amount ?? 0)}。`;
     case 'move_steps':
       return `停下时向前移动 ${effect.steps ?? 0} 格并结算。`;
     case 'move_to': {
@@ -402,7 +407,7 @@ function describeCellEffect(effect: CellEffect, state: GameState | RenderableGam
     case 'draw_card':
       return `停下时再抽一张${effect.deck === 'destiny' ? '命运' : '机会'}卡并执行。`;
     case 'repairs':
-      return `停下时按每栋 ${formatMoney(effect.perHouse ?? 0)}、每旅馆 ${formatMoney(effect.perHotel ?? 0)} 支付维修费。`;
+      return `停下时按每栋 ${cellCash(state, effect.perHouse ?? 0)}、每旅馆 ${cellCash(state, effect.perHotel ?? 0)} 支付维修费。`;
     case 'none':
       return '无特殊效果。';
     case 'module':
@@ -430,7 +435,7 @@ function describeModuleCell(cell: Extract<Cell, { type: 'module' }>, state: Game
     const payload = cell.payload as { claimCost?: number; toll?: number };
     const claimCost = payload.claimCost ?? 0;
     const toll = payload.toll ?? 0;
-    return `停在无主烽火台时可花 ${formatMoney(claimCost)} 占据它；其他玩家之后再停在此格，须向你支付 ${formatMoney(toll)} 通行费。`;
+    return `停在无主烽火台时可花 ${cellCash(state, claimCost)} 占据它；其他玩家之后再停在此格，须向你支付 ${cellCash(state, toll)} 通行费。`;
   }
   // 路线图 #23 的八个模块：参数都是引擎常量（格内 payload 为空），故这里只讲清「停下来能做什么」，
   // 具体金额统一放在设置面板的「规则说明」里给出（见 ui/mapRules.ts 的 MODULE_NOTES），
@@ -473,13 +478,13 @@ function describeModuleCell(cell: Extract<Cell, { type: 'module' }>, state: Game
 function nonPropertyDescription(cell: Exclude<Cell, PropertyCell>, state: GameState | RenderableGameState): string {
   switch (cell.type) {
     case 'start':
-      return `经过或停在起点时获得 ${formatMoney(state.config.passStartSalary)}。`;
+      return `经过或停在起点时获得 ${cellCash(state, state.config.passStartSalary)}。`;
     case 'chance':
       return '抽一张机会卡并执行效果。';
     case 'destiny':
       return '抽一张命运卡并执行效果。';
     case 'tax':
-      return `停下时向银行缴税 ${formatMoney(cell.amount)}。`;
+      return `停下时向银行缴税 ${cellCash(state, cell.amount)}。`;
     case 'airport': {
       const entryCell = state.board.cells.find((candidate) => candidate.id === cell.branchEntryId);
       const entryName = entryCell ? entryCell.name : '支线';
@@ -841,7 +846,7 @@ function deckLabel(deck: 'chance' | 'destiny'): string {
 }
 
 function money(amount: number): string {
-  return `¥${formatMoney(amount)}`;
+  return `${formatCash(amount)}`;
 }
 
 function modulePayload(payload: unknown): Record<string, unknown> {

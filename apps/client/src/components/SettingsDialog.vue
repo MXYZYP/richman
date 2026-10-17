@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import MobileSheet from './MobileSheet.vue';
 import PwaInstallRow from './PwaInstallRow.vue';
 import ReleaseNotesDialog from './ReleaseNotesDialog.vue';
@@ -20,7 +20,7 @@ import {
 import { THEMES, getStoredAppearance, getStoredTheme, recommendedThemeForMap, resolveTheme, setAppearance, setTheme, type AppearanceId, type ThemeId } from '../ui/themeManager';
 import { PLAYBACK_SPEED_OPTIONS, getPlaybackSpeedRef, setPlaybackSpeed } from '../session/playbackPace';
 import { describeMapRulesById } from '../ui/mapRules';
-import { formatMoney } from '../ui/format';
+import { formatCash, setCashUnitForMap } from '../ui/format';
 
 /**
  * 统一设置入口（路线图 #13 扩展）。
@@ -61,6 +61,9 @@ const props = withDefaults(defineProps<{
   showSessionActions: false,
   mapId: null,
 });
+
+// 「现金目标」「地产地价」等金额要跟着本局地图选单位（中国图「两」/ 世界图「金币」）。
+watch(() => props.mapId ?? null, (mapId) => setCashUnitForMap(mapId), { immediate: true });
 
 const emit = defineEmits<{
   'update:open': [open: boolean];
@@ -161,7 +164,7 @@ onBeforeUnmount(() => {
 
 const title = '设置';
 const victoryCopy = computed(() => (
-  props.cashGoal === null ? null : `胜利条件：现金达到 ${formatMoney(props.cashGoal)}。`
+  props.cashGoal === null ? null : `胜利条件：现金达到 ${formatCash(props.cashGoal)}。`
 ));
 
 /** 当前地图的规则事实；无地图上下文（如大厅未选图）时为 null。 */
@@ -410,10 +413,6 @@ const rulesSummary = computed(() => (
         @click="emit('surrender')"
       >投降</button>
     </template>
-
-    <!-- 收尾主按钮（照参考图）：一颗满宽厚按钮，按下去就关面板；
-         头部右上角的「关闭」仍在，两个入口都通。 -->
-    <button type="button" class="settings-done" @click="emit('update:open', false)">完成</button>
   </MobileSheet>
 </template>
 
@@ -773,31 +772,6 @@ const rulesSummary = computed(() => (
 .settings-session-button--danger {
   border-color: color-mix(in srgb, var(--surrender, #b3402f) 40%, var(--color-border));
   color: var(--surrender, #b3402f);
-}
-
-/* 收尾主按钮：满宽、14px 圆角、一条 4px 深色底边，按下时整体下沉 2px（参考图的「完成」）。 */
-.settings-done {
-  min-height: 50px;
-  margin-top: 2px;
-  border: 1px solid var(--color-primary);
-  border-radius: 14px;
-  background: var(--color-primary);
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  box-shadow: 0 4px 0 color-mix(in srgb, var(--color-primary) 62%, #000);
-  cursor: pointer;
-}
-
-.settings-done:active {
-  transform: translateY(2px);
-  box-shadow: 0 2px 0 color-mix(in srgb, var(--color-primary) 62%, #000);
-}
-
-.settings-done:focus-visible {
-  outline: 3px solid var(--color-accent);
-  outline-offset: 2px;
 }
 
 /* ---- 紧凑区间（本组件此前没有任何断点）----

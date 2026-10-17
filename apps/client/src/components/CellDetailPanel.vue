@@ -15,7 +15,7 @@
  */
 import MobileSheet from './MobileSheet.vue';
 import type { CellDetail } from '../game/clientGame';
-import { formatMoney } from '../ui/format';
+import { formatCash } from '../ui/format';
 
 const props = defineProps<{
   detail: CellDetail;
@@ -40,7 +40,7 @@ const emit = defineEmits<{
       <div v-if="props.detail.currentRent" class="rent-highlight" aria-label="当前过路费">
         <span class="rent-label">当前过路费</span>
         <strong v-if="props.detail.currentRent.amount !== null" class="rent-amount">
-          ¥{{ formatMoney(props.detail.currentRent.amount) }}
+          {{ formatCash(props.detail.currentRent.amount) }}
         </strong>
         <strong v-else class="rent-amount pending">待本次掷骰</strong>
         <small class="rent-note">{{ props.detail.currentRent.note }}</small>
@@ -51,7 +51,7 @@ const emit = defineEmits<{
         <dl class="rent-list">
           <div v-for="row in props.detail.rentRows" :key="row.label">
             <dt>{{ row.label }}</dt>
-            <dd>¥{{ formatMoney(row.amount) }}</dd>
+            <dd>{{ formatCash(row.amount) }}</dd>
           </div>
         </dl>
       </section>
@@ -61,7 +61,7 @@ const emit = defineEmits<{
       <dl class="facts">
         <div v-if="props.detail.price !== null">
           <dt>价格</dt>
-          <dd>¥{{ formatMoney(props.detail.price) }}</dd>
+          <dd>{{ formatCash(props.detail.price) }}</dd>
         </div>
         <div v-if="props.detail.ownerName !== null">
           <dt>拥有者</dt>
@@ -77,11 +77,11 @@ const emit = defineEmits<{
         </div>
         <div v-if="props.detail.mortgageValue !== null">
           <dt>抵押额</dt>
-          <dd>¥{{ formatMoney(props.detail.mortgageValue) }}</dd>
+          <dd>{{ formatCash(props.detail.mortgageValue) }}</dd>
         </div>
         <div v-if="props.detail.houseCost !== null">
           <dt>单栋建筑费</dt>
-          <dd>¥{{ formatMoney(props.detail.houseCost) }}</dd>
+          <dd>{{ formatCash(props.detail.houseCost) }}</dd>
         </div>
       </dl>
 

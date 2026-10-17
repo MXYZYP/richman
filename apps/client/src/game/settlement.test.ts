@@ -58,7 +58,7 @@ describe('getSettlementSummary', () => {
       rank: 1,
       id: 'p1',
       name: '玩家一',
-      status: '¥42,000',
+      status: '42,000 两',
       isWinner: true,
       isBankrupt: false,
       isBot: false,
@@ -150,7 +150,7 @@ describe('getSettlementSummary', () => {
     const summary = getSettlementSummary(state);
 
     expect(summary.rows.map((row) => row.id)).toEqual(['p3', 'p2', 'p1']);
-    expect(summary.rows.map((row) => row.status)).toEqual(['¥12,000', '¥9,000', '¥3,000']);
+    expect(summary.rows.map((row) => row.status)).toEqual(['12,000 两', '9,000 两', '3,000 两']);
   });
 
   it('uses the cash goal reason when the game-over event says cash_goal', () => {

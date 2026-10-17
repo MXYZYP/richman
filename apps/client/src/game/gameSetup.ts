@@ -5,6 +5,7 @@ import {
   type MapPack,
 } from '@richman/board-data';
 import type { BotDifficulty } from '@richman/engine';
+import { formatCash } from '../ui/format';
 import type { CreateLocalSessionOptions } from '../session/localSession';
 import {
   hasAllClientMapAssets,
@@ -143,7 +144,7 @@ function validateResolvedGameSetup(setup: GameSetupForm, pack: MapPack): GameSet
     return { ok: false, message: '抵押利率需在 0%-100% 之间' };
   }
   if (setup.cashGoalEnabled && (!Number.isFinite(setup.cashGoal) || setup.cashGoal <= setup.config.initialCash)) {
-    return { ok: false, message: `现金目标必须高于初始资金 ${formatYuan(setup.config.initialCash)}` };
+    return { ok: false, message: `现金目标必须高于初始资金 ${formatCash(setup.config.initialCash)}` };
   }
 
   return { ok: true };
@@ -259,6 +260,3 @@ function clampInt(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, integer));
 }
 
-function formatYuan(amount: number): string {
-  return `¥${amount.toLocaleString('zh-CN')}`;
-}

@@ -15,7 +15,7 @@ import TurnCountdown from '../components/TurnCountdown.vue';
 import SettingsDialog from '../components/SettingsDialog.vue';
 import ReplayDialog from '../components/ReplayDialog.vue';
 import { formatRecentLogEvent, canProposeTrade, getAssetRows, getAuctionDisplay, getCellDetail, getCellDetailSubtitle, getOwnTradableCells, getPendingCardChoice, getPendingPurchaseOffer, getPlayerAssetDialogModel, getTradeDisplay, getTradeProposalOptions, type ClientAction } from '../game/clientGame';
-import { formatCashAnnouncement, formatMoney } from '../ui/format';
+import { formatCash, formatCashAnnouncement, setCashUnitForMap } from '../ui/format';
 import { canInspectFinalBoard, getSettlementExitDecision } from '../game/settlement';
 import type { CashNotice, GameSession, ReplayExportOutcome } from '../session/gameSession';
 import type { CreateLocalSessionOptions } from '../session/localSession';
@@ -140,6 +140,10 @@ watch(() => props.session, () => {
 
 // Session refs surfaced as local computeds so the template auto-unwraps them and stays clean.
 const state = computed(() => props.session.state.value);
+
+// 本局货币单位跟着棋盘走：中国城市图「两」、世界之旅「金币」（见 ui/format.ts 的 CASH_UNIT_BY_MAP）。
+// immediate 保证首帧就是对的 —— 否则会先按默认「两」画一遍再跳成「金币」。
+watch(() => state.value?.mapRef.id ?? null, (mapId) => setCashUnitForMap(mapId), { immediate: true });
 
 // 皮肤「跟随地图」（#118）：地图 id 只存在于对局状态里，所以重算放在这里而不是 App.vue。
 // immediate 保证「刷新页面直接进对局」（此时启动只按 null 解析成经典）也能立刻纠正到地图配色。
@@ -1212,15 +1216,15 @@ function inspectFinalBoard() {
         >
           <span class="location-title">
             <strong>{{ currentCellDetail.name }}</strong>
-            <b v-if="currentCellDetail.price !== null" class="location-price">¥{{ formatMoney(currentCellDetail.price) }}</b>
+            <b v-if="currentCellDetail.price !== null" class="location-price">{{ formatCash(currentCellDetail.price) }}</b>
           </span>
           <span class="location-details">
             <span v-if="locationSubtitle">{{ locationSubtitle }}</span>
-            <b v-if="activeActorCash !== null">可用现金 ¥{{ formatMoney(activeActorCash) }}</b>
+            <b v-if="activeActorCash !== null">可用现金 {{ formatCash(activeActorCash) }}</b>
           </span>
         </button>
         <div v-if="activeDebtAmount !== null" class="mobile-debt-strip" role="status">
-          <span>{{ activeActorName }} 欠款 ¥{{ formatMoney(activeDebtAmount) }}</span>
+          <span>{{ activeActorName }} 欠款 {{ formatCash(activeDebtAmount) }}</span>
           <button type="button" class="debt-strip-action" @click="openMobileSheet('assets')">{{ isSpectator ? '查看资产' : '处理资产' }}</button>
         </div>
         <button

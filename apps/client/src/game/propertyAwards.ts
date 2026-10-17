@@ -1,5 +1,5 @@
 import type { RenderableGameState } from '../session/gameSession';
-import { formatMoney } from '../ui/format';
+import { formatCash } from '../ui/format';
 
 // 本局地块奖项：纯派生，输入 RenderableGameState，输出最多三项奖项。
 // 数据来源：
@@ -67,7 +67,7 @@ export function getPropertyAwards(state: RenderableGameState): PropertyAwards {
       title: '最有价值',
       cellId: mvp.cellId,
       cellName: mvp.name,
-      metric: `收租 ¥${formatMoney(mvp.rentCollected)}`,
+      metric: `收租 ${formatCash(mvp.rentCollected)}`,
     });
   } else {
     return { awards };
@@ -90,7 +90,7 @@ export function getPropertyAwards(state: RenderableGameState): PropertyAwards {
       title: '最不划算',
       cellId: worst.cellId,
       cellName: worst.name,
-      metric: `回本 ¥${formatMoney(worst.rentCollected)} / ¥${formatMoney(worst.investment)}`,
+      metric: `回本 ${formatCash(worst.rentCollected)} / ${formatCash(worst.investment)}`,
     });
   }
 

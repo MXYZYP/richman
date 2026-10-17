@@ -16,7 +16,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { RenderableGameState } from '../session/gameSession';
 import { getSettlementSummary } from '../game/settlement';
-import { formatMoney } from '../ui/format';
+import { formatCash } from '../ui/format';
 
 const props = withDefaults(defineProps<{
   state: RenderableGameState;
@@ -95,7 +95,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
             </div>
             <span class="row-money">
               <small>现金</small>
-              <strong>¥{{ formatMoney(row.cash) }}</strong>
+              <strong>{{ formatCash(row.cash) }}</strong>
               <em v-if="row.isBankrupt">{{ row.status }}</em>
             </span>
           </li>

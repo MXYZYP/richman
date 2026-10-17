@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { getActiveMapPack, listActiveMaps } from '@richman/board-data';
 import type { BotDifficulty } from '@richman/engine';
 import MapPicker from './MapPicker.vue';
+import { setCashUnitForMap } from '../ui/format';
 import ViewShell from '../views/ViewShell.vue';
 import {
   BOT_DIFFICULTY_OPTIONS,
@@ -55,6 +56,8 @@ const emit = defineEmits<{
 }>();
 
 const setup = ref(cloneSetup(props.initialSetup ?? createDefaultGameSetup(setupDependencies)));
+// 换地图时同步货币单位：设置页的规则摘要里就有初始资金 / 地价，不能等到开局才换。
+watch(() => setup.value.mapId, (mapId) => setCashUnitForMap(mapId), { immediate: true });
 const validation = computed(() => validateGameSetup(setup.value, setupDependencies));
 const totalPlayers = computed(() => setup.value.humanCount + setup.value.botCount);
 // #8：单机热座上限 6 人，与联机（roomManager.MAX_PLAYERS）对齐。

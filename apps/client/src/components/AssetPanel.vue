@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { formatMoney } from '../ui/format';
+import { formatCash } from '../ui/format';
 import type { AssetRow, ClientAction } from '../game/clientGame';
 
 const props = withDefaults(defineProps<{
@@ -118,7 +118,7 @@ function confirmBankruptcy() {
       <div class="debt-copy">
         <strong class="debt-pill">
           <span class="debt-label">欠款</span>
-          <span class="debt-amount">¥{{ formatMoney(debtAmount) }}</span>
+          <span class="debt-amount">{{ formatCash(debtAmount) }}</span>
         </strong>
         <p v-if="!readOnly">出售房屋或抵押地产筹集现金，无法偿还时可宣告破产。</p>
       </div>
@@ -144,7 +144,7 @@ function confirmBankruptcy() {
     <dl v-if="actorCash !== null" class="cash-strip">
       <div class="cash-cell">
         <dt>可用现金</dt>
-        <dd class="cash-value">¥{{ formatMoney(actorCash) }}</dd>
+        <dd class="cash-value">{{ formatCash(actorCash) }}</dd>
       </div>
       <div class="cash-cell">
         <dt>持有地产</dt>
@@ -168,19 +168,19 @@ function confirmBankruptcy() {
           <dl class="asset-money">
             <div v-if="row.sellHouseRefund !== null && row.level > 0">
               <dt>卖房可得</dt>
-              <dd>¥{{ formatMoney(row.sellHouseRefund) }}</dd>
+              <dd>{{ formatCash(row.sellHouseRefund) }}</dd>
             </div>
             <div v-if="row.level === 0 && row.mortgageValue !== null && !row.mortgaged">
               <dt>抵押可得</dt>
-              <dd>¥{{ formatMoney(row.mortgageValue) }}</dd>
+              <dd>{{ formatCash(row.mortgageValue) }}</dd>
             </div>
             <div v-if="row.sellPropertyValue !== null && row.level === 0 && !row.mortgaged">
               <dt>卖地可得</dt>
-              <dd>¥{{ formatMoney(row.sellPropertyValue) }}</dd>
+              <dd>{{ formatCash(row.sellPropertyValue) }}</dd>
             </div>
             <div v-if="row.redeemCost !== null && row.mortgaged">
               <dt>赎回费用</dt>
-              <dd>¥{{ formatMoney(row.redeemCost) }}</dd>
+              <dd>{{ formatCash(row.redeemCost) }}</dd>
             </div>
           </dl>
 

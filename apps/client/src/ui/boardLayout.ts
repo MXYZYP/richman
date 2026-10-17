@@ -21,7 +21,7 @@ const BUILT_IN_ICON_GLYPHS: Readonly<Record<BuiltInIconId, string>> = Object.fre
   airport: '✈',
   chance: '?',
   destiny: '!',
-  tax: '¥',
+  tax: '税',
   'special-food': '🍜',
   'special-moon': '☾',
   world: '🌐',

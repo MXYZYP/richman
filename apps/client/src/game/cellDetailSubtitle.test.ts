@@ -47,7 +47,7 @@ describe('位置卡第二行不再重复格名', () => {
     expect(getCellDetailSubtitle(
       { name: '北京', typeLabel: '地产', ownerName: '电脑A', price: 2000, levelLabel: '2级' },
       { label: '当前租金', amount: 480 },
-    )).toBe('电脑A · 2级 · 当前租金 ¥480');
+    )).toBe('电脑A · 2级 · 当前租金 480 两');
   });
 
   it('really does collide on the start tile of a shipped map', () => {

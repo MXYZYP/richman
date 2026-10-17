@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { ChatMessage, PublicRoomState, RoomRuleConfig, RoomSettings, RoomSettingsPatch } from '@richman/protocol';
 import { ROOM_PASSWORD_MAX_LENGTH, ROOM_PASSWORD_MIN_LENGTH, TURN_TIME_LIMIT_OPTIONS } from '@richman/protocol';
 import { getActiveMapPack } from '@richman/board-data';
+import { formatCash, setCashUnitForMap } from '../ui/format';
 import type { BotDifficulty } from '@richman/engine';
 import { BOT_DIFFICULTY_OPTIONS } from '../game/gameSetup';
 import type { LobbyCommand } from '../session/onlineSession';
@@ -52,6 +53,10 @@ const props = withDefaults(defineProps<{
   showMapTitle: false,
   roomSettings: null,
 });
+
+// 大厅里的金额（初始资金 / 现金目标 / 规则摘要）也要按本房间的地图选单位。
+// 必须写在 props 之后 —— 写在前面会踩「使用了未初始化的 props」。
+watch(() => props.room.map.ref.id, (mapId) => setCashUnitForMap(mapId), { immediate: true });
 
 const emit = defineEmits<{
   addBot: [];
@@ -212,7 +217,7 @@ function applyRuleChange(partial: Partial<RoomRuleConfig>): void {
   // 会让这局根本开不起来。本地先拦一次，房主立刻看到该先处理哪一项；
   // 服务端同样的规则仍然保留（它才是权威，且要防住被改过的快照与旧客户端）。
   if (cashGoal.value !== null && cashGoal.value <= next.initialCash) {
-    ruleError.value = `现金目标 ¥${cashGoal.value} 必须高于初始资金，请先改为「不设目标」或降低初始资金`;
+    ruleError.value = `现金目标 ${formatCash(cashGoal.value)} 必须高于初始资金，请先改为「不设目标」或降低初始资金`;
     return;
   }
   ruleError.value = null;
@@ -319,7 +324,7 @@ const cashGoalPresets = computed<number[]>(() => {
 });
 const cashGoalOptions = computed(() => [
   { value: null as number | null, label: '不设目标' },
-  ...cashGoalPresets.value.map((value) => ({ value: value as number | null, label: `¥${value}` })),
+  ...cashGoalPresets.value.map((value) => ({ value: value as number | null, label: formatCash(value as number) })),
 ]);
 
 function chooseCashGoal(value: number | null): void {
@@ -394,12 +399,12 @@ const ruleSummary = computed(() => {
   const listed = discoverable.value ? ' · 已公开到房间列表' : '';
   // 现金目标（#23 ③）进摘要：它是最容易改变这局时长的一项房规，
   // 非房主必须能一眼看到「这局是打到只剩一人，还是攒到某个数就结束」。
-  const goal = cashGoal.value !== null ? ` · 现金目标 ¥${cashGoal.value}` : '';
+  const goal = cashGoal.value !== null ? ` · 现金目标 ${formatCash(cashGoal.value)}` : '';
   // 密码与观战开关（#23 ③）也进摘要：前者解释「为什么别人进不来」，后者解释
   // 「为什么点观战被拒」，都是非房主会遇到、却看不到开关本身的两件事。
   const locked = passwordProtected.value ? ' · 已设房间密码' : '';
   const spectate = allowSpectators.value ? '' : ' · 禁止观战';
-  return `初始资金 ¥${rule.initialCash} · 最高房级 ${rule.maxHouseLevel} 级 · 抵押利率 ${percent}%${undo}${limit}${listed}${goal}${locked}${spectate}`;
+  return `初始资金 ${formatCash(rule.initialCash)} · 最高房级 ${rule.maxHouseLevel} 级 · 抵押利率 ${percent}%${undo}${limit}${listed}${goal}${locked}${spectate}`;
 });
 
 // Copy feedback is transient and self-describing so a clipboard rejection is never silent.
@@ -735,7 +740,7 @@ onBeforeUnmount(() => {
           <p class="lobby-rules__hint">
             {{ cashGoal === null
               ? '不设目标：打到只剩最后一人为止。'
-              : `先攒到 ¥${cashGoal} 现金者立刻获胜（必须高于本局初始资金）。` }}
+              : `先攒到 ${formatCash(cashGoal)} 现金者立刻获胜（必须高于本局初始资金）。` }}
           </p>
         </div>
 

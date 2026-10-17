@@ -6,7 +6,7 @@ import type {
   TradeDisplay,
   TradeProposalOption,
 } from '../game/clientGame';
-import { formatMoney } from '../ui/format';
+import { formatCash } from '../ui/format';
 
 /**
  * 议价面板（#105 交易 / #106 拍卖）共用一块控制台区域。
@@ -46,7 +46,7 @@ const tradeRows = computed(() => {
 /** 报价双方都空手只可能是数据异常；这里退化成一行「无内容」而不是渲染空栏。 */
 function sideText(side: { cash: number; cellNames: string[] }): string {
   const parts: string[] = [];
-  if (side.cash > 0) parts.push(`现金 ¥${formatMoney(side.cash)}`);
+  if (side.cash > 0) parts.push(`现金 ${formatCash(side.cash)}`);
   if (side.cellNames.length > 0) parts.push(side.cellNames.join('、'));
   return parts.length === 0 ? '无' : parts.join(' + ');
 }
@@ -84,8 +84,8 @@ const bidTooHigh = computed(() => {
 const bidBlockedReason = computed(() => {
   const auction = props.auction;
   if (auction === null) return '';
-  if (bidAmount.value < auction.minBid) return `出价不能低于 ¥${formatMoney(auction.minBid)}`;
-  if (bidAmount.value > auction.myMaxBid) return `最多只能出到 ¥${formatMoney(auction.myMaxBid)}（你的现金）`;
+  if (bidAmount.value < auction.minBid) return `出价不能低于 ${formatCash(auction.minBid)}`;
+  if (bidAmount.value > auction.myMaxBid) return `最多只能出到 ${formatCash(auction.myMaxBid)}（你的现金）`;
   return '';
 });
 
@@ -97,7 +97,7 @@ const auctionLeaderText = computed(() => {
   const auction = props.auction;
   if (auction === null) return '';
   if (auction.leaderName === null) return '尚无出价';
-  return `${auction.leaderName} 以 ¥${formatMoney(auction.leaderBid)} 领先`;
+  return `${auction.leaderName} 以 ${formatCash(auction.leaderBid)} 领先`;
 });
 
 /* ---- 发起交易 ---- */
@@ -137,8 +137,8 @@ const requestCashTooHigh = computed(() => (
 
 const proposeBlockedReason = computed(() => {
   if (selectedTarget.value === null) return '请选择一位对手';
-  if (offerCashTooHigh.value) return `「我给」的现金超过你手上的 ¥${formatMoney(props.ownCash)}`;
-  if (requestCashTooHigh.value) return `「我要」的现金超过对方手上的 ¥${formatMoney(selectedTarget.value.cash)}`;
+  if (offerCashTooHigh.value) return `「我给」的现金超过你手上的 ${formatCash(props.ownCash)}`;
+  if (requestCashTooHigh.value) return `「我要」的现金超过对方手上的 ${formatCash(selectedTarget.value.cash)}`;
   if (offerEmpty.value && requestEmpty.value) return '双方都空手的报价没有意义：至少给出一项或索要一项';
   return '';
 });
@@ -238,7 +238,7 @@ function submitBid(): void {
   <section v-else-if="auction" class="bargain-panel" aria-label="地产拍卖">
     <p class="bargain-panel__title">
       <span>地产拍卖</span>
-      <span class="bargain-panel__pair">{{ auction.cellName }} · 底价 ¥{{ formatMoney(auction.cellPrice) }}</span>
+      <span class="bargain-panel__pair">{{ auction.cellName }} · 底价 {{ formatCash(auction.cellPrice) }}</span>
     </p>
     <ul class="bargain-panel__sides">
       <li>
@@ -263,7 +263,7 @@ function submitBid(): void {
           :step="AUCTION_MIN_INCREMENT"
         />
         <span class="bargain-panel__range">
-          下限 ¥{{ formatMoney(auction.minBid) }} · 上限 ¥{{ formatMoney(auction.myMaxBid) }}
+          下限 {{ formatCash(auction.minBid) }} · 上限 {{ formatCash(auction.myMaxBid) }}
         </span>
       </div>
       <p v-if="bidBlockedReason !== ''" class="bargain-panel__warn">{{ bidBlockedReason }}</p>
@@ -282,7 +282,7 @@ function submitBid(): void {
         >放弃叫价</button>
       </div>
       <p class="bargain-panel__hint">
-        每次加价至少 ¥{{ formatMoney(AUCTION_MIN_INCREMENT) }}；放弃后本轮不再叫价。
+        每次加价至少 {{ formatCash(AUCTION_MIN_INCREMENT) }}；放弃后本轮不再叫价。
         无人加价时，最高出价者按自己的出价买下这块地。
       </p>
     </template>
@@ -307,7 +307,7 @@ function submitBid(): void {
         <label for="trade-target">交易对手</label>
         <select id="trade-target" v-model="targetId">
           <option v-for="option in proposalOptions" :key="option.playerId" :value="option.playerId">
-            {{ option.nickname }}（现金 ¥{{ formatMoney(option.cash) }}）
+            {{ option.nickname }}（现金 {{ formatCash(option.cash) }}）
           </option>
         </select>
       </div>

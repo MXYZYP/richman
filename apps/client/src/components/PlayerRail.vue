@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { PlayerColor, PlayerState } from '@richman/engine';
-import { formatCashDelta, formatMoney } from '../ui/format';
+import { formatCash, formatCashDelta } from '../ui/format';
 import type { CashNotice } from '../session/gameSession';
 
 // 玩家资产条：当前行动者占 2.75fr 宽位，其余玩家是 1fr 紧凑席位；
@@ -80,7 +80,7 @@ function selectPlayer(playerId: string, event: MouseEvent): void {
 
 /** 现金永远完整呈现：位数多的金额降一档字级，席位不会被撑破。*/
 function isLongCash(amount: number): boolean {
-  return formatMoney(amount).length > 8;
+  return formatCash(amount).length > 8;
 }
 
 function noticeForPlayer(playerId: string): CashNotice | undefined {
@@ -123,7 +123,7 @@ function pillKey(notice: CashNotice): string {
               <span v-if="player.id === heroId" class="seat-state">行动中</span>
               <span v-else-if="!player.isBot && !player.online" class="seat-state offline">离线</span>
             </span>
-            <strong class="player-cash" :class="{ 'cash-long': isLongCash(player.cash) }">¥{{ formatMoney(player.cash) }}</strong>
+            <strong class="player-cash" :class="{ 'cash-long': isLongCash(player.cash) }">{{ formatCash(player.cash) }}</strong>
           </span>
           <!-- 主位更替时的一次性高亮，不循环、不改变布局。-->
           <span v-if="player.id === heroId" :key="heroId" class="hero-pulse" aria-hidden="true"></span>

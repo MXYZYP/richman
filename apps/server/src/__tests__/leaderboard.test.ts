@@ -87,9 +87,13 @@ describe('leaderboardStore — 落盘榜单', () => {
   });
 
   it('排序：胜场优先，再看资产峰值、总局数、更新时间、playerId', () => {
+    // p-a / p-b 要落在「更新时间」之后的 playerId 收尾这一档，
+    // 所以两者的 updatedAt 必须**完全相同**：否则「先达到者在前」会先一步分出胜负，
+    // 这条用例就退化成在赌两次 Date.now() 落在同一毫秒（曾经这样偶发失败过）。
+    const sameMoment = Date.now();
     const sorted = sortLeaderboardEntries([
-      entry({ playerId: 'p-b', wins: 2, bestAsset: 10_000 }),
-      entry({ playerId: 'p-a', wins: 2, bestAsset: 10_000 }),
+      entry({ playerId: 'p-b', wins: 2, bestAsset: 10_000, updatedAt: sameMoment }),
+      entry({ playerId: 'p-a', wins: 2, bestAsset: 10_000, updatedAt: sameMoment }),
       entry({ playerId: 'p-c', wins: 3, bestAsset: 1 }),
       entry({ playerId: 'p-d', wins: 2, bestAsset: 20_000 }),
     ]);

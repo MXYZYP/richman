@@ -23,8 +23,8 @@ const players = [
 
 describe('cash feedback formatting', () => {
   it('formats cash deltas with explicit signs and localized amounts', () => {
-    expect(cashFormatters.formatCashDelta?.(1000)).toBe('+¥1,000');
-    expect(cashFormatters.formatCashDelta?.(-1000)).toBe('−¥1,000');
+    expect(cashFormatters.formatCashDelta?.(1000)).toBe('+1,000 两');
+    expect(cashFormatters.formatCashDelta?.(-1000)).toBe('−1,000 两');
   });
 
   it('announces known players from the latest transition in notice order', () => {
@@ -33,7 +33,7 @@ describe('cash feedback formatting', () => {
         { generation: 1, transitionId: 3, playerId: 'p1', delta: -500 },
         { generation: 1, transitionId: 3, playerId: 'p2', delta: 500 },
       ]),
-    ).toBe('玩家一减少 ¥500；玩家二增加 ¥500');
+    ).toBe('玩家一减少 500 两；玩家二增加 500 两');
   });
 
   it('ignores notices for unknown players', () => {
@@ -50,7 +50,7 @@ describe('cash feedback formatting', () => {
         { generation: 1, transitionId: 1, playerId: 'p1', delta: -500 },
         { generation: 1, transitionId: 2, playerId: 'p2', delta: 500 },
       ]),
-    ).toBe('玩家二增加 ¥500');
+    ).toBe('玩家二增加 500 两');
   });
 
   it('prioritizes the newest generation before transition id', () => {
@@ -59,6 +59,6 @@ describe('cash feedback formatting', () => {
         { generation: 1, transitionId: 99, playerId: 'p1', delta: -500 },
         { generation: 2, transitionId: 1, playerId: 'p2', delta: 500 },
       ]),
-    ).toBe('玩家二增加 ¥500');
+    ).toBe('玩家二增加 500 两');
   });
 });

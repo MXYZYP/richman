@@ -439,7 +439,7 @@ describe('GamePresenter', () => {
 
       await presenter.playEvents(events, snapshot);
 
-      expect(presenter.eventMessage.value).toContain('¥2,000');
+      expect(presenter.eventMessage.value).toContain('2,000 两');
       expect(presenter.isAnimating.value).toBe(false);
     });
 
