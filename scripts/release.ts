@@ -194,11 +194,11 @@ export function parseCreateArguments(args: readonly string[]): Omit<CreateReleas
   let bump: ReleaseBump = 'patch';
   let flags = args;
   const requestedBump = args[0];
-  if (requestedBump === 'patch' || requestedBump === 'minor') {
+  if (requestedBump === 'patch' || requestedBump === 'minor' || requestedBump === 'major') {
     bump = requestedBump;
     flags = args.slice(1);
   } else if (requestedBump !== undefined && !requestedBump.startsWith('--')) {
-    throw new Error('发布类型必须是 patch 或 minor');
+    throw new Error('发布类型必须是 patch、minor 或 major');
   }
 
   let title = '';

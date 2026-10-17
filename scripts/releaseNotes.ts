@@ -1,4 +1,4 @@
-export type ReleaseBump = 'patch' | 'minor';
+export type ReleaseBump = 'patch' | 'minor' | 'major';
 
 export interface ReleaseEntry {
   readonly version: string;
@@ -130,6 +130,7 @@ export function parseReleaseCatalog(value: unknown): ReleaseCatalog {
 export function bumpVersion(version: string, bump: ReleaseBump): string {
   const [major, minor, patch] = parseSemver(version);
   if (bump === 'patch') return `${major}.${minor}.${patch + 1}`;
+  if (bump === 'major') return `${major + 1}.0.0`;
   return `${major}.${minor + 1}.0`;
 }
 

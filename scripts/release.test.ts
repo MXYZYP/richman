@@ -10,7 +10,7 @@ import {
   parseCreateArguments,
   rebuildChangelog,
 } from './release';
-import { parseReleaseCatalog, renderChangelog } from './releaseNotes';
+import { bumpVersion, parseReleaseCatalog, renderChangelog } from './releaseNotes';
 
 const roots: string[] = [];
 const initialCatalog = parseReleaseCatalog({
@@ -69,6 +69,15 @@ describe('release file command', () => {
       title: '新玩法',
       changes: ['新增正式地图。'],
     });
+    // 大版本：2.19.0 → 3.0.0 这种跨代发布，minor 只能到 2.20.0，必须单独支持。
+    expect(parseCreateArguments(['major', '--title', '重做', '--change', '局内货币改版。'])).toEqual({
+      bump: 'major',
+      title: '重做',
+      changes: ['局内货币改版。'],
+    });
+    expect(bumpVersion('2.19.0', 'major')).toBe('3.0.0');
+    expect(bumpVersion('2.19.0', 'minor')).toBe('2.20.0');
+    expect(bumpVersion('2.19.0', 'patch')).toBe('2.19.1');
   });
 
   it('creates a patch release and synchronizes all generated files', async () => {
