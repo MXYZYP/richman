@@ -368,7 +368,7 @@ describe('yuncheng-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(yunchengTourMap, [coreModule, piaohaoModule])).not.toThrow();
     expect(computeContentHash(yunchengTourMap)).toBe(yunchengTourMap.ref.contentHash);
     expect(yunchengTourMap.ref.contentHash)
-      .toBe('17345a339e0fe2420d6982b96c1369ae6a8360af27917f79fb5b089def985e4b');
+      .toBe('8d8ef3ef4821f64ea5bc15ff0da6d4fb93f94a4176f42c7953bf9d8ba8d0356f');
     expect(Object.isFrozen(yunchengTourMap)).toBe(true);
     expect(Object.isFrozen(yunchengTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(yunchengTourMap.game.cards.destiny[2]!.effect)).toBe(true);

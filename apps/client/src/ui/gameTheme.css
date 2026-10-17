@@ -31,7 +31,7 @@ dialog.mobile-sheet.sheet {
   --game-focus: #8a6420;
   --game-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --game-radius-panel: 12px;
-  --game-radius-control: 9px;
+  --game-radius-control: 10px;
 
   /* 对局内既有变量：sage-light 面 + 琥珀棕主色 */
   --color-bg: var(--game-page);
@@ -103,7 +103,7 @@ dialog.mobile-sheet.sheet {
   --game-focus: #17688a;
   --game-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --game-radius-panel: 12px;
-  --game-radius-control: 9px;
+  --game-radius-control: 10px;
 
   /* 对局内既有变量：青蓝主色，muted 加深以提高可读性 */
   --color-bg: var(--game-page);
@@ -166,7 +166,7 @@ dialog.mobile-sheet.sheet {
   --game-focus: #f5c26a;
   --game-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --game-radius-panel: 12px;
-  --game-radius-control: 9px;
+  --game-radius-control: 10px;
 
   --color-bg: var(--game-page);
   --color-cell: #333d53;
@@ -227,7 +227,7 @@ dialog.mobile-sheet.sheet {
   --game-focus: #276f34;
   --game-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --game-radius-panel: 12px;
-  --game-radius-control: 9px;
+  --game-radius-control: 10px;
 
   --color-bg: var(--game-page);
   --color-cell: #f9fdf5;
@@ -287,7 +287,7 @@ dialog.mobile-sheet.sheet {
   --game-focus: #96591a;
   --game-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --game-radius-panel: 12px;
-  --game-radius-control: 9px;
+  --game-radius-control: 10px;
 
   --color-bg: var(--game-page);
   --color-cell: #fdfbf4;

@@ -312,7 +312,7 @@ describe('northeast-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(northeastTourMap, [CORE_MODULE, PRISON_MODULE])).not.toThrow();
     expect(computeContentHash(northeastTourMap)).toBe(northeastTourMap.ref.contentHash);
     expect(northeastTourMap.ref.contentHash)
-      .toBe('cd5cb6b546b0399168a11eb0df869152f1f7d6d1e4f28d4f56dcdaeffd0250ff');
+      .toBe('79597c52bd659496dfd86d561345a1c28fc0acc604855fc8d9ff36705da195b8');
     expect(Object.isFrozen(northeastTourMap)).toBe(true);
     expect(Object.isFrozen(northeastTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(northeastTourMap.game.cards.chance[10]!.effect)).toBe(true);

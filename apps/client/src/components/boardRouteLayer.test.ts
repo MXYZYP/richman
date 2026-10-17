@@ -76,9 +76,16 @@ describe('每张正式地图的棋盘呈现', () => {
       if (route.type !== 'polyline') return false;
       return route.points.some((point) => centres.has(`${point.x.toFixed(2)},${point.y.toFixed(2)}`));
     });
+    // 穿格心的折线只有两种合法层级：
+    //   > cellZ —— 线压在格子之上，看得见、但会从格名上横过去；
+    //   < cellZ —— 线沉到格子之下，格名干净，线只在格与格的缝里露出。
+    // 唯一不能接受的是「和格子同层」（z === cellZ）：那条线会随 DOM 顺序时隐时现。
+    // 11-17 之前这里是硬性的 >，于是十三张图一律穿字；运城 / 山西 / 东北 这三张
+    // 13×10 的宫格图因此改成 <（见下面那条专门的用例）。
     for (const route of threaded) {
-      expect(route.zIndex ?? 0, `${mapId}: 穿格心的折线必须在格子(z=${cellZ})之上`)
-        .toBeGreaterThan(cellZ);
+      const routeZ = route.zIndex ?? 0;
+      expect(Math.abs(routeZ - cellZ), `${mapId}: 折线不能与格子同层(z=${cellZ})`)
+        .toBeGreaterThanOrEqual(1);
     }
 
     const centre = presentation.center ?? [];
@@ -94,4 +101,22 @@ describe('每张正式地图的棋盘呈现', () => {
     // Title paints above the panel it sits on.
     expect(title!.zIndex ?? 0).toBeGreaterThan(panel!.zIndex ?? 0);
   });
+
+  // 11-17 修正：运城 / 山西 / 东北 是 13×10 的宫格图 —— 格子又宽又高、格名几乎填满整格，
+  // 而折线是按「格心连线」画的，正好从字上横过去（用户：「路径线把文字都挡住了」）。
+  // 这三张图把路线沉到格子之下（z=2 < cellZ），线只在格缝里露出：棋路仍然连得起来，
+  // 格名不再被切。别再把这三张图的 zIndex 改回 4。
+  it.each(['yuncheng-tour', 'shanxi-tour', 'northeast-tour'])(
+    '%s 的棋路沉在格子之下（宫格图的格名不能被穿格心的线压住）',
+    (mapId) => {
+      const pack = getActiveMapPack(mapId);
+      const cellZ = zIndexOf('.map-cell');
+      const routes = pack.presentation.routes ?? [];
+      expect(routes.length, `${mapId}: 应当有棋路`).toBeGreaterThan(0);
+      for (const route of routes) {
+        expect(route.zIndex ?? 0, `${mapId}: 宫格图的棋路必须在格子(z=${cellZ})之下`)
+          .toBeLessThan(cellZ);
+      }
+    },
+  );
 });

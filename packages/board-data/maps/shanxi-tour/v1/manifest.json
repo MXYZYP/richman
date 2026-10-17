@@ -2,7 +2,7 @@
   "ref": {
     "id": "shanxi-tour",
     "version": 1,
-    "contentHash": "2213cc4fca910544592c9a6b3099b9118b79fbb728746696ead7ca1d736d3ed0"
+    "contentHash": "45e1ca69c36bf319c9c56f6cb0c1527606105a4b64f4811dad64cb1bd25a6659"
   },
   "metadata": {
     "title": "山西之旅",
@@ -463,7 +463,7 @@
         ],
         "lineCap": "round",
         "opacity": 0.9,
-        "zIndex": 4,
+        "zIndex": 2,
         "points": [
           {
             "x": 11.25,

@@ -2,7 +2,7 @@
   "ref": {
     "id": "yuncheng-tour",
     "version": 1,
-    "contentHash": "17345a339e0fe2420d6982b96c1369ae6a8360af27917f79fb5b089def985e4b"
+    "contentHash": "8d8ef3ef4821f64ea5bc15ff0da6d4fb93f94a4176f42c7953bf9d8ba8d0356f"
   },
   "metadata": {
     "title": "运城之旅",
@@ -474,7 +474,7 @@
         ],
         "lineCap": "round",
         "opacity": 0.9,
-        "zIndex": 4,
+        "zIndex": 2,
         "points": [
           {
             "x": 11.25,

@@ -2,7 +2,7 @@
   "ref": {
     "id": "northeast-tour",
     "version": 1,
-    "contentHash": "cd5cb6b546b0399168a11eb0df869152f1f7d6d1e4f28d4f56dcdaeffd0250ff"
+    "contentHash": "79597c52bd659496dfd86d561345a1c28fc0acc604855fc8d9ff36705da195b8"
   },
   "metadata": {
     "title": "东北之旅",
@@ -457,7 +457,7 @@
         ],
         "lineCap": "round",
         "opacity": 0.9,
-        "zIndex": 4,
+        "zIndex": 2,
         "points": [
           {
             "x": 11.25,

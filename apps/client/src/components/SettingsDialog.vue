@@ -238,44 +238,74 @@ const rulesSummary = computed(() => (
 
     <section class="settings-group" aria-labelledby="settings-sound">
       <h3 id="settings-sound" class="settings-group-title">声音</h3>
-      <label class="setting-row" for="sfx-toggle">
-        <span>音效</span>
-        <input id="sfx-toggle" type="checkbox" :checked="sfxEnabled" @change="toggleSfx" />
-      </label>
-      <label class="setting-row setting-row--volume" for="sfx-volume">
-        <span>音效音量</span>
-        <input
-          id="sfx-volume"
-          class="volume-slider"
-          type="range"
-          min="0"
-          max="100"
-          step="5"
-          :value="percentLabel(sfxVolume)"
-          :aria-valuetext="`${percentLabel(sfxVolume)}%`"
-          @input="changeSfxVolume"
-        />
-        <output class="volume-value" for="sfx-volume">{{ percentLabel(sfxVolume) }}%</output>
-      </label>
-      <label class="setting-row" for="bgm-toggle">
-        <span>背景音乐</span>
-        <input id="bgm-toggle" type="checkbox" :checked="bgmEnabled" @change="toggleBgm" />
-      </label>
-      <label class="setting-row setting-row--volume" for="bgm-volume">
-        <span>音乐音量</span>
-        <input
-          id="bgm-volume"
-          class="volume-slider"
-          type="range"
-          min="0"
-          max="100"
-          step="5"
-          :value="percentLabel(bgmVolume)"
-          :aria-valuetext="`${percentLabel(bgmVolume)}%`"
-          @input="changeBgmVolume"
-        />
-        <output class="volume-value" for="bgm-volume">{{ percentLabel(bgmVolume) }}%</output>
-      </label>
+
+      <!-- 音量块（11-17 照参考图）：名字在左、百分比在右（用该项主色）、下面一条粗滑块，
+           滑块左段按当前值填色、滑块头是带色环的大圆钮；开关收进同一行右侧。
+           两者都保留：拉到 0 等同静音，但开关是独立记忆的一份偏好。 -->
+      <div class="sound-block sound-block--bgm">
+        <div class="sound-head">
+          <span class="sound-name">背景音乐</span>
+          <output class="sound-value" for="bgm-volume">{{ percentLabel(bgmVolume) }}%</output>
+          <label class="sound-switch">
+            <input
+              id="bgm-toggle"
+              type="checkbox"
+              :checked="bgmEnabled"
+              aria-label="背景音乐开关"
+              @change="toggleBgm"
+            />
+            <span class="sound-switch__track" aria-hidden="true"></span>
+          </label>
+        </div>
+        <label class="sound-track" for="bgm-volume">
+          <input
+            id="bgm-volume"
+            class="volume-slider"
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            :value="percentLabel(bgmVolume)"
+            :style="{ '--fill': `${percentLabel(bgmVolume)}%` }"
+            aria-label="音乐音量"
+            :aria-valuetext="`${percentLabel(bgmVolume)}%`"
+            @input="changeBgmVolume"
+          />
+        </label>
+      </div>
+
+      <div class="sound-block sound-block--sfx">
+        <div class="sound-head">
+          <span class="sound-name">音效</span>
+          <output class="sound-value" for="sfx-volume">{{ percentLabel(sfxVolume) }}%</output>
+          <label class="sound-switch">
+            <input
+              id="sfx-toggle"
+              type="checkbox"
+              :checked="sfxEnabled"
+              aria-label="音效开关"
+              @change="toggleSfx"
+            />
+            <span class="sound-switch__track" aria-hidden="true"></span>
+          </label>
+        </div>
+        <label class="sound-track" for="sfx-volume">
+          <input
+            id="sfx-volume"
+            class="volume-slider"
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            :value="percentLabel(sfxVolume)"
+            :style="{ '--fill': `${percentLabel(sfxVolume)}%` }"
+            aria-label="音效音量"
+            :aria-valuetext="`${percentLabel(sfxVolume)}%`"
+            @input="changeSfxVolume"
+          />
+        </label>
+      </div>
+
       <p class="settings-hint">
         开关与音量都只影响本机：不同步给他人、不改变任何对局状态。把某一项音量拉到 0
         等同于静音——不再排期发声；开关重新打开后，音量按上面保存的数值生效。
@@ -374,6 +404,10 @@ const rulesSummary = computed(() => (
         @click="emit('surrender')"
       >投降</button>
     </template>
+
+    <!-- 收尾主按钮（照参考图）：一颗满宽厚按钮，按下去就关面板；
+         头部右上角的「关闭」仍在，两个入口都通。 -->
+    <button type="button" class="settings-done" @click="emit('update:open', false)">完成</button>
   </MobileSheet>
 </template>
 
@@ -410,15 +444,17 @@ const rulesSummary = computed(() => (
   gap: 6px;
 }
 
+/* 分段控件（皮肤 / 动画）照参考图做「厚片」：14px 圆角，选中态是实心色 + 一条深色底边，
+   一眼能看出按下去的那一档。 */
 .settings-option {
   min-height: 44px;
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--board-surface);
   color: var(--color-text);
   font: inherit;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
 }
 
@@ -426,6 +462,7 @@ const rulesSummary = computed(() => (
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: #fff;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--color-primary) 62%, #000);
 }
 
 .settings-option:focus-visible {
@@ -437,9 +474,9 @@ const rulesSummary = computed(() => (
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 5px 6px;
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--board-surface);
   font-size: 12px;
   font-weight: 700;
@@ -455,7 +492,7 @@ const rulesSummary = computed(() => (
   flex: 1;
   min-height: 44px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 11px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -465,6 +502,7 @@ const rulesSummary = computed(() => (
 .pace-option.pace-active {
   background: var(--color-primary);
   color: #fff;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--color-primary) 62%, #000);
 }
 
 .pace-option:focus-visible {
@@ -486,7 +524,7 @@ const rulesSummary = computed(() => (
   gap: 10px;
   padding: 10px 12px;
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--board-surface);
   font-size: 14px;
   font-weight: 700;
@@ -500,38 +538,162 @@ const rulesSummary = computed(() => (
   cursor: pointer;
 }
 
-/* 音量行：标签固定宽度、滑块占满剩余、百分比定宽，三列对齐后两行滑块起止点一致。 */
-.setting-row--volume {
+/* ---- 声音块（11-17 照参考图重做）-----------------------------------------
+   参考图里的音轨是「名字 / 百分比 / 一条粗滑块」，不是「夹在设置行里的一条细线」。
+   一块一个 --sound-color：背景音乐走竹青、音效走朱砂，百分比与滑块填色都跟着它。 */
+.sound-block {
+  --sound-color: var(--color-primary);
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--board-surface);
+}
+
+.sound-block--bgm {
+  --sound-color: var(--color-gain);
+}
+
+.sound-head {
+  display: flex;
   align-items: center;
+  gap: 10px;
+}
+
+.sound-name {
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.sound-value {
+  margin-left: auto;
+  color: var(--sound-color);
+  font-size: 14px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 开关：26px 高的小胶囊，打开时填该项主色。input 本体留 1px 透明可聚焦。 */
+.sound-switch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.sound-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.sound-switch__track {
+  display: block;
+  width: 44px;
+  height: 26px;
+  border-radius: var(--radius-chip);
+  background: var(--button-disabled-bg);
+  transition: background 140ms ease;
+}
+
+.sound-switch__track::after {
+  content: '';
+  display: block;
+  width: 20px;
+  height: 20px;
+  margin: 3px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 24%);
+  transition: transform 140ms ease;
+}
+
+.sound-switch input:checked + .sound-switch__track {
+  background: var(--sound-color);
+}
+
+.sound-switch input:checked + .sound-switch__track::after {
+  transform: translateX(18px);
+}
+
+.sound-switch input:focus-visible + .sound-switch__track {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* 滑块：12px 粗轨 + 24px 白心彩环圆钮。--fill 由模板按当前百分比写进内联样式，
+   左段填该项主色、右段是淡灰轨——不用管深浅色模式，两段颜色都从变量推出来。 */
+.sound-track {
+  display: block;
 }
 
 .volume-slider {
-  flex: 1;
-  min-width: 0;
-  min-height: 24px;
-  accent-color: var(--color-primary);
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 26px;
+  margin: 0;
+  background: transparent;
   cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+  height: 12px;
+  border-radius: var(--radius-chip);
+  background: linear-gradient(
+    to right,
+    var(--sound-color) 0 var(--fill, 0%),
+    color-mix(in srgb, var(--color-muted) 22%, transparent) var(--fill, 0%) 100%
+  );
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -6px;
+  border: 4px solid var(--sound-color);
+  border-radius: 50%;
+  background: var(--board-surface);
+  box-shadow: 0 2px 5px rgb(53 39 20 / 22%);
+}
+
+.volume-slider::-moz-range-track {
+  height: 12px;
+  border-radius: var(--radius-chip);
+  background: color-mix(in srgb, var(--color-muted) 22%, transparent);
+}
+
+.volume-slider::-moz-range-progress {
+  height: 12px;
+  border-radius: var(--radius-chip);
+  background: var(--sound-color);
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 4px solid var(--sound-color);
+  border-radius: 50%;
+  background: var(--board-surface);
+  box-shadow: 0 2px 5px rgb(53 39 20 / 22%);
 }
 
 .volume-slider:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
-  border-radius: 6px;
-}
-
-.volume-value {
-  min-width: 44px;
-  text-align: right;
-  color: var(--color-muted);
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
-  font-weight: 800;
+  border-radius: var(--radius-chip);
 }
 
 .setting-action {
   padding: 6px 12px;
   border: 1px solid var(--color-primary);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--color-primary);
   color: #fff;
   font-size: 13px;
@@ -634,7 +796,7 @@ const rulesSummary = computed(() => (
 .settings-session-button {
   min-height: 44px;
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--board-surface);
   color: var(--color-text);
   font: inherit;
@@ -645,6 +807,31 @@ const rulesSummary = computed(() => (
 .settings-session-button--danger {
   border-color: color-mix(in srgb, var(--surrender, #b3402f) 40%, var(--color-border));
   color: var(--surrender, #b3402f);
+}
+
+/* 收尾主按钮：满宽、14px 圆角、一条 4px 深色底边，按下时整体下沉 2px（参考图的「完成」）。 */
+.settings-done {
+  min-height: 50px;
+  margin-top: 2px;
+  border: 1px solid var(--color-primary);
+  border-radius: 14px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--color-primary) 62%, #000);
+  cursor: pointer;
+}
+
+.settings-done:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--color-primary) 62%, #000);
+}
+
+.settings-done:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 /* ---- 紧凑区间（本组件此前没有任何断点）----

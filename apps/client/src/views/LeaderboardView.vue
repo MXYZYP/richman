@@ -253,27 +253,55 @@ onMounted(() => {
   list-style: none;
 }
 
+/* 榜单行照参考图做成「一张一张的小卡片」：12px 圆角 + 细描边 + 实心底，
+   前三名的名次换成奖牌色块，自己那一行整块高亮（描边 + 底色 + 一条底边）。 */
 .leaderboard-row {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  grid-template-columns: 30px minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
-  padding: 6px 8px;
-  border-radius: 8px;
-  background: rgb(0 0 0 / 3%);
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--surface-soft);
   font-size: 12px;
 }
 
 .leaderboard-row-self {
-  background: var(--event-bg);
-  color: var(--event-text);
+  border-color: color-mix(in srgb, var(--color-accent) 62%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 16%, var(--surface-card));
+  color: var(--color-text);
   font-weight: 800;
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--color-accent) 42%, transparent);
 }
 
 .leaderboard-rank {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-muted) 14%, transparent);
   font-variant-numeric: tabular-nums;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 900;
   color: var(--color-muted);
+}
+
+/* 金 / 银 / 铜：只给前三名上色，其余保持中性灰块。 */
+.leaderboard-row:nth-child(1) .leaderboard-rank {
+  background: var(--color-accent);
+  color: #3a2a10;
+}
+
+.leaderboard-row:nth-child(2) .leaderboard-rank {
+  background: color-mix(in srgb, var(--color-muted) 30%, #ffffff);
+  color: #3a3a34;
+}
+
+.leaderboard-row:nth-child(3) .leaderboard-rank {
+  background: color-mix(in srgb, var(--color-primary) 26%, #ffffff);
+  color: #4a2a18;
 }
 
 .leaderboard-row-self .leaderboard-rank {
@@ -285,7 +313,8 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 900;
   color: var(--color-text);
 }
 
@@ -303,6 +332,5 @@ onMounted(() => {
   color: inherit;
 }
 
-.leaderboard-row { border-left: 3px solid var(--color-border); }
-.leaderboard-row-self { border-left-color: var(--color-accent); }
+/* 自己那一行的强调已经由整卡描边承担，不再需要左侧那条 3px 竖条。 */
 </style>

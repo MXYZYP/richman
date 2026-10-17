@@ -1234,6 +1234,7 @@ function inspectFinalBoard() {
         <Teleport to="body" :disabled="!isMobileLayout">
           <MobileSheet
             class="sheet sheet-assets"
+            :layout="isMobileLayout ? 'modal' : 'inline'"
             :open="isMobileLayout && mobileSheet === 'assets'"
             :title="isSpectator ? '资产详情' : '我的资产'"
             :aside="`${assetRows.length} 处`"
@@ -1254,6 +1255,7 @@ function inspectFinalBoard() {
         <Teleport to="body" :disabled="!isMobileLayout">
           <MobileSheet
             class="sheet sheet-log"
+            :layout="isMobileLayout ? 'modal' : 'inline'"
             :open="isMobileLayout && mobileSheet === 'log'"
             title="战报记录"
             @close="closeMobileSheet"
@@ -1305,6 +1307,7 @@ function inspectFinalBoard() {
           <MobileSheet
             v-if="isChatAvailable"
             class="sheet sheet-chat"
+            :layout="isMobileLayout ? 'modal' : 'inline'"
             :open="isMobileLayout && mobileSheet === 'chat'"
             title="房间聊天"
             @close="closeMobileSheet"
@@ -1633,6 +1636,9 @@ function inspectFinalBoard() {
   overflow-anchor: none;
 }
 
+/* 局内所有「卡片」统一 12px 圆角（--game-radius-panel 同值）：
+   这张卡原先是「只有一条下边框的整条色块、圆角 0」，挨着圆角的战报卡与人物卡时
+   一眼就能看出两个系统。现在改成真正的卡片：四边描边 + 12px 圆角。 */
 .location-card {
   display: grid;
   align-content: center;
@@ -1640,10 +1646,9 @@ function inspectFinalBoard() {
   min-width: 0;
   min-height: 72px;
   width: 100%;
-  padding: 10px 13px 7px;
-  border: 0;
-  border-bottom: 1px solid var(--color-border);
-  border-radius: 0;
+  padding: 10px 13px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--game-radius-panel, 12px);
   background: var(--game-panel);
   color: var(--color-text);
   text-align: left;
@@ -2000,7 +2005,7 @@ function inspectFinalBoard() {
   width: 100%;
   min-height: 44px;
   border: 1px solid var(--color-border);
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-primary);
   font-size: 12px;
@@ -2231,7 +2236,7 @@ function inspectFinalBoard() {
     min-height: 44px;
     padding: 0 12px;
     border: none;
-    border-radius: 9px;
+    border-radius: var(--radius-control);
     background: var(--color-pay);
     color: #fff;
     font-size: 12px;
@@ -2249,7 +2254,11 @@ function inspectFinalBoard() {
     gap: 8px;
     min-height: 50px;
     padding: 2px 12px 3px;
-    border-top: 1px solid var(--color-border);
+    /* 顶角跟全局弹窗同档：整条直角白条贴在屏幕下沿时，是局内最显眼的一处「直角」。
+       底边贴屏幕保持直角，正好与底部抽屉同一种处理。 */
+    border: 1px solid var(--color-border);
+    border-bottom: 0;
+    border-radius: var(--radius-dialog) var(--radius-dialog) 0 0;
     /* 同 .players：写死的 #e4e8d9 换成本皮肤的面板底色。 */
     background: var(--game-panel);
   }
@@ -2262,7 +2271,7 @@ function inspectFinalBoard() {
     gap: 7px;
     min-height: 44px;
     border: 1px solid transparent;
-    border-radius: 9px;
+    border-radius: var(--radius-control);
     background: transparent;
     color: var(--color-muted);
     font-size: 12px;

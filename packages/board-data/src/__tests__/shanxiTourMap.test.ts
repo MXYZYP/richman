@@ -311,7 +311,7 @@ describe('shanxi-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(shanxiTourMap, [coreModule, piaohaoModule])).not.toThrow();
     expect(computeContentHash(shanxiTourMap)).toBe(shanxiTourMap.ref.contentHash);
     expect(shanxiTourMap.ref.contentHash)
-      .toBe('2213cc4fca910544592c9a6b3099b9118b79fbb728746696ead7ca1d736d3ed0');
+      .toBe('45e1ca69c36bf319c9c56f6cb0c1527606105a4b64f4811dad64cb1bd25a6659');
     expect(Object.isFrozen(shanxiTourMap)).toBe(true);
     expect(Object.isFrozen(shanxiTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(shanxiTourMap.game.cards.destiny[2]!.effect)).toBe(true);
