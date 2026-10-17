@@ -1314,6 +1314,7 @@ function inspectFinalBoard() {
           >
             <ChatPanel
               class="chat-sheet-panel"
+              :show-title="false"
               :messages="chatMessages"
               :local-player-id="chatLocalId"
               @send="handleSendChat"
@@ -2100,7 +2101,11 @@ function inspectFinalBoard() {
     color 140ms ease;
 }
 
-.dock-entry:hover,
+.dock-entry:hover {
+  /* 已是卡片：hover 不该把卡片刷成半透明白，只在自身底色上提亮一档。 */
+  background: color-mix(in srgb, var(--game-panel) 84%, #fff);
+}
+
 .log-toggle:hover {
   background: rgb(255 255 255 / 62%);
 }
@@ -2252,15 +2257,13 @@ function inspectFinalBoard() {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 8px;
-    min-height: 50px;
-    padding: 2px 12px 3px;
-    /* 顶角跟全局弹窗同档：整条直角白条贴在屏幕下沿时，是局内最显眼的一处「直角」。
-       底边贴屏幕保持直角，正好与底部抽屉同一种处理。 */
-    border: 1px solid var(--color-border);
-    border-bottom: 0;
-    border-radius: var(--radius-dialog) var(--radius-dialog) 0 0;
-    /* 同 .players：写死的 #e4e8d9 换成本皮肤的面板底色。 */
-    background: var(--game-panel);
+    /* 11-17 第六版（用户原话「右下角四个按键分开吧，每个是单独的按钮」）：
+       原来四个入口被一整条白底长条框在一起，看着像一条工具栏、一处点击区。
+       现在长条只负责定位，底色/描边/圆角全部撤掉，每颗按钮自己是一张卡片。 */
+    min-height: 0;
+    padding: 6px 0;
+    border: 0;
+    background: transparent;
   }
 
   .dock-entry {
@@ -2269,10 +2272,13 @@ function inspectFinalBoard() {
     align-items: center;
     justify-content: center;
     gap: 7px;
-    min-height: 44px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-control);
-    background: transparent;
+    min-height: 46px;
+    /* 单独一颗按钮 = 一张 12px 圆角卡（--game-radius-panel 同档），底色取本皮肤面板色，
+       底下压一条 2px 深色边，和首页的按钮是同一套「贴纸」质感。 */
+    border: 1px solid var(--color-border);
+    border-radius: var(--game-radius-panel, 12px);
+    background: var(--game-panel);
+    box-shadow: 0 2px 0 color-mix(in srgb, var(--color-border) 80%, transparent);
     color: var(--color-muted);
     font-size: 12px;
     font-weight: 700;
@@ -2294,7 +2300,10 @@ function inspectFinalBoard() {
   }
 
   .dock-entry:active {
-    background: #fff;
+    /* 按下：卡片下沉 1px、把那条 2px 底边收掉，看起来是真的被按扁了。 */
+    background: var(--game-panel);
+    box-shadow: none;
+    transform: translateY(1px);
   }
 
   .dock-debt-dot {

@@ -8,6 +8,10 @@ import { BOT_DIFFICULTY_OPTIONS } from '../game/gameSetup';
 import type { LobbyCommand } from '../session/onlineSession';
 import ChatPanel from '../components/ChatPanel.vue';
 import SettingsDialog from '../components/SettingsDialog.vue';
+// 11-17 第六版：联机大厅原来是**第三个**自己画壳的整页（.lobby-shell / .lobby-card），
+// 于是这一页连「返回」都没有——「离开房间」被压在整页最下面，房间规则越长它越远。
+// 现在与在线 / 单机两页共用 ViewShell：返回条在左上、卡片尺寸只在 ViewShell 里写一次。
+import ViewShell from './ViewShell.vue';
 
 // Mirrors the server's room capacity (roomManager MAX_PLAYERS, humans + bots combined).
 // Adding a bot past this is rejected server-side; the client disables the control so the
@@ -458,21 +462,22 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="lobby-shell">
-    <section class="lobby-card" aria-labelledby="lobby-title">
-      <header class="lobby-head">
-        <p class="lobby-eyebrow">联机对战</p>
-        <h1 id="lobby-title">房间 {{ room.roomCode }}</h1>
-        <p v-if="showMapTitle" class="lobby-map-title">{{ room.map.title }}</p>
-        <p class="lobby-status" role="status">等待开始 · {{ connectionLabel }}</p>
-      </header>
+  <ViewShell
+    :title="`房间 ${room.roomCode}`"
+    :aside="showMapTitle ? room.map.title : ''"
+    :back-label="pendingCommand === 'leave' ? '正在离开…' : '离开房间'"
+    :back-disabled="!canMutate"
+    @back="emit('leave')"
+  >
+    <div class="entry-body">
+      <p class="lobby-status" role="status">等待开始 · {{ connectionLabel }}</p>
 
       <section class="lobby-invite" aria-label="邀请好友">
         <span class="lobby-invite-label">把这个链接发给好友，同一个房间开局：</span>
         <code class="lobby-invite-url">{{ inviteUrl }}</code>
-        <div class="lobby-invite-actions">
-          <button type="button" class="lobby-btn lobby-btn--accent" @click="handleCopy">复制邀请链接</button>
-          <button ref="qrButton" type="button" class="lobby-btn lobby-btn--ghost" @click="handleShowQR">显示二维码</button>
+        <div class="entry-row">
+          <button type="button" class="entry-primary" @click="handleCopy">复制邀请链接</button>
+          <button ref="qrButton" type="button" class="entry-secondary" @click="handleShowQR">显示二维码</button>
         </div>
         <p v-if="copyFeedback" class="lobby-invite-feedback" :class="{ failed: !copyFeedback.ok }" role="status">
           {{ copyFeedback.message }}
@@ -805,11 +810,11 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <section v-if="isHost" class="lobby-controls" aria-label="房主操作">
-        <button type="button" class="lobby-btn lobby-btn--ghost" :disabled="!canAddBot" @click="emit('addBot')">
+      <section v-if="isHost" class="entry-actions" aria-label="房主操作">
+        <button type="button" class="entry-secondary" :disabled="!canAddBot" @click="emit('addBot')">
           {{ isFull ? '房间已满' : '添加电脑玩家' }}
         </button>
-        <button type="button" class="lobby-btn lobby-btn--primary" :disabled="!canStart" @click="emit('start')">
+        <button type="button" class="entry-primary" :disabled="!canStart" @click="emit('start')">
           {{ pendingCommand === 'start' ? '开始中…' : '开始游戏' }}
         </button>
         <p v-if="startBlockedReason" class="lobby-hint" role="status">{{ startBlockedReason }}</p>
@@ -849,96 +854,37 @@ onBeforeUnmount(() => {
         />
         <button
           type="button"
-          class="lobby-btn lobby-btn--ghost lobby-settings__trigger"
+          class="entry-secondary lobby-settings__trigger"
           aria-haspopup="dialog"
           :aria-expanded="settingsOpen"
           @click="settingsOpen = true"
         >设置</button>
       </section>
 
-      <button
-        type="button"
-        class="lobby-btn lobby-btn--leave"
-        :disabled="!canMutate"
-        @click="emit('leave')"
-      >
-        {{ pendingCommand === 'leave' ? '正在离开…' : '离开房间' }}
-      </button>
-    </section>
-
-    <div v-if="qrOpen" class="lobby-qr-backdrop" role="presentation" @click.self="closeQR">
-      <section class="lobby-qr-dialog" role="dialog" aria-modal="true" aria-labelledby="lobby-qr-title">
-        <h2 id="lobby-qr-title">扫码加入房间 {{ room.roomCode }}</h2>
-        <img v-if="qrDataUrl" class="lobby-qr-image" :src="qrDataUrl" :alt="`房间 ${room.roomCode} 邀请二维码`" />
-        <p v-else-if="qrError" class="lobby-qr-error" role="alert">{{ qrError }}</p>
-        <p v-else class="lobby-qr-loading" role="status">正在生成二维码…</p>
-        <button ref="qrClose" type="button" class="lobby-btn lobby-btn--ghost" @click="closeQR">关闭</button>
-      </section>
+      <!-- 二维码弹层。放在 .entry-body 内部只是为了让它的按钮也能拿到 .entry-secondary
+           的尺寸 —— 它本身是 position: fixed，不参与文档流，位置不受父级影响。 -->
+      <div v-if="qrOpen" class="lobby-qr-backdrop" role="presentation" @click.self="closeQR">
+        <section class="lobby-qr-dialog" role="dialog" aria-modal="true" aria-labelledby="lobby-qr-title">
+          <h2 id="lobby-qr-title">扫码加入房间 {{ room.roomCode }}</h2>
+          <img v-if="qrDataUrl" class="lobby-qr-image" :src="qrDataUrl" :alt="`房间 ${room.roomCode} 邀请二维码`" />
+          <p v-else-if="qrError" class="lobby-qr-error" role="alert">{{ qrError }}</p>
+          <p v-else class="lobby-qr-loading" role="status">正在生成二维码…</p>
+          <button ref="qrClose" type="button" class="entry-secondary" @click="closeQR">关闭</button>
+        </section>
+      </div>
     </div>
-
-  </main>
+  </ViewShell>
 </template>
 
 <style scoped>
-.lobby-shell {
-  /* 与首页同处理：dvh 跟随地址栏伸缩，100vh 仅作老浏览器兜底（写在前面）。
-     四边让出安全区——index.html 开了 viewport-fit=cover。 */
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: grid;
-  place-items: start center;
-  padding:
-    max(18px, env(safe-area-inset-top))
-    max(18px, env(safe-area-inset-right))
-    max(18px, env(safe-area-inset-bottom))
-    max(18px, env(safe-area-inset-left));
-}
-
-.lobby-card {
-  width: min(560px, 100%);
-  display: grid;
-  gap: 18px;
-  padding: clamp(20px, 4vw, 34px);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  background:
-    var(--surface-card),
-    var(--board-surface);
-  box-shadow: 0 18px 48px rgb(53 39 20 / 14%);
-}
-
-.lobby-head {
-  display: grid;
-  gap: 4px;
-}
-
-.lobby-eyebrow {
-  margin: 0;
-  color: var(--color-muted);
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.2em;
-}
-
-.lobby-head h1 {
-  margin: 0;
-  color: var(--color-primary);
-  font-size: clamp(30px, 6vw, 46px);
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.06em;
-}
-
+/* 壳（.view-shell / .view-card / 返回条）全部由 ViewShell.vue 提供 —— 本页**不再写**
+   卡片宽高、内边距、圆角、底色、阴影，也不再画自己的返回按钮。
+   房间码从 46px 的大标题改成返回条上的标题（与「在线联网对战」「单机模式」同字号）。 */
 .lobby-status {
   margin: 0;
   color: var(--color-muted);
+  font-size: var(--text-meta-size);
   font-weight: 800;
-}
-
-.lobby-map-title {
-  margin: 2px 0 0;
-  color: var(--color-text);
-  font-weight: 900;
 }
 
 .lobby-invite {
@@ -964,12 +910,6 @@ onBeforeUnmount(() => {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 13px;
   word-break: break-all;
-}
-
-.lobby-invite-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 
 .lobby-invite-feedback {
@@ -1057,6 +997,9 @@ onBeforeUnmount(() => {
 .lobby-bot-name-input {
   flex: 1 1 auto;
   min-width: 0;
+  /* entryPage.css 会给 .entry-body 下所有输入框 width:100%。放在 flex 行里会把它撑满整行、
+     把「移出 / 移除」按钮挤出去，这里显式收回自适应宽度。 */
+  width: auto;
   min-height: 44px;
   margin-right: auto;
   padding: 8px 10px;
@@ -1135,11 +1078,6 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
-.lobby-controls {
-  display: grid;
-  gap: 10px;
-}
-
 .lobby-wait {
   display: flex;
   gap: 10px;
@@ -1174,48 +1112,8 @@ onBeforeUnmount(() => {
   font-weight: 800;
 }
 
-.lobby-btn {
-  min-height: 48px;
-  border: 0;
-  border-radius: 16px;
-  font-size: 1rem;
-  font-weight: 900;
-  cursor: pointer;
-  padding-inline: 18px;
-}
-
-.lobby-btn--primary {
-  background: var(--button-enabled-bg);
-  color: var(--button-enabled-text);
-}
-
-.lobby-btn--accent {
-  background: var(--color-accent);
-  color: var(--color-text);
-}
-
-.lobby-btn--ghost {
-  background: var(--surface-soft);
-  color: var(--color-primary);
-  border: 1px solid var(--color-border);
-}
-
-.lobby-btn--leave {
-  background: var(--button-disabled-bg);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-}
-
-.lobby-btn:disabled {
-  background: var(--button-disabled-bg);
-  color: var(--button-disabled-text);
-  cursor: not-allowed;
-}
-
-.lobby-btn:focus-visible {
-  outline: 3px solid var(--color-accent);
-  outline-offset: 2px;
-}
+/* 按钮不再自带一套 .lobby-btn —— 全部走 ui/entryPage.css 的 .entry-primary /
+   .entry-secondary，与「在线联网对战」「单机模式」是同一颗按钮（高 48 / 圆角 16）。 */
 
 .lobby-qr-backdrop {
   position: fixed;
@@ -1271,20 +1169,9 @@ onBeforeUnmount(() => {
   to { transform: rotate(360deg); }
 }
 
-/* 阈值与首页 / GameView 统一到 1024px（折叠屏内屏、小平板竖屏常落在 768–1024）。 */
-@media (max-width: 1024px) {
-  .lobby-shell {
-    padding:
-      max(10px, env(safe-area-inset-top))
-      max(10px, env(safe-area-inset-right))
-      max(10px, env(safe-area-inset-bottom))
-      max(10px, env(safe-area-inset-left));
-  }
-}
-
 /* ---- 聊天 + 设置（#50 / #52）----
-   两者都内联在大厅卡片文档流内，不再使用 position:fixed，
-   因此不会与卡片底部的「离开房间」等按钮发生遮挡。 */
+   两者都在大厅文档流内，不再使用 position:fixed，因此不会遮挡任何操作按钮。
+   （「离开房间」已移到 ViewShell 的返回条上，不再在页面底部单占一行。） */
 .lobby-chat,
 .lobby-settings {
   display: grid;

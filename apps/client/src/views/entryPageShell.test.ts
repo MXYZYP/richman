@@ -14,6 +14,11 @@
 //      页面自己的 <style scoped> 只留各自独有的内容排版。
 //   4. 两页的操作顺位一致：续玩 → 主行动 → 表单 →（在线多一段）列表。
 //
+// 11-17 第六版补一页：**联机大厅（房间等待页）**原本是第三个自己画壳的整页
+//   （.lobby-shell / .lobby-card / 一个 46px 的「房间 789230」大标题 / 「离开房间」压在页面最底部），
+//   于是「返回」这一件事在三个二级页里又出现了第三种位置。用户原话：
+//   「联机对战创建房间页面布局还是未统一？」。现在它也走 ViewShell，并纳入下面第 5 条。
+//
 // 本仓没有组件挂载测试环境，所以这些契约只能靠读源码钉住 —— 它们是**接线**，不是渲染验证。
 // 视觉仍然要靠人在真机上看（见 .workbuddy/memory 里的「要用户量 computed style」那条）。
 import { describe, expect, it } from 'vitest';
@@ -28,6 +33,7 @@ const read = (...parts: string[]) => readFileSync(resolve(srcRoot, ...parts), 'u
 const SHELL = read('views', 'ViewShell.vue');
 const ONLINE = read('views', 'OnlineEntryView.vue');
 const LOCAL = read('components', 'GameSetup.vue');
+const LOBBY = read('views', 'LobbyView.vue');
 const ENTRY_CSS = read('ui', 'entryPage.css');
 const MAIN = read('main.ts');
 
@@ -83,6 +89,36 @@ describe('整页壳：返回首页固定在左上角，卡片尺寸只有一处'
       expect(text).not.toMatch(/>\s*返回首页\s*</);
       expect(text).not.toContain('view-bar');
     }
+  });
+});
+
+describe('联机大厅：第三个二级整页，也必须是同一个壳', () => {
+  it('大厅 import 并使用了 ViewShell', () => {
+    expect(LOBBY).toContain("import ViewShell from './ViewShell.vue';");
+    expect(LOBBY).toContain('<ViewShell');
+    expect(LOBBY).toContain('</ViewShell>');
+    expect(LOBBY).toContain('class="entry-body"');
+  });
+
+  it('大厅不再自己画壳 / 卡片，也不再自带一套按钮', () => {
+    expect(LOBBY).not.toContain('min(560px');
+    expect(LOBBY).not.toContain('radius-card');
+    expect(LOBBY).not.toContain('100dvh');
+    // 卡片的宽高、内边距、圆角、底色、阴影只允许出现在 ViewShell 里。
+    expect(LOBBY).not.toMatch(/\.lobby-(shell|card)\s*\{/);
+    // 按钮统一走 entryPage.css：再出现 .lobby-btn 就是又有了第二套按钮。
+    // 断言前先剥注释 —— 说明文字里点了这个名字，不能算「又写了一套」。
+    expect(decls(LOBBY)).not.toContain('lobby-btn');
+    expect(LOBBY).toContain('entry-primary');
+    expect(LOBBY).toContain('entry-secondary');
+  });
+
+  it('「离开房间」在返回条上，不再压在页面最底部', () => {
+    const body = LOBBY.slice(LOBBY.indexOf('<template>'), LOBBY.lastIndexOf('</template>'));
+    expect(body).toContain('离开房间');
+    expect(body.indexOf('离开房间')).toBeLessThan(body.indexOf('class="entry-body"'));
+    // 页面里不许再出现一颗写着自己文案的「离开房间」按钮。
+    expect(body).not.toMatch(/>\s*\{\{ pendingCommand === 'leave'[\s\S]{0,40}\}\}\s*</);
   });
 });
 

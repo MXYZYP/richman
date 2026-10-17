@@ -82,3 +82,28 @@ describe('局内浮层：一套壳、一个圆角、一套叫法', () => {
     }
   });
 });
+
+// 用户原话（11-17）：「右下角四个按键分开吧，每个是单独的按钮。」
+// 改造前：四颗入口被一整条白底 + 上圆角的长条框在一起（.mobile-dock-bar 自带 border/background），
+// 四颗按钮本身 border/background 全 transparent —— 看着是一条工具栏，不像四个按钮。
+describe('底部操作坞：四颗入口各自是一张卡', () => {
+  const GAME = read('views/GameView.vue');
+
+  it('长条只负责定位，不许再有底色 / 描边 / 圆角', () => {
+    // 取带 grid-template-columns 的那条规则（文件里 .mobile-dock-bar 还出现在 display:none 与 margin-top 两处）。
+    const bar = /\.mobile-dock-bar\s*\{([^}]*grid-template-columns[^}]*)\}/.exec(GAME);
+    if (bar === null) throw new Error('GameView 应当有一条把操作坞排成 4 列的规则');
+    expect(bar[1]).toContain('background: transparent');
+    expect(bar[1]).toContain('border: 0');
+    expect(bar[1]).not.toContain('border-radius');
+  });
+
+  it('每颗按钮自带描边 / 底色 / 圆角 / 底边', () => {
+    const entry = /\.dock-entry\s*\{([^}]*)\}/.exec(GAME);
+    if (entry === null) throw new Error('GameView 应当有 .dock-entry 规则');
+    expect(entry[1]).toContain('border: 1px solid var(--color-border)');
+    expect(entry[1]).toContain('background: var(--game-panel)');
+    expect(entry[1]).toContain('border-radius: var(--game-radius-panel');
+    expect(entry[1]).toContain('box-shadow: 0 2px 0');
+  });
+});

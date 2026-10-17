@@ -3,11 +3,20 @@ import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { ChatMessage } from '@richman/protocol';
 import { QUICK_PHRASES, createQuickPhraseGate, isSendableQuickPhrase } from '../session/quickPhrases';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   messages: ChatMessage[];
   localPlayerId: string | null;
   disabled?: boolean;
-}>();
+  /**
+   * 是否画自己的标题条。默认画 —— 大厅卡片里、桌面侧栏内联时它需要一个标题。
+   * 装进 MobileSheet 时必须关掉：弹层本身已有「房间聊天」大标题，
+   * 否则同一个词上下叠两遍（用户截图里就是这样）。
+   */
+  showTitle?: boolean;
+}>(), {
+  disabled: false,
+  showTitle: true,
+});
 
 const emit = defineEmits<{ send: [text: string] }>();
 
@@ -62,8 +71,8 @@ onBeforeUnmount(() => phraseGate.dispose());
 </script>
 
 <template>
-  <aside class="chat-panel" aria-label="房间聊天">
-    <header class="chat-panel__head">房间聊天</header>
+  <aside class="chat-panel" :class="{ 'chat-panel--bare': !showTitle }" aria-label="房间聊天">
+    <header v-if="showTitle" class="chat-panel__head">房间聊天</header>
     <div ref="listEl" class="chat-panel__list">
       <p v-if="messages.length === 0" class="chat-panel__empty">还没有消息，开始聊天吧</p>
       <div
@@ -126,6 +135,15 @@ onBeforeUnmount(() => phraseGate.dispose());
   overflow: hidden;
   font-size: 13px;
   color: var(--color-text);
+}
+
+/* 装进弹层时的形态：标题与外框都由 MobileSheet 提供，这里再画一层就是「框中框」。
+   只保留内容排布，外框 / 底色 / 阴影全部交给外层。 */
+.chat-panel--bare {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .chat-panel__head {

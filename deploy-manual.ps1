@@ -451,6 +451,10 @@ $files = @(
   # stale server copy means neither contract is pinned any more.
   "apps/client/src/views/entryPageShell.test.ts",
   "apps/client/src/ui/sheetTypography.test.ts",
+  # Added in the 11-17 pass: the four in-game overlays must share one shell / one radius /
+  # one vocabulary, and the mobile dock must render four separate button cards (not one
+  # toolbar strip). A stale server copy means neither contract is pinned any more.
+  "apps/client/src/ui/gameDialogStyle.test.ts",
   "apps/client/src/components/SettingsDialog.test.ts",
   "apps/client/src/ui/mapRules.test.ts",
   # Guards the global/scoped CSS boundary: importing a global stylesheet from a

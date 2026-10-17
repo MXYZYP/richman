@@ -21,9 +21,12 @@ withDefaults(defineProps<{
   aside?: string;
   /** 返回按钮上的字。默认「返回首页」。 */
   backLabel?: string;
+  /** 返回按钮是否禁用（命令在途时防止重复提交）。默认可用。 */
+  backDisabled?: boolean;
 }>(), {
   aside: '',
   backLabel: '返回首页',
+  backDisabled: false,
 });
 
 const emit = defineEmits<{ back: [] }>();
@@ -33,7 +36,12 @@ const emit = defineEmits<{ back: [] }>();
   <main class="view-shell">
     <section class="view-card" :aria-label="title">
       <header class="view-bar">
-        <button type="button" class="view-bar__back" @click="emit('back')">{{ backLabel }}</button>
+        <button
+          type="button"
+          class="view-bar__back"
+          :disabled="backDisabled"
+          @click="emit('back')"
+        >{{ backLabel }}</button>
         <h1 class="view-bar__title">{{ title }}</h1>
         <span v-if="aside !== ''" class="view-bar__aside">{{ aside }}</span>
       </header>
@@ -100,6 +108,12 @@ const emit = defineEmits<{ back: [] }>();
 
 .view-bar__back:hover {
   border-color: var(--color-accent);
+}
+
+.view-bar__back:disabled {
+  color: var(--color-muted);
+  border-color: var(--color-border);
+  cursor: not-allowed;
 }
 
 .view-bar__title {

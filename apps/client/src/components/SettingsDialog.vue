@@ -217,17 +217,23 @@ const rulesSummary = computed(() => (
           </template>
         </p>
       </div>
-      <div class="pace-control" role="group" aria-label="动画速度">
-        <span class="pace-label">动画</span>
-        <button
-          v-for="option in paceOptions"
-          :key="option.value"
-          type="button"
-          class="pace-option"
-          :class="{ 'pace-active': option.value === playbackSpeed }"
-          :aria-pressed="option.value === playbackSpeed"
-          @click="setPlaybackSpeed(option.value)"
-        >{{ option.label }}</button>
+      <!-- 动画速度：与上面「对局皮肤」用**同一个**分段控件（.settings-field + .settings-options
+           + .settings-option）。原来这里另写了一套 .pace-*：外层一条边框轨道、里面三段无边框，
+           于是没选中的「慢速 / 快速」看着就是两截浮在轨道里的文字，字号还是 12px（皮肤是 13px）
+           —— 同一屏里两套控件，用户直接问「这个组件是不是也有问题」。现在只剩一份写法。 -->
+      <div class="settings-field">
+        <span class="settings-field-label">动画速度</span>
+        <div class="settings-options" role="radiogroup" aria-label="动画速度">
+          <button
+            v-for="option in paceOptions"
+            :key="option.value"
+            type="button"
+            class="settings-option"
+            :class="{ active: option.value === playbackSpeed }"
+            :aria-pressed="option.value === playbackSpeed"
+            @click="setPlaybackSpeed(option.value)"
+          >{{ option.label }}</button>
+        </div>
       </div>
       <p class="settings-hint">
         深色模式、皮肤与动画速度都是本机显示偏好：每位参赛者与观战者各自设置、只影响自己
@@ -466,46 +472,6 @@ const rulesSummary = computed(() => (
 }
 
 .settings-option:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
-}
-
-.pace-control {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 6px;
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  background: var(--board-surface);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.pace-label {
-  color: var(--color-muted);
-  margin-right: 2px;
-}
-
-.pace-option {
-  flex: 1;
-  min-height: 44px;
-  border: 1px solid transparent;
-  border-radius: 11px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.pace-option.pace-active {
-  background: var(--color-primary);
-  color: #fff;
-  box-shadow: 0 3px 0 color-mix(in srgb, var(--color-primary) 62%, #000);
-}
-
-.pace-option:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }
