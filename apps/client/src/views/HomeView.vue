@@ -217,10 +217,18 @@ const emit = defineEmits<{
 }
 
 .home-beian {
+  /* ★ 必须显式抬到背景层之上：.home-scene 是 position:absolute + z-index:0 的装饰层，
+     而页脚是**静态流内元素** —— 按 CSS 绘制顺序，z-index:0 的定位元素会盖在静态内容之上，
+     整行字就被背景插画压住了，看起来「和背景同一个颜色」。（卡片有 z-index:1 才没中招。）
+     只改颜色救不回来，必须先定层。 */
+  position: relative;
+  z-index: 1;
   margin: 14px 0 0;
-  /* 原来是 12px + --color-muted(#6B6658)，用户反馈「颜色太浅」⇒ 换正文色 并加大一号。 */
+  /* 12px + --color-muted 太浅 → 换正文色 → 仍觉「和背景混在一起」（其实是上面那层遮挡）。
+     现在用品牌朱砂 + 加粗：与版本入口按钮同色，整条页脚读作一条，也能在纸面插画上立住。 */
   font-size: 13px;
-  color: var(--color-text);
+  color: var(--color-primary);
+  font-weight: 700;
   text-align: center;
   letter-spacing: 0.02em;
 }
