@@ -110,6 +110,7 @@ export interface GameState {
   recentLog: GameEvent[];          // 最近 200 条事件（供重连/刷新重建日志）
   winnerId: string | null;
   cashGoal: number | null;         // 现金目标房规（null = 关闭）
+  maxTurns?: number | null;        // 回合上限房规（null/0 = 不限；>0 = 到达后按净资产排名 stalemate 终局，保证收敛）
   // 数据引用（createGame 存入）——让 applyIntent 自包含（只需 state 即可执行规则）
   // 实施偏差：03 §4.1 字段清单未列此三项，但 applyIntent 签名（03 §4）只接受 state；
   // 移动需要 board 的 next 指针、抽卡需要 cards、结算需要 config 数值。存档因此也自包含（03 §7）。
@@ -257,7 +258,7 @@ export type CoreGameEvent =
   | { type: 'auction_bid_placed'; playerId: string; cellId: number; amount: number }
   | { type: 'auction_passed'; playerId: string; cellId: number }
   | { type: 'auction_resolved'; cellId: number; winnerId: string | null; amount: number }
-  | { type: 'game_over'; winnerId: string; reason: 'last_standing' | 'cash_goal' };
+  | { type: 'game_over'; winnerId: string; reason: 'last_standing' | 'cash_goal' | 'stalemate' };
 export type GameEvent = CoreGameEvent | ModuleEvent;
 // 未来模块保留事件（本版不产生）：sent_to_jail / jail_roll_failed / jail_exited（监狱）
 

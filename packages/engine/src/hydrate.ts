@@ -238,7 +238,7 @@ function validateRecentEvent(
     case 'game_over':
       return hasExactKeys(value, ['type', 'winnerId', 'reason'])
         && validPlayerReference(value.winnerId, playerIds)
-        && (value.reason === 'last_standing' || value.reason === 'cash_goal');
+        && (value.reason === 'last_standing' || value.reason === 'cash_goal' || value.reason === 'stalemate');
     // === 交易（#105）===
     case 'trade_proposed':
     case 'trade_cancelled':
@@ -649,7 +649,7 @@ export function hydrateGameState(
   //  - cardChoice：单机真人抽卡确认
   //  - pendingTrade / pendingAuction / auctionOnDecline：交易与拍卖（#105 / #106）
   // 判定方式刻意与 hasExactKeys 等价 —— 必填键一个不能少、未知键一个不能多、可选键可有可无。
-  const optionalKeys = ['cardChoice', 'pendingTrade', 'pendingAuction', 'auctionOnDecline'];
+  const optionalKeys = ['cardChoice', 'pendingTrade', 'pendingAuction', 'auctionOnDecline', 'maxTurns'];
   if (!isRecord(value)
     || stateKeys.some((key) => !Object.hasOwn(value, key))
     || Object.keys(value).some((key) => !stateKeys.includes(key) && !optionalKeys.includes(key))) {
@@ -829,6 +829,9 @@ export function hydrateGameState(
   }
   if (!(value.cashGoal === null || (isFiniteNonNegative(value.cashGoal) && value.cashGoal > targetConfig.initialCash))) {
     return fail('invalid cash goal');
+  }
+  if (!(value.maxTurns === undefined || value.maxTurns === null || (Number.isInteger(value.maxTurns) && (value.maxTurns as number) >= 1))) {
+    return fail('invalid max turns');
   }
 
   const clone = structuredClone(value) as unknown as GameState;

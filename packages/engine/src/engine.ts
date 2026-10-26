@@ -40,6 +40,7 @@ export interface CreateGameInput {
   players: readonly { id: string; nickname: string; isBot?: boolean }[]; // 按输入座次
   seed: string;
   cashGoal?: number | null;
+  maxTurns?: number | null;
   /** 单机真人抽卡确认（作弊重抽）：仅本地会话传入；不传 = 原有立即结算，联机/电脑玩家不受影响。 */
   cardChoiceMode?: 'local-human';
   /** 房规「放弃购买即拍卖」（#106）：不传 = false = 沿用既有「无拍卖」行为。 */
@@ -47,6 +48,8 @@ export interface CreateGameInput {
 }
 
 const SEAT_COLORS: PlayerColor[] = ['red', 'blue', 'yellow', 'green', 'purple', 'orange'];
+
+const DEFAULT_MAX_TURNS = 10000; // 回合上限默认值（与 simulate.MAX_TURNS 对齐）：保证现金目标关闭的对局也必然终局
 
 function copyMapRef(mapRef: MapRef): MapRef {
   return Object.freeze({
@@ -116,6 +119,7 @@ export function createGame(input: CreateGameInput): GameState {
     players: inputPlayers,
     seed,
     cashGoal = null,
+    maxTurns = DEFAULT_MAX_TURNS,
   } = input;
   const board = deepCloneAndFreeze(input.board);
   const cards = deepCloneAndFreeze(input.cards);
@@ -129,6 +133,10 @@ export function createGame(input: CreateGameInput): GameState {
 
   if (cashGoal !== null && cashGoal <= config.initialCash) {
     throw new Error(`createGame: 现金目标须大于初始资金（${config.initialCash}），实为 ${cashGoal}`);
+  }
+
+  if (maxTurns !== null && (!Number.isInteger(maxTurns) || maxTurns < 1)) {
+    throw new Error('createGame: maxTurns 须为 >=1 的整数或 null，实为 ' + maxTurns);
   }
 
   let state = hashSeed(seed);
@@ -206,6 +214,7 @@ export function createGame(input: CreateGameInput): GameState {
     recentLog: [{ type: 'game_started' }],
     winnerId: null,
     cashGoal,
+    maxTurns,
     ...(input.cardChoiceMode === 'local-human' ? { cardChoice: { mode: 'local-human' as const, pending: null } } : {}),
     board,
     cards,
@@ -443,6 +452,20 @@ function alivePlayers(state: GameState): PlayerState[] {
   return state.players.filter((p) => !p.bankrupt);
 }
 
+function netWorth(state: GameState, playerId: string): number {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) return 0;
+  let worth = player.cash;
+  for (const [cellId, prop] of Object.entries(state.properties)) {
+    if (prop.ownerId === playerId) {
+      const cell = state.board.cells[Number(cellId)];
+      const price = cell && 'price' in cell ? (cell as { price: number }).price : 0;
+      worth += price;
+    }
+  }
+  return worth;
+}
+
 function finalizeWinConditions(result: Extract<ApplyResult, { ok: true }>, previousState: GameState): ApplyResult {
   if (result.state.phase === 'game_over') return result;
 
@@ -478,6 +501,26 @@ function finalizeWinConditions(result: Extract<ApplyResult, { ok: true }>, previ
         events: [...result.events, event],
       };
     }
+  }
+
+  // 僵局终局（D1 收敛性保证）：回合达到上限且债务已清，按净资产排名结算，保证每局必然结束
+  const cap = result.state.maxTurns ?? 0;
+  if (cap > 0 && result.state.turn >= cap && result.state.debt === null) {
+    const ranked = alive
+      .map((p) => ({ p, w: netWorth(result.state, p.id) }))
+      .sort((a, b) => b.w - a.w || b.p.cash - a.p.cash);
+    const winner = ranked[0]?.p ?? alive[0];
+    const event: GameEvent = { type: 'game_over', winnerId: winner.id, reason: 'stalemate' };
+    return {
+      ok: true,
+      state: {
+        ...result.state,
+        phase: 'game_over',
+        winnerId: winner.id,
+        recentLog: [...previousState.recentLog, ...result.events, event].slice(-200),
+      },
+      events: [...result.events, event],
+    };
   }
 
   return result;
