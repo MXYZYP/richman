@@ -68,7 +68,33 @@ pnpm --filter @richman/server build
 echo "  服务端类型检查通过。"
 
 echo "[5/5] 重启进程 ..."
-pm2 restart "$PM2_NAME"
+if pm2 describe "$PM2_NAME" >/dev/null 2>&1; then
+  pm2 restart "$PM2_NAME" --update-env
+else
+  # pm2 守护进程可能随机器重启消失且未配 pm2 startup（2026-10-26 实测发生过：
+  # 守护进程被重新拉起后报「Process richman not found」，线上静默宕机）。
+  # 按发布 SOP 的首次启动命令拉起；端口用服务端默认 3000（与反代约定一致）。
+  echo "  pm2 中无 $PM2_NAME 进程，按首次启动拉起 ..."
+  pm2 start "pnpm --filter @richman/server start" --name "$PM2_NAME"
+fi
+pm2 save
+
+echo "===== 健康检查 ====="
+# 部署即验证：服务起不来就判整次部署失败（Actions 日志可直接看到），不带病收工。
+HEALTH_OK=0
+for _ in $(seq 1 15); do
+  if curl -sf "http://127.0.0.1:3000/healthz" >/dev/null 2>&1; then
+    echo "  /healthz ok"
+    HEALTH_OK=1
+    break
+  fi
+  sleep 1
+done
+if [ "$HEALTH_OK" -ne 1 ]; then
+  echo "[ERROR] 重启后 /healthz 持续不可达（按服务端默认端口 3000 检查）——上服务器跑 pm2 logs richman 排查" >&2
+  pm2 status "$PM2_NAME" || true
+  exit 1
+fi
 
 echo "===== 部署完成 ====="
 pm2 status "$PM2_NAME"
