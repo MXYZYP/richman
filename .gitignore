@@ -47,6 +47,9 @@ e2e/.artifacts/
 playwright-report/
 test-results/
 
+# 本地验证用的临时截图（仓库根 shot-*.png）
+/shot-*.png
+
 # 密钥/证书，绝不入库
 *.pem
 *.key

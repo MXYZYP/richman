@@ -28,11 +28,11 @@ PM2_NAME="richman"
 
 cd "$APP_DIR"
 
-echo "[1/4] 拉取远端最新代码 (origin/$BRANCH) ..."
+echo "[1/5] 拉取远端最新代码 (origin/$BRANCH) ..."
 git fetch origin "$BRANCH"
 git reset --hard "origin/$BRANCH"
 
-echo "[2/4] 安装依赖（pnpm-lock.yaml 变化时自动执行）..."
+echo "[2/5] 安装依赖（pnpm-lock.yaml 变化时自动执行）..."
 # 为什么不能用 pnpm install 一直禁用：服务端新增/升级运行时依赖时，
 # 旧 node_modules 会导致线上 "Cannot find module"，必须在部署时对齐 lockfile。
 #
@@ -56,10 +56,18 @@ else
   printf '%s\n' "$CURRENT_LOCK_STAMP" > "$LOCKFILE_STAMP"
 fi
 
-echo "[3/4] 构建前端 ..."
+echo "[3/5] 构建前端 ..."
 pnpm --filter @richman/client build
 
-echo "[4/4] 重启进程 ..."
+echo "[4/5] 类型检查服务端（tsc --noEmit 门禁）..."
+# 服务端用 tsx 直跑 TS 源码，tsx 不做类型检查，
+# 所以在 pm2 restart 之前必须先过 tsc --noEmit，
+# 否则「用了未 import 的名字」这类 ReferenceError 会直接让线上进程崩溃冻屏，
+# 且本地/构建期完全静默。门禁失败则整次部署中止，绝不重启旧进程。
+pnpm --filter @richman/server build
+echo "  服务端类型检查通过。"
+
+echo "[5/5] 重启进程 ..."
 pm2 restart "$PM2_NAME"
 
 echo "===== 部署完成 ====="
