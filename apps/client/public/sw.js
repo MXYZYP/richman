@@ -11,7 +11,7 @@
 //   绕过办法（临时救急）：DevTools → Application → Service Workers → Unregister，
 //   或勾选 Network 面板的 "Disable cache"。
 //   ★ 本地预览也算：`_preview` 那份也是同一个道理，改了产物没升号，预览里就一直看旧 chunk。
-const CACHE = 'richman-v22';
+const CACHE = 'richman-v23';
 const SHELL = [
   '/index.html',
   '/manifest.webmanifest',
@@ -54,7 +54,10 @@ async function precache() {
 }
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(precache().then(() => self.skipWaiting()));
+  // 不再在 install 阶段无条件 skipWaiting。游戏是长会话单页应用，用户很少主动导航，
+  // 若自动接管会在对局中途触发刷新、体验差。改为：新 SW 进入 waiting 后由客户端
+  // 「新版本可用」提示引导用户主动刷新（见 src/main.ts 的 registerServiceWorkerWithUpdatePrompt）。
+  event.waitUntil(precache());
 });
 
 self.addEventListener('activate', (event) => {
@@ -63,6 +66,14 @@ self.addEventListener('activate', (event) => {
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
+});
+
+// 客户端在用户同意更新后发来 SKIP_WAITING，才真正接管页面；否则新 SW 一直 waiting，
+// 不打断当前对局。配套逻辑在 src/main.ts 的 registerServiceWorkerWithUpdatePrompt。
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', (event) => {
