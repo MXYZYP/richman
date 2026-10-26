@@ -430,7 +430,14 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
     }
 
     try {
-      const result = roomManager.createRoom(payload.nickname, payload.mapId, payload.requestId, payload.botDifficulty);
+      const result = roomManager.createRoom(
+        payload.nickname,
+        payload.mapId,
+        payload.requestId,
+        payload.botDifficulty,
+        // D6 阶段 1：工坊自定义图包原样下传；开关关闭/校验不过都在 RoomManager 里拒绝。
+        payload.customMapPack,
+      );
       if (!result.ok) {
         ack(toAck(result));
         return;

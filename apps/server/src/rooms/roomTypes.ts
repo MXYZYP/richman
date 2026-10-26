@@ -110,6 +110,12 @@ export interface RoomManagerDependencies<TTimerHandle = unknown> {
   hashRoomPassword?(password: string, salt: string): string;
   generateRoomPasswordSalt?(): string;
   mapResolver?: RoomMapResolver;
+  /**
+   * 工坊自定义图房间开关（D6 阶段 1）：默认**关闭**。
+   * 关闭时带 customMapPack 的建房请求一律拒绝——阶段 2 客户端就绪前放开，
+   * 只会造出「房主能建、加入者客户端解析不了」的半成品房间。
+   */
+  customMapRoomsEnabled?: boolean;
   gameGateway?: GameRuntimeGateway;
   onServerError?(message: string, error: unknown): void;
 }
@@ -135,6 +141,12 @@ export interface Room {
   code: string;
   readonly mapRef: MapRef;
   readonly mapTitle: string;
+  /**
+   * 工坊自定义地图包（D6 阶段 1）：建房时经 customMapGate 校验后随房间保存在内存。
+   * 有值 = 自定义图房间；地图解析（房规上限、开局）优先用它，而不是内置注册表。
+   * 阶段 3 才随快照落盘——在那之前进程重启后自定义图房间无法恢复（快照恢复按不可用丢弃）。
+   */
+  readonly customMapPack?: MapPack;
   status: RoomStatus;
   hostId: string;
   /** 电脑玩家难度（P1-6）：房主可在大厅改（#6），驱动 chooseBotIntent 的决策激进度。 */

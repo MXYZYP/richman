@@ -1,5 +1,5 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import { getActiveMapPack, getMapPack } from '@richman/board-data';
+import { getActiveMapPack, getMapPack, listActiveMaps } from '@richman/board-data';
 import type { MapPack, MapRef } from '@richman/board-data';
 import { hydrateGameState } from '@richman/engine';
 import { currentPendingAuction, currentPendingTrade } from '@richman/engine';
@@ -8,6 +8,7 @@ import { applyGameIntent as applyRuntimeGameIntent, chooseTakeoverIntent, create
 import type { GameRuntimeGateway } from '../game/gameRuntime';
 import type { PublicRoomState, PublicRoomSummary, RoomRole, RoomRuleConfig, RoomSettings, RoomSettingsPatch, TurnDeadlineInfo, UndoOutcome, UndoRequestInfo } from '@richman/protocol';
 import { ROOM_PASSWORD_MAX_LENGTH, ROOM_PASSWORD_MIN_LENGTH, TURN_TIME_LIMIT_MAX_SEC } from '@richman/protocol';
+import { acceptCustomMapPack } from './customMapGate';
 import { gameFailure, roomFailure } from './roomErrors';
 import type { RoomFailure, WireFailure } from './roomErrors';
 import { ROOM_SNAPSHOT_SCHEMA_VERSION } from './roomSnapshotStore';
@@ -43,6 +44,8 @@ const UNDO_REQUEST_TTL_MS = 20_000;
 const PASSWORD_HASH_BYTES = 32;
 const PASSWORD_SALT_BYTES = 16;
 const DEFAULT_MAP_RESOLVER: RoomMapResolver = { getActiveMapPack, getMapPack };
+/** 内置地图 id 清单（D6 阶段 1）：自定义图的 id 不得与之冲突（校验在 customMapGate）。 */
+const BUILTIN_MAP_IDS: readonly string[] = listActiveMaps().map((entry) => entry.ref.id);
 
 /**
  * 一步「可悔的棋」（#101）：悔棋就是把 `state` 装回去。
@@ -137,6 +140,8 @@ export class RoomManager<TTimerHandle = unknown> {
   readonly #turnDeadlines = new Map<string, TurnDeadline>();
   readonly #gateway: GameRuntimeGateway;
   readonly #mapResolver: RoomMapResolver;
+  /** 工坊自定义图房间开关（D6 阶段 1）：默认关闭，见 RoomManagerDependencies 注释。 */
+  readonly #customMapRoomsEnabled: boolean;
   /** 房间落盘快照（C-③）：为 null 时纯内存运行，行为与引入前完全一致。 */
   readonly #snapshotStore: RoomSnapshotStore | null;
   /** 房间密码的哈希与盐生成（#23 ③）；默认实现见文件末尾的 default* 函数。 */
@@ -147,13 +152,14 @@ export class RoomManager<TTimerHandle = unknown> {
     this.#dependencies = dependencies;
     this.#gateway = dependencies.gameGateway ?? defaultGameGateway;
     this.#mapResolver = dependencies.mapResolver ?? DEFAULT_MAP_RESOLVER;
+    this.#customMapRoomsEnabled = dependencies.customMapRoomsEnabled ?? false;
     this.#snapshotStore = dependencies.snapshotStore ?? null;
     this.#hashRoomPassword = dependencies.hashRoomPassword ?? defaultHashRoomPassword;
     this.#generateRoomPasswordSalt = dependencies.generateRoomPasswordSalt ?? defaultGenerateRoomPasswordSalt;
     this.#restoreRoomsFromSnapshots();
   }
 
-  createRoom(nickname: string, mapId: string, requestId?: string, botDifficulty: BotDifficulty = 'normal'): RoomResult<CreateRoomValue> {
+  createRoom(nickname: string, mapId: string, requestId?: string, botDifficulty: BotDifficulty = 'normal', customMapPack?: unknown): RoomResult<CreateRoomValue> {
     if (requestId !== undefined) {
       const replay = this.#replayCreate(requestId, nickname, mapId);
       if (replay !== undefined) {
@@ -167,10 +173,28 @@ export class RoomManager<TTimerHandle = unknown> {
     }
 
     let activeMap;
-    try {
-      activeMap = this.#mapResolver.getActiveMapPack(mapId);
-    } catch {
-      return roomFailure('INVALID_ROOM_ACTION', 'Requested map is unavailable.');
+    let isCustomMap = false;
+    if (customMapPack !== undefined) {
+      // 工坊自定义图（D6 阶段 1）：默认关闭（见 RoomManagerDependencies.customMapRoomsEnabled）。
+      // 服务端五重校验见 customMapGate.ts（体积/结构/哈希比对/id 冲突/模块白名单）。
+      if (!this.#customMapRoomsEnabled) {
+        return roomFailure('INVALID_ROOM_ACTION', 'Custom map rooms are not enabled.');
+      }
+      const gate = acceptCustomMapPack(customMapPack, BUILTIN_MAP_IDS);
+      if (!gate.ok) {
+        return roomFailure('INVALID_ROOM_ACTION', 'Custom map rejected: ' + gate.detail);
+      }
+      if (mapId !== gate.pack.ref.id) {
+        return roomFailure('INVALID_ROOM_ACTION', 'Custom map id does not match the payload mapId.');
+      }
+      activeMap = Object.freeze(gate.pack) as MapPack;
+      isCustomMap = true;
+    } else {
+      try {
+        activeMap = this.#mapResolver.getActiveMapPack(mapId);
+      } catch {
+        return roomFailure('INVALID_ROOM_ACTION', 'Requested map is unavailable.');
+      }
     }
 
     const roomCode = this.#allocateRoomCode();
@@ -184,6 +208,8 @@ export class RoomManager<TTimerHandle = unknown> {
       code: roomCode,
       mapRef: copyMapRef(activeMap.ref),
       mapTitle: activeMap.metadata.title,
+      // 工坊自定义图（D6 阶段 1）：pack 只在内存随房间走；随快照持久化是阶段 3。
+      ...(isCustomMap ? { customMapPack: activeMap } : {}),
       status: 'lobby',
       hostId: playerId,
       botDifficulty,
@@ -419,7 +445,7 @@ export class RoomManager<TTimerHandle = unknown> {
       } else {
         let mapMaxHouseLevel: number;
         try {
-          mapMaxHouseLevel = this.#mapResolver.getActiveMapPack(room.mapRef.id).game.config.maxHouseLevel;
+          mapMaxHouseLevel = this.#resolveRoomMapPack(room, 'active').game.config.maxHouseLevel;
         } catch {
           return roomFailure('INVALID_ROOM_ACTION', 'Requested map is unavailable.');
         }
@@ -953,6 +979,20 @@ export class RoomManager<TTimerHandle = unknown> {
     this.#dependencies.onAsyncEvents([notice, ...outcome.events]);
   }
 
+  /**
+   * 房间维度的地图解析（D6 阶段 1）：自定义图房间用随房保存的包，内置图走注册表。
+   * mode='active' 对应 getActiveMapPack（按 id，房规上限等用途）；
+   * mode='exact' 对应 getMapPack（按精确 ref，开局前再做三元组全等校验）。
+   */
+  #resolveRoomMapPack(room: Room, mode: 'active' | 'exact'): MapPack {
+    if (room.customMapPack !== undefined) {
+      return room.customMapPack;
+    }
+    return mode === 'active'
+      ? this.#mapResolver.getActiveMapPack(room.mapRef.id)
+      : this.#mapResolver.getMapPack(room.mapRef);
+  }
+
   startRoom(roomCode: string, requesterId: string): RoomResult<PublicRoomState> {
     const existingRoom = this.#rooms.get(roomCode);
     if (existingRoom?.status === 'ended') {
@@ -969,7 +1009,7 @@ export class RoomManager<TTimerHandle = unknown> {
 
     let mapPack;
     try {
-      mapPack = this.#mapResolver.getMapPack(room.mapRef);
+      mapPack = this.#resolveRoomMapPack(room, 'exact');
     } catch (error) {
       this.#dependencies.onServerError?.('startRoom exact map resolution failed', error);
       return roomFailure('INVALID_ROOM_ACTION', 'Unable to start the game.');

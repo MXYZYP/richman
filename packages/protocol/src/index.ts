@@ -100,6 +100,11 @@ export interface CreateRoomPayload {
   mapId: string;
   /** 电脑玩家难度（P1-6）；不传时服务器按 normal 处理。 */
   botDifficulty?: BotDifficulty;
+  /**
+   * 工坊自定义地图包（D6 阶段 1）：完整 MapPack JSON，mapId 必须等于包内 ref.id。
+   * 仅在服务器显式开启自定义图房间时被接受（默认关闭）；不带此字段 = 内置图，行为不变。
+   */
+  customMapPack?: unknown;
 }
 
 /**
