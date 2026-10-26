@@ -2,6 +2,7 @@ import { computed, ref, shallowRef, watch } from 'vue';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { createGamePresenter, getAvailableActions, type GamePresenterResult } from './gamePresenter';
 import { paceMultiplier } from './playbackPace';
+import { resolveServerOrigin } from './serverOrigin';
 import { io, type Socket } from 'socket.io-client';
 import type { BotDifficulty, GameEvent, Intent } from '@richman/engine';
 import type {
@@ -311,10 +312,13 @@ function renamePayloadOf(args: readonly unknown[]): { playerId: string; nickname
 export function createOnlineSession(options: CreateOnlineSessionOptions = {}): OnlineGameSession {
   const storage = options.storage ?? browserStorage();
   const crypto = options.crypto ?? globalThis.crypto;
+  // 同源部署连 `location.origin`；跨域部署（H5 挂第三方域名）必须连真正的服务端，
+  // 否则会在对方的服务器上找 socket.io，永远连不上。
+  const fallbackUrl = resolveServerOrigin(import.meta.env) || browserGlobals.location?.origin;
   const socket = (options.socketFactory ?? ((url: string): OnlineSocket => {
     const productionSocket: ProductionSocket = io(url);
     return productionSocket as unknown as OnlineSocket;
-  })) (options.url ?? browserGlobals.location?.origin ?? '');
+  })) (options.url ?? fallbackUrl ?? '');
   const ackTimeoutMs = options.ackTimeoutMs ?? DEFAULT_ACK_TIMEOUT_MS;
   const state = shallowRef<RenderableGameState | null>(null);
   const room = shallowRef<PublicRoomState | null>(null);

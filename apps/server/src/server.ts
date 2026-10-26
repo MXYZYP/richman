@@ -69,6 +69,14 @@ export function createRoomServer<TTimerHandle = unknown>({
   const httpServer = createServer(requestHandler);
   const io = new SocketIoServer<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(httpServer, {
     serveClient: false,
+    // 跨域：H5 包体挂在 TapTap 创意工坊这类第三方域名下时，socket.io 的 HTTP 长轮询握手
+    // 属于跨域请求，不放行就会被浏览器拦掉（WebSocket 直连本身不受 CORS 限制，
+    // 但 socket.io 会先用 /socket.io/?EIO=4 探一次）。
+    //
+    // 用 `*` 而不是白名单：这个服务不持有任何凭据（无 cookie、无 token 鉴权，
+    // 房间靠 6 位码 + 房主令牌），放行任意来源不增加实质风险；而第三方平台给游戏分配的
+    // 托管域名不可预知，写死白名单必然漏。
+    cors: { origin: '*' },
   });
 
   let dispatchAsyncEvents = (_events: RoomDomainEvent[]): void => undefined;
@@ -155,6 +163,9 @@ function createRequestHandler(
       response.end('ok');
       return;
     }
+    // 跨域预检与响应头：必须排在所有 /api 处理之前，否则预检 OPTIONS 会落到静态托管上
+    // （sirv 对 OPTIONS 不返回允许头，浏览器直接判失败，真请求根本发不出去）。
+    if (applyCorsHeaders(request, response)) return;
     // 排行榜 API（#116）**必须**排在静态托管之前：sirv 配了 `single: true`，
     // 任何落到它手里的未知路径都会被当成「前端路由」返回 index.html（200 + HTML），
     // 客户端 `response.json()` 于是抛出一个与真实原因毫不相干的解析错误。
@@ -163,6 +174,32 @@ function createRequestHandler(
     if (playerAccountApi !== null && playerAccountApi(request, response)) return;
     staticHandler(request, response);
   };
+}
+
+/**
+ * 给 `/api/` 开跨域。
+ *
+ * 为什么需要：同源部署时浏览器不发预检、也不需要这些头；但 H5 包体挂在第三方域名
+ * （TapTap 创意工坊）下时，页面与接口不同源，缺了 `Access-Control-Allow-Origin`
+ * 浏览器会直接拦掉响应 —— 表现是「网络错误」，与接口本身是否正常无关，极易误判。
+ *
+ * 只覆盖 `/api/`，静态资源不需要（同源加载）。
+ * 返回 true 表示这次请求已经处理完毕（OPTIONS 预检），调用方应直接 return。
+ */
+function applyCorsHeaders(request: IncomingMessage, response: ServerResponse): boolean {
+  const path = request.url ?? '';
+  if (!path.startsWith('/api/')) return false;
+
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  response.setHeader('Access-Control-Max-Age', '600');
+
+  if (request.method !== 'OPTIONS') return false;
+
+  response.statusCode = 204;
+  response.end();
+  return true;
 }
 
 /** 客户端产物不可用时的兜底：直接 404，而不是让 sirv 在构造期抛 ENOENT 把进程带崩。

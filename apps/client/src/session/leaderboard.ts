@@ -1,5 +1,6 @@
 import type { PlayerStats } from './playerStats';
 import type { StorageLike } from './sessionStorage';
+import { resolveServerOrigin } from './serverOrigin';
 
 // 成就排行榜的客户端（路线图 #116）。
 //
@@ -14,8 +15,14 @@ import type { StorageLike } from './sessionStorage';
 //  3. **服务端回来的东西不可信**：`parseLeaderboardPayload` 逐字段校验后才交给界面，
 //     形状不对就当成「取不到」，绝不把半截数据渲染出去。
 
-/** 与服务端同源的接口路径（同源部署，不需要配置 base）。 */
-export const LEADERBOARD_ENDPOINT = '/api/leaderboard';
+/**
+ * 排行榜接口地址。
+ *
+ * 同源部署（服务器自己托管 dist）时前缀为空，就是 `/api/leaderboard`；
+ * 跨域部署（H5 包体挂在 TapTap 创意工坊这类第三方域名下）时，相对路径会打到
+ * 第三方的服务器上必然 404 ⇒ 由构建期 `VITE_SERVER_ORIGIN` 补上服务端根地址。
+ */
+export const LEADERBOARD_ENDPOINT = `${resolveServerOrigin(import.meta.env)}/api/leaderboard`;
 
 /** 本机随机玩家标识的存储键。它只用来把「同一个人重复提交」认成同一条记录。 */
 export const PLAYER_ID_KEY = 'richman_player_id_v1';
