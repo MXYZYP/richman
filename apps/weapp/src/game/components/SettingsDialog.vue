@@ -1,0 +1,816 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import MobileSheet from './MobileSheet.vue';
+import PwaInstallRow from './PwaInstallRow.vue';
+import ReleaseNotesDialog from './ReleaseNotesDialog.vue';
+import {
+  SFX_DEFAULT_VOLUME,
+  getSfxVolume,
+  isSfxEnabled,
+  setSfxEnabled,
+  setSfxVolume,
+} from '../audio/sfx';
+import {
+  BGM_DEFAULT_VOLUME,
+  getBgmVolume,
+  isBgmEnabled,
+  setBgmEnabled,
+  setBgmVolume,
+} from '../audio/bgm';
+import { THEMES, getStoredAppearance, getStoredTheme, recommendedThemeForMap, resolveTheme, setAppearance, setTheme, type AppearanceId, type ThemeId } from '../ui/themeManager';
+import { PLAYBACK_SPEED_OPTIONS, getPlaybackSpeedRef, setPlaybackSpeed } from '../session/playbackPace';
+import { describeMapRulesById } from '../ui/mapRules';
+import { formatCash, setCashUnitForMap } from '../ui/format';
+
+/**
+ * 统一设置入口（路线图 #13 扩展）。
+ *
+ * 之前散落三处：对局侧栏（桌面把设置行直接摊在侧栏里，没有标题也没有入口）、移动端底部
+ * 操作坞的「设置」抽屉、大厅卡片里的「安装应用」一行。这里收成一个弹窗：
+ * 手机是底部抽屉、桌面是居中弹窗，两端同一份内容与同一套语义。
+ *
+ * 分区原则：凡是「只影响本机观感」的（深色模式/皮肤/动画/音效/BGM/音量/安装）都放这里并
+ * 标注清楚，避免玩家误以为改了会同步给别人。规则说明则相反 —— 它按**当前地图**渲染（#13），
+ * 让「本局到底在玩什么」在设置里就能看全，而不是一句任何地图都成立的通用话。
+ *
+ * 两条外观轴的归属（#11）：皮肤是「对局内配色」，所以首页不再提供选择器，只在这里；
+ * 深色模式是「整站外观」，覆盖首页/大厅/设置等页面级界面。二者用 'auto' 皮肤串起来。
+ */
+const props = withDefaults(defineProps<{
+  open: boolean;
+  /** 单机热座才有悔棋/回放（联机以服务器为权威态，不可本地回退）。 */
+  isLocalGame?: boolean;
+  canUndo?: boolean;
+  canReplay?: boolean;
+  /** 本局胜利条件（现金目标）；null 表示不限。 */
+  cashGoal?: number | null;
+  /** 退出按钮文案（本地「返回首页」/ 联机「离开房间」）。 */
+  exitLabel?: string;
+  canSurrender?: boolean;
+  /** 会话级操作（退出/投降）：桌面侧栏已有同款按钮，故只在移动端抽屉里显示。 */
+  showSessionActions?: boolean;
+  /** 当前地图 id；用于按地图渲染规则说明。缺省或未知 id 时回落到通用要点。 */
+  mapId?: string | null;
+}>(), {
+  isLocalGame: false,
+  canUndo: false,
+  canReplay: false,
+  cashGoal: null,
+  exitLabel: '退出',
+  canSurrender: false,
+  showSessionActions: false,
+  mapId: null,
+});
+
+// 「现金目标」「地产地价」等金额要跟着本局地图选单位（中国图「两」/ 世界图「金币」）。
+watch(() => props.mapId ?? null, (mapId) => setCashUnitForMap(mapId), { immediate: true });
+
+const emit = defineEmits<{
+  'update:open': [open: boolean];
+  undo: [];
+  replay: [];
+  /** 打开复盘弹窗（导出 / 导入复盘码）。由上层负责关掉本弹窗再开那一个。 */
+  replayCode: [];
+  exit: [];
+  surrender: [];
+}>();
+
+const themes = THEMES;
+const theme = ref<ThemeId>(getStoredTheme());
+const darkMode = ref(getStoredAppearance() === 'dark');
+/** 当前皮肤的实际配色（'auto' 随深色模式、'map' 随本局地图解析），用于把自动挡的结果说清楚。 */
+const resolvedThemeLabel = computed(
+  () => THEMES.find((option) => option.id === resolveTheme(theme.value, darkMode.value ? 'dark' : 'light', props.mapId))?.label ?? '',
+);
+/** 「跟随地图」在本局会解析成哪一套（未知 / 无地图时回落到经典）。 */
+const mapThemeLabel = computed(
+  () => THEMES.find((option) => option.id === recommendedThemeForMap(props.mapId))?.label ?? '经典',
+);
+
+function chooseTheme(id: ThemeId): void {
+  theme.value = id;
+  // 必须带上本局地图：否则「跟随地图」在设置面板里会按 null 解析成经典、棋盘当场掉色。
+  setTheme(id, props.mapId);
+}
+
+/** 深色模式：整站页面级外观；'auto' / 'map' 皮肤依赖它，故 setAppearance 内部会一并重算 data-theme。 */
+function chooseDarkMode(next: boolean): void {
+  darkMode.value = next;
+  const appearance: AppearanceId = next ? 'dark' : 'light';
+  setAppearance(appearance, props.mapId);
+}
+
+const playbackSpeed = getPlaybackSpeedRef();
+const paceOptions = PLAYBACK_SPEED_OPTIONS;
+
+const sfxEnabled = ref(isSfxEnabled());
+function toggleSfx(): void {
+  sfxEnabled.value = !sfxEnabled.value;
+  setSfxEnabled(sfxEnabled.value);
+}
+
+const bgmEnabled = ref(isBgmEnabled());
+function toggleBgm(): void {
+  bgmEnabled.value = !bgmEnabled.value;
+  setBgmEnabled(bgmEnabled.value);
+}
+
+// 音量用 0~100 的整数百分比驱动滑块，写回模块时再折算成 0~1 的线性音量。
+const sfxVolume = ref(getSfxVolume());
+function changeSfxVolume(event: Event): void {
+  const percent = Number((event.target as HTMLInputElement).value);
+  const next = Number.isFinite(percent) ? percent / 100 : SFX_DEFAULT_VOLUME;
+  sfxVolume.value = next;
+  setSfxVolume(next);
+}
+
+const bgmVolume = ref(getBgmVolume());
+function changeBgmVolume(event: Event): void {
+  const percent = Number((event.target as HTMLInputElement).value);
+  const next = Number.isFinite(percent) ? percent / 100 : BGM_DEFAULT_VOLUME;
+  bgmVolume.value = next;
+  setBgmVolume(next);
+}
+
+function percentLabel(value: number): number {
+  return Math.round(value * 100);
+}
+
+/** 恢复默认设置：只重置本机偏好，不碰账号、存档与对局状态。 */
+const resetNotice = ref(false);
+let resetNoticeTimer: number | null = null;
+function restoreDefaults(): void {
+  chooseDarkMode(false);
+  chooseTheme('auto');
+  setPlaybackSpeed('standard');
+  sfxEnabled.value = true;
+  setSfxEnabled(true);
+  bgmEnabled.value = false;
+  setBgmEnabled(false);
+  sfxVolume.value = SFX_DEFAULT_VOLUME;
+  setSfxVolume(SFX_DEFAULT_VOLUME);
+  bgmVolume.value = BGM_DEFAULT_VOLUME;
+  setBgmVolume(BGM_DEFAULT_VOLUME);
+  resetNotice.value = true;
+  if (resetNoticeTimer !== null) window.clearTimeout(resetNoticeTimer);
+  resetNoticeTimer = window.setTimeout(() => {
+    resetNotice.value = false;
+    resetNoticeTimer = null;
+  }, 2400);
+}
+onBeforeUnmount(() => {
+  if (resetNoticeTimer !== null) window.clearTimeout(resetNoticeTimer);
+});
+
+const title = '设置';
+const victoryCopy = computed(() => (
+  props.cashGoal === null ? null : `胜利条件：现金达到 ${formatCash(props.cashGoal)}。`
+));
+
+/** 当前地图的规则事实；无地图上下文（如大厅未选图）时为 null。 */
+const mapRules = computed(() => describeMapRulesById(props.mapId));
+const rulesSummary = computed(() => (
+  mapRules.value === null ? '本局规则要点' : `《${mapRules.value.title}》规则要点`
+));
+</script>
+
+<template>
+  <MobileSheet
+    class="sheet-settings"
+    layout="modal"
+    :open="open"
+    :title="title"
+    @close="emit('update:open', false)"
+  >
+    <view class="settings-group" aria-labelledby="settings-appearance">
+      <view id="settings-appearance" class="settings-group-title">外观</view>
+      <view class="setting-row" for="dark-mode-toggle">
+        <text>深色模式</text>
+        <input
+          id="dark-mode-toggle"
+          type="checkbox"
+          :checked="darkMode"
+          @change="chooseDarkMode(!darkMode)"
+        />
+      </view>
+      <view class="settings-field">
+        <text class="settings-field-label">对局皮肤</text>
+        <view class="settings-options" role="radiogroup" aria-label="对局皮肤">
+          <button
+            v-for="option in themes"
+            :key="option.id"
+            type="button"
+            class="settings-option"
+            :class="{ active: theme === option.id }"
+            :aria-pressed="theme === option.id"
+            :title="option.hint"
+            @click="chooseTheme(option.id)"
+          >{{ option.label }}</button>
+        </view>
+        <view class="settings-hint">
+          当前实际配色：{{ resolvedThemeLabel }}。
+          <template v-if="theme === 'auto'">
+            「跟随深色」会随上面的深色模式自动切换（开 → 暗夜，关 → 经典）；
+            想锁死某个配色，直接点经典 / 海洋 / 暗夜 / 森林 / 沙丘即可。
+          </template>
+          <template v-else-if="theme === 'map'">
+            「跟随地图」按本局地图取值：当前地图 →
+            {{ darkMode ? '暗夜（深色模式优先）' : mapThemeLabel }}。
+            换地图会自动换色，未收录的地图用经典。
+          </template>
+        </view>
+      </view>
+      <!-- 动画速度：与上面「对局皮肤」用**同一个**分段控件（.settings-field + .settings-options
+           + .settings-option）。原来这里另写了一套 .pace-*：外层一条边框轨道、里面三段无边框，
+           于是没选中的「慢速 / 快速」看着就是两截浮在轨道里的文字，字号还是 12px（皮肤是 13px）
+           —— 同一屏里两套控件，用户直接问「这个组件是不是也有问题」。现在只剩一份写法。 -->
+      <view class="settings-field">
+        <text class="settings-field-label">动画速度</text>
+        <view class="settings-options" role="radiogroup" aria-label="动画速度">
+          <button
+            v-for="option in paceOptions"
+            :key="option.value"
+            type="button"
+            class="settings-option"
+            :class="{ active: option.value === playbackSpeed }"
+            :aria-pressed="option.value === playbackSpeed"
+            @click="setPlaybackSpeed(option.value)"
+          >{{ option.label }}</button>
+        </view>
+      </view>
+      <view class="settings-hint">
+        深色模式、皮肤与动画速度都是本机显示偏好：每位参赛者与观战者各自设置、只影响自己
+        看到的画面，不同步给他人，也不改变任何对局状态。深色模式作用于首页 / 大厅 / 设置等
+        页面级界面；对局内配色由皮肤决定，选「跟随深色」即可跟着一起变暗。
+      </view>
+    </view>
+
+    <view class="settings-group" aria-labelledby="settings-sound">
+      <view id="settings-sound" class="settings-group-title">声音</view>
+
+      <!-- 音量块（11-17 照参考图）：名字在左、百分比在右（用该项主色）、下面一条粗滑块，
+           滑块左段按当前值填色、滑块头是带色环的大圆钮；开关收进同一行右侧。
+           两者都保留：拉到 0 等同静音，但开关是独立记忆的一份偏好。 -->
+      <view class="sound-block sound-block--bgm">
+        <view class="sound-head">
+          <text class="sound-name">背景音乐</text>
+          <text class="sound-value" for="bgm-volume">{{ percentLabel(bgmVolume) }}%</text>
+          <view class="sound-switch">
+            <input
+              id="bgm-toggle"
+              type="checkbox"
+              :checked="bgmEnabled"
+              aria-label="背景音乐开关"
+              @change="toggleBgm"
+            />
+            <text class="sound-switch__track" aria-hidden="true"></text>
+          </view>
+        </view>
+        <view class="sound-track" for="bgm-volume">
+          <input
+            id="bgm-volume"
+            class="volume-slider"
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            :value="percentLabel(bgmVolume)"
+            :style="{ '--fill': `${percentLabel(bgmVolume)}%` }"
+            aria-label="音乐音量"
+            :aria-valuetext="`${percentLabel(bgmVolume)}%`"
+            @input="changeBgmVolume"
+          />
+        </view>
+      </view>
+
+      <view class="sound-block sound-block--sfx">
+        <view class="sound-head">
+          <text class="sound-name">音效</text>
+          <text class="sound-value" for="sfx-volume">{{ percentLabel(sfxVolume) }}%</text>
+          <view class="sound-switch">
+            <input
+              id="sfx-toggle"
+              type="checkbox"
+              :checked="sfxEnabled"
+              aria-label="音效开关"
+              @change="toggleSfx"
+            />
+            <text class="sound-switch__track" aria-hidden="true"></text>
+          </view>
+        </view>
+        <view class="sound-track" for="sfx-volume">
+          <input
+            id="sfx-volume"
+            class="volume-slider"
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            :value="percentLabel(sfxVolume)"
+            :style="{ '--fill': `${percentLabel(sfxVolume)}%` }"
+            aria-label="音效音量"
+            :aria-valuetext="`${percentLabel(sfxVolume)}%`"
+            @input="changeSfxVolume"
+          />
+        </view>
+      </view>
+
+      <view class="settings-hint">
+        开关与音量都只影响本机：不同步给他人、不改变任何对局状态。把某一项音量拉到 0
+        等同于静音——不再排期发声；开关重新打开后，音量按上面保存的数值生效。
+      </view>
+    </view>
+
+    <view v-if="isLocalGame" class="settings-group" aria-labelledby="settings-game">
+      <view id="settings-game" class="settings-group-title">对局操作</view>
+      <view class="setting-row">
+        <text>悔棋</text>
+        <button
+          type="button"
+          class="setting-action"
+          :disabled="!canUndo"
+          @click="emit('undo')"
+        >撤回上一步</button>
+      </view>
+      <view class="setting-row">
+        <text>回放</text>
+        <button
+          type="button"
+          class="setting-action"
+          :disabled="!canReplay"
+          @click="emit('replay')"
+        >观看本局回放</button>
+      </view>
+      <!-- 复盘（#115）：回放是「自己再看一遍」，复盘是把整局编成一段码给别人看（或看别人的）。
+           入口放这里而不是侧栏——桌面侧栏已经很挤，而且它天然属于「对局操作」这一组。 -->
+      <view class="setting-row">
+        <text>复盘</text>
+        <button type="button" class="setting-action setting-action--ghost" @click="emit('replayCode')">
+          导出 / 导入复盘码
+        </button>
+      </view>
+      <view class="settings-hint">
+        悔棋与回放只在单机对局可用：单机没有别人，回退不会影响任何对手。
+        联机的悔棋在对局面板上发起，且需要在场对手逐一同意才会生效——不能本地单方面回退。
+        复盘码也只导得出单机对局：它记录的是开局的种子与整局操作，联机没有这份逐房间日志。
+      </view>
+    </view>
+
+    <view class="settings-group" aria-labelledby="settings-help">
+      <view id="settings-help" class="settings-group-title">规则说明</view>
+      <view class="rules-help" open>
+        <text>{{ rulesSummary }}</text>
+        <!-- 按当前地图渲染的事实清单（#13）：数字全部来自地图包，不写死任何一张图。 -->
+        <view v-if="mapRules" class="rules-facts">
+          <view v-for="fact in mapRules.facts" :key="fact.label" class="rules-fact">
+            <view>{{ fact.label }}</view>
+            <view>{{ fact.value }}</view>
+          </view>
+        </view>
+        <view>
+          <view>掷骰按点数前进，落在无主地产可购买。</view>
+          <view>落在他人地产需按租金付费；现金不足会被接管或出局。</view>
+          <view v-if="victoryCopy">{{ victoryCopy }}</view>
+          <view>房主可踢出捣乱玩家（对局中=强制出局）。</view>
+        </view>
+        <view v-if="mapRules && mapRules.moduleNotes.length > 0" class="rules-module-notes">
+          <view v-for="note in mapRules.moduleNotes" :key="note">{{ note }}</view>
+        </view>
+        <view v-if="mapRules === null" class="rules-fallback">
+          选好地图进入对局后，这里会换成当前地图的实际数值（格数、地块与渡口数量、房屋上限、胜利目标等）。
+        </view>
+      </view>
+    </view>
+
+    <view class="settings-group" aria-labelledby="settings-app">
+      <view id="settings-app" class="settings-group-title">应用</view>
+      <PwaInstallRow hint="安装后可离线打开，像原生 App 一样" />
+      <view class="setting-row">
+        <text>版本</text>
+        <!-- 复用首页那颗「更新说明」入口：对局中也能查到自己玩的是哪个版本、这次改了什么。
+             这里传 defer：设置面板本身嵌在大厅/对局视图里，正文若预先渲染，整份更新说明
+             就会出现在这两个视图的渲染结果中。 -->
+        <ReleaseNotesDialog defer />
+      </view>
+      <view class="setting-row">
+        <text>恢复默认</text>
+        <button type="button" class="setting-action setting-action--ghost" @click="restoreDefaults">
+          恢复默认设置
+        </button>
+      </view>
+      <view class="settings-hint">
+        恢复默认设置只重置本机的皮肤、动画速度与声音偏好（含音量），不碰账号、存档与正在进行的对局。
+      </view>
+      <view v-if="resetNotice" class="settings-notice" role="status">已恢复默认设置。</view>
+    </view>
+
+    <template v-if="showSessionActions">
+      <button type="button" class="settings-session-button" @click="emit('exit')">{{ exitLabel }}</button>
+      <button
+        v-if="canSurrender"
+        type="button"
+        class="settings-session-button settings-session-button--danger"
+        @click="emit('surrender')"
+      >投降</button>
+    </template>
+  </MobileSheet>
+</template>
+
+<style scoped>
+.settings-group {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-group-title {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.settings-field {
+  display: grid;
+  gap: 6px;
+}
+
+.settings-field-label {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 皮肤有四档（含「跟随深色」）：固定 flex 平分在窄屏会把「跟随深色」挤成两行，
+   改用自适应列宽，窄屏自动折成两行两列。 */
+.settings-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  gap: 6px;
+}
+
+/* 分段控件（皮肤 / 动画）照参考图做「厚片」：14px 圆角，选中态是实心色 + 一条深色底边，
+   一眼能看出按下去的那一档。 */
+.settings-option {
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--board-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.settings-option.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--color-primary) 62%, #000);
+}
+
+.settings-option:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.settings-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--board-surface);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.setting-row input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+/* ---- 声音块（11-17 照参考图重做）-----------------------------------------
+   参考图里的音轨是「名字 / 百分比 / 一条粗滑块」，不是「夹在设置行里的一条细线」。
+   一块一个 --sound-color：背景音乐走竹青、音效走朱砂，百分比与滑块填色都跟着它。 */
+.sound-block {
+  --sound-color: var(--color-primary);
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--board-surface);
+}
+
+.sound-block--bgm {
+  --sound-color: var(--color-gain);
+}
+
+.sound-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sound-name {
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.sound-value {
+  margin-left: auto;
+  color: var(--sound-color);
+  font-size: 14px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 开关：26px 高的小胶囊，打开时填该项主色。input 本体留 1px 透明可聚焦。 */
+.sound-switch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.sound-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.sound-switch__track {
+  display: block;
+  width: 44px;
+  height: 26px;
+  border-radius: var(--radius-chip);
+  background: var(--button-disabled-bg);
+  transition: background 140ms ease;
+}
+
+.sound-switch__track::after {
+  content: '';
+  display: block;
+  width: 20px;
+  height: 20px;
+  margin: 3px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 24%);
+  transition: transform 140ms ease;
+}
+
+.sound-switch input:checked + .sound-switch__track {
+  background: var(--sound-color);
+}
+
+.sound-switch input:checked + .sound-switch__track::after {
+  transform: translateX(18px);
+}
+
+.sound-switch input:focus-visible + .sound-switch__track {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* 滑块：12px 粗轨 + 24px 白心彩环圆钮。--fill 由模板按当前百分比写进内联样式，
+   左段填该项主色、右段是淡灰轨——不用管深浅色模式，两段颜色都从变量推出来。 */
+.sound-track {
+  display: block;
+}
+
+.volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 26px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+  height: 12px;
+  border-radius: var(--radius-chip);
+  background: linear-gradient(
+    to right,
+    var(--sound-color) 0 var(--fill, 0%),
+    color-mix(in srgb, var(--color-muted) 22%, transparent) var(--fill, 0%) 100%
+  );
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -6px;
+  border: 4px solid var(--sound-color);
+  border-radius: 50%;
+  background: var(--board-surface);
+  box-shadow: 0 2px 5px rgb(53 39 20 / 22%);
+}
+
+.volume-slider::-moz-range-track {
+  height: 12px;
+  border-radius: var(--radius-chip);
+  background: color-mix(in srgb, var(--color-muted) 22%, transparent);
+}
+
+.volume-slider::-moz-range-progress {
+  height: 12px;
+  border-radius: var(--radius-chip);
+  background: var(--sound-color);
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 4px solid var(--sound-color);
+  border-radius: 50%;
+  background: var(--board-surface);
+  box-shadow: 0 2px 5px rgb(53 39 20 / 22%);
+}
+
+.volume-slider:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-chip);
+}
+
+.setting-action {
+  padding: 6px 12px;
+  border: 1px solid var(--color-primary);
+  border-radius: 10px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+/* 次要动作（恢复默认）：描边而非实心，避免在一堆偏好项里被误当成主按钮。 */
+.setting-action--ghost {
+  border-color: var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+}
+
+.setting-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.rules-help {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--board-surface);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rules-help summary {
+  cursor: pointer;
+  color: var(--color-text);
+  font-weight: 800;
+}
+
+.rules-help ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 5px;
+  color: var(--color-muted);
+  line-height: 1.45;
+}
+
+/* 按地图渲染的数值清单：左标签右数值，窄屏下自动折成上下两行。 */
+.rules-facts {
+  margin: 10px 0 0;
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-muted) 8%, transparent);
+}
+
+.rules-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.rules-fact dt {
+  flex: 0 0 auto;
+  color: var(--color-muted);
+  font-weight: 700;
+}
+
+.rules-fact dd {
+  margin: 0;
+  min-width: 0;
+  text-align: right;
+  color: var(--color-text);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+/* 特化规则模块的提示与通用要点同形，用上分隔线表示「这一句是这张图独有的」。 */
+.rules-module-notes {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.rules-fallback {
+  margin: 8px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-notice {
+  margin: 0;
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settings-session-button {
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--board-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.settings-session-button--danger {
+  border-color: color-mix(in srgb, var(--surrender, #b3402f) 40%, var(--color-border));
+  color: var(--surrender, #b3402f);
+}
+
+/* ---- 紧凑区间（本组件此前没有任何断点）----
+   768–1024px 区间：外壳（GameView 1024px / MobileSheet 1025px）已认定本组件走
+   「底部抽屉」形态，但本组件自身无对应调整，设置项在竖排布局里仍按桌面假设排布。 */
+@media (max-width: 1024px) {
+  /* 抽屉形态下可用宽度更窄：选项栅格下限放宽一档，避免每行挤成两三字的窄块。 */
+  .settings-options {
+    grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
+  }
+
+  /* 开关行改为两行堆叠：窄屏下标题与说明挤在一行会把说明文字压成竖排字。 */
+  .setting-row {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .setting-row input[type='checkbox'] {
+    flex: 0 0 auto;
+  }
+}
+
+/* 矮视口（如横屏手机、折叠屏半开）：抽屉高度受限，压缩行距与内边距，
+   避免设置项被推到「需要滚动才能看到」的位置。 */
+@media (max-height: 620px) {
+  .setting-row {
+    padding: 8px 10px;
+  }
+
+  .settings-field {
+    gap: 4px;
+  }
+
+  .rules-facts {
+    padding: 6px 8px;
+  }
+
+  .rules-help {
+    padding: 8px 10px;
+  }
+}
+</style>

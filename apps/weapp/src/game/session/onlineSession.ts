@@ -1,0 +1,1539 @@
+import { computed, ref, shallowRef, watch } from 'vue';
+import type { ComputedRef, Ref, ShallowRef } from 'vue';
+import { createGamePresenter, getAvailableActions, type GamePresenterResult } from './gamePresenter';
+import { paceMultiplier } from './playbackPace';
+import { resolveServerOrigin } from './serverOrigin';
+import { io, type Socket } from './socketIoShim';
+import type { BotDifficulty, GameEvent, Intent } from '@richman/engine';
+import type {
+  Ack,
+  ChatMessage,
+  ClientToServerEvents,
+  CreateRoomAck,
+  JoinRoomAck,
+  PublicGameSnapshot,
+  PublicRoomState,
+  PublicRoomSummary,
+  ResumeAck,
+  RoomListAck,
+  RoomRole,
+  RoomSettings,
+  RoomSettingsPatch,
+  ServerToClientEvents,
+  TurnDeadlineInfo,
+  UndoOutcome,
+  UndoRequestInfo,
+} from '@richman/protocol';
+import { CHAT_TEXT_MAX_LENGTH } from '@richman/protocol';
+import { normalizeTurnDeadline, normalizeTurnTimeLimitSec } from './turnTimer';
+import type { ClientAction, DisplayCard } from '../game/clientGame';
+import { resolvePublicGameSnapshot } from '../game/mapResolver';
+import type { CashNotice, ConnectionStatus, GameSession, RenderableGameState, TransientNotice } from './gameSession';
+import {
+  ACTIVE_ONLINE_SESSION_KEY,
+  clearStoredOnlineSession,
+  clearPendingRoomRequest,
+  commitOnlineSession,
+  PENDING_ROOM_REQUEST_KEY,
+  readOnlineSession,
+  readPendingRoomRequest,
+  savePendingRoomRequest,
+  type OnlineSession,
+  type PendingRoomRequest,
+  type StorageLike,
+} from './sessionStorage';
+import { classifyEntryFailure, type EntryFailureKind } from './appFlow';
+
+type ProductionSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
+
+interface OnlineSocket {
+  readonly connected: boolean;
+  on(event: string, listener: (...args: never[]) => void): unknown;
+  off(event: string, listener?: (...args: never[]) => void): unknown;
+  emit(event: string, ...args: unknown[]): unknown;
+  connect(): unknown;
+  disconnect(): unknown;
+}
+interface CryptoLike {
+  getRandomValues(bytes: Uint8Array): Uint8Array;
+}
+
+const browserGlobals = globalThis as typeof globalThis & {
+  localStorage?: StorageLike;
+  location?: { origin: string };
+};
+type Operation = 'create' | 'join' | 'resume' | 'start' | 'addBot' | 'removeBot' | 'renameBot' | 'updateSettings' | 'leave' | 'intent' | 'skip' | 'kick' | 'undoRequest' | 'undoVote' | 'undoCancel' | 'set-takeover';
+type LastErrorKind = 'derived' | 'operation' | 'blocking' | 'terminal';
+type ReconciliationMarker = {
+  readonly generation: number;
+  readonly revision: number;
+  readonly roomStatus: PublicRoomState['status'] | null;
+  readonly botIdsAtEmit: ReadonlySet<string>;
+  readonly removeTargetId: string | null;
+  readonly renameTargetId: string | null;
+  readonly renameExpectedNickname: string | null;
+  readonly gameTurn: number | null;
+  readonly actorId: string | null;
+};
+type LastErrorState =
+  | { readonly kind: 'derived'; readonly message: string; readonly derivedSource: 'takeover'; readonly debtorId: string | undefined }
+  | { readonly kind: 'derived'; readonly message: string; readonly derivedSource: 'offline-debt'; readonly debtorId: string }
+  | {
+    readonly kind: 'operation';
+    readonly message: string;
+    readonly code: string;
+    readonly operation?: Operation;
+    readonly marker?: ReconciliationMarker;
+  }
+  | { readonly kind: 'blocking'; readonly message: string; readonly code: string }
+  | { readonly kind: 'terminal'; readonly message: string };
+const MAP_COMPATIBILITY_ERROR = '当前客户端缺少房间所需地图，请刷新或更新后重试。';
+
+/** A host-only lobby mutation. Exactly one may be in flight at a time (single-flight lock). */
+export type LobbyCommand = 'start' | 'addBot' | 'removeBot' | 'renameBot' | 'updateSettings' | 'leave' | 'kick';
+
+export interface CreateOnlineSessionOptions {
+  url?: string;
+  storage?: StorageLike;
+  ackTimeoutMs?: number;
+  crypto?: CryptoLike;
+  socketFactory?: (url: string) => OnlineSocket;
+}
+
+export interface OnlineGameSession extends GameSession {
+  readonly mode: 'online';
+  /**
+   * 每个开了AI 托管的玩家（playerId -> 是否开启）。
+   *
+   * 用于让本机玩家看出「对手是托管在走，不是挂机」—— 否则只能看到对方不动，
+   * 分不清是托管、掉线还是放空。走独立事件而非房间投影，
+   * 与服务端的 room_settings / undo_* 同一理由（改投影形状会让全等断言集体变红）。
+   */
+  readonly takeoverOnPlayers: ComputedRef<Record<string, boolean>>;
+  /**
+   * How the last create/join entry failed, or null while none is staged. `definitive`
+   * means a same-id retry is futile and the user should abandon; `transient` retries.
+   */
+  readonly entryFailure: Ref<EntryFailureKind | null>;
+  create(nickname: string, mapId: string, botDifficulty?: BotDifficulty): Promise<void>;
+  retryPending(): Promise<void>;
+  retryResume(): Promise<void>;
+  /** Keep the stored session intact, but suppress automatic recovery until explicitly retried. */
+  deferResume(): void;
+  /**
+   * Explicitly discard a staged (failed) create/join entry. Clears in-memory staging only
+   * after the pending request leaves storage, so a rejected removal keeps the entry
+   * retryable and refresh-consistent. Returns whether the abort committed.
+   */
+  abortEntry(): boolean;
+  /**
+   * Explicitly discard the stored active session (「放弃这局」). Clears in-memory state only
+   * after the record leaves storage; a rejected removal keeps it and reports a safe error.
+   */
+  discardStoredSession(): boolean;
+  /**
+   * Give up an in-game session locally and return home, even when the socket is down and a
+   * server `room:leave` can never be acknowledged. Storage-first: clears the stored record before
+   * the in-memory room/state, so a rejected removal keeps everything intact and reports a safe
+   * error. Returns whether the abandon committed. Used by the failed-connection banner.
+   */
+  abandon(): boolean;
+  /**
+   * 加入房间（#23 ③）：`password` 仅在房间设了密码时需要，明文一次性提交给服务端。
+   * 密码会随待恢复请求一起落 localStorage，因此断线后 `retryPending` 无需再次索要密码。
+   */
+  join(roomCode: string, nickname: string, role?: RoomRole, password?: string): Promise<void>;
+  /** True when the authenticated member id belongs to the room's spectator roster. */
+  readonly isSpectator: ComputedRef<boolean>;
+  /** True when the local player is the room host — the only role allowed to mutate the lobby. */
+  readonly isHost: ComputedRef<boolean>;
+  /**
+   * True only when a live, recovered, owned session can accept a lobby mutation — connected,
+   * active, and not mid-recovery. The UI disables every host control (add/remove/start/leave)
+   * while this is false so a stale lobby never fires a doomed command.
+   */
+  readonly isLobbyCommandReady: ComputedRef<boolean>;
+  /** The lobby command currently awaiting a server acknowledgement, or null while idle. */
+  readonly pendingCommand: Ref<LobbyCommand | null>;
+  /** A human reason the game cannot start yet, or null when the host may start. */
+  readonly startBlockedReason: ComputedRef<string | null>;
+  /**
+   * 房间设置（#4 规则自定义 / #6 电脑难度）的权威副本，由服务端 `room:settings` 广播/单播驱动。
+   * `null` = 尚未收到（刚进大厅的一瞬），UI 应等它到位再渲染设置面板，避免闪一帧默认值。
+   */
+  readonly roomSettings: Ref<RoomSettings | null>;
+  /** 房主修改房间设置（仅大厅阶段生效；服务端会拒绝非房主与已开局房间）。 */
+  updateRoomSettings(patch: RoomSettingsPatch): Promise<void>;
+  /**
+   * 拉取公开房间列表（#108）。**不需要已在房间里**——首页「公开房间」区块正是这么用的。
+   *
+   * 返回 ack 而不是直接抛错：列表刷不出来是很轻的失败（用户完全可以手输房间码），
+   * 调用方据此给一句可重试的提示即可，不该像建房/加入那样占住持久错误位。
+   */
+  listRooms(): Promise<Ack<RoomListAck>>;
+  /**
+   * 悔棋（#101）：当前悬而未决的悔棋请求（服务端权威副本），`null` = 没有。
+   * 发起者据此显示「等待对手确认」，对手据此显示「同意 / 拒绝」。
+   */
+  readonly undoRequest: Ref<UndoRequestInfo | null>;
+  /** 「此刻谁可以发起悔棋」的玩家 id（服务端算好广播下来的），`null` = 没人可悔。 */
+  readonly undoAvailability: Ref<string | null>;
+  /** 本机玩家此刻能否发起悔棋（房主已开启 + 上一手真人就是我 + 无在途请求 + 连接可用）。 */
+  readonly canRequestUndo: ComputedRef<boolean>;
+  /** 本机玩家是否需要对当前这次悔棋表态。 */
+  readonly canVoteUndo: ComputedRef<boolean>;
+  /** 当前悔棋请求是否由我发起。 */
+  readonly isUndoRequester: ComputedRef<boolean>;
+  /** 发起悔棋（只有服务端认可的「上一手行动者」能成功）。 */
+  requestUndo(): Promise<void>;
+  /** 对手对悔棋请求表决：全部同意才回退，任一人拒绝即作废。 */
+  voteUndo(requestId: string, approve: boolean): Promise<void>;
+  /** 撤回自己尚未有结果的悔棋请求。 */
+  cancelUndo(): Promise<void>;
+  start(): Promise<void>;
+  addBot(): Promise<void>;
+  removeBot(playerId: string): Promise<void>;
+  renameBot(playerId: string, nickname: string): Promise<void>;
+  kickPlayer(playerId: string): Promise<void>;
+}
+
+const DEFAULT_ACK_TIMEOUT_MS = 8_000;
+const ERROR_MESSAGES: Record<string, string> = {
+  INVALID_TOKEN: '会话已失效，请重新加入房间',
+  ROOM_NOT_FOUND: '房间不存在或已关闭',
+  ROOM_FULL: '房间人数已满',
+  GAME_ALREADY_STARTED: '游戏已开始，无法加入（仅可切换为观战）',
+  NICKNAME_TAKEN: '昵称已被使用，请换一个',
+  NOT_HOST: '只有房主可以执行此操作',
+  INVALID_NICKNAME: '昵称需为 1 至 20 个字符',
+  NOT_ENOUGH_PLAYERS: '至少需要 2 名玩家才能开始',
+  INVALID_ROOM_ACTION: '当前房间状态无法执行此操作',
+  CREATE_RATE_LIMITED: '创建房间过于频繁，请稍后再试',
+  REQUEST_TIMEOUT: '请求超时，请重试',
+  OPERATION_IN_PROGRESS: '请求正在处理中',
+  DISCONNECTED: '连接已断开，请重试',
+  SESSION_NOT_RECOVERED: '会话尚未恢复，请重试',
+  STORAGE_UNAVAILABLE: '无法更新本地存档，请稍后重试',
+  CONNECT_ERROR: '无法连接服务器，请重试',
+  // 悔棋（#101）的三个码正常情况下走即时提示（见 INTENT_REJECTION_MESSAGES）；
+  // 这里留一份兜底文案，免得它们万一从别的路径落到持久错误位上显示成原始英文码。
+  UNDO_DISABLED: '当前房间没有开启悔棋',
+  UNDO_UNAVAILABLE: '现在没有可悔的一步',
+  UNDO_PENDING: '已经有一个悔棋请求在处理中',
+  // 房间密码与观战开关（#23 ③）。两条都不是「房间坏了/没了」，而是「这次进不去」——
+  // 必须给出可据以行动的下一步：改密码重试 / 换个房间。
+  // 尤其不能落到 ROOM_NOT_FOUND 的文案上：那会让人以为房间已解散，转头去重新建房。
+  WRONG_ROOM_PASSWORD: '房间密码不正确，请重新输入',
+  SPECTATING_DISABLED: '房主关闭了观战，无法旁观这局',
+};
+const INTENT_REJECTION_MESSAGES: Readonly<Record<string, string>> = {
+  OPERATION_IN_PROGRESS: '操作过快，请稍候重试',
+  INSUFFICIENT_FUNDS: '现金不足',
+  WRONG_PHASE: '当前阶段不能执行这个操作',
+  NOT_YOUR_TURN: '还没轮到你行动',
+  ILLEGAL_INTENT: '这个操作现在不可用',
+  // 悔棋（#101）：这三条都是「点一下才发现不行」的即时反馈，不该占住持久错误位——
+  // 否则玩家会看到一个再也消不掉的错误条，而问题本身早就过去了。
+  UNDO_DISABLED: '本房间没有开启悔棋',
+  UNDO_UNAVAILABLE: '现在没有可悔的一步',
+  UNDO_PENDING: '已经有一个悔棋请求在处理中',
+};
+const TRANSIENT_NOTICE_MS = 2_500;
+const ERROR_PRIORITY: Readonly<Record<LastErrorKind, number>> = {
+  derived: 1,
+  operation: 2,
+  blocking: 3,
+  terminal: 4,
+};
+const BLOCKING_ERROR_CODES = new Set([
+  'INVALID_TOKEN',
+  'ROOM_NOT_FOUND',
+  'DISCONNECTED',
+  'SESSION_NOT_RECOVERED',
+  'STORAGE_UNAVAILABLE',
+  'CONNECT_ERROR',
+]);
+
+function browserStorage(): StorageLike {
+  if (browserGlobals.localStorage === undefined) throw new Error('Online session storage is required outside a browser');
+  return browserGlobals.localStorage;
+}
+
+/**
+ * 现金目标（#23 ③）的客户端归一：只接受**正整数**，其余（含 `null`、`NaN`、小数、负数）一律 `null`。
+ *
+ * 与 `normalizeTurnTimeLimitSec` 同一套思路——服务端才是权威，客户端这一层的职责只是
+ * 「把拿到的值收成一个界面上能安全渲染的形态」，而不是替服务端做业务校验。
+ * 真正的硬约束（必须大于生效初始资金）只在服务端判定，客户端连本地预检都不做：
+ * 生效初始资金取决于房主的 ruleConfig，那是服务端才知道的事。
+ */
+function normalizeCashGoal(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+function publicError(code: string): string {
+  return ERROR_MESSAGES[code] ?? '操作未完成，请重试';
+}
+
+function requestId(crypto: CryptoLike): string {
+  return [...crypto.getRandomValues(new Uint8Array(16))].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise; });
+  return { promise, resolve };
+}
+
+/** A shared empty id set for reconciliation markers of non-add-bot commands (never mutated). */
+const EMPTY_ID_SET: ReadonlySet<string> = new Set<string>();
+
+/** Recover a remove-bot's target player id from its emit arguments, or null when absent. */
+function removeTargetOf(args: readonly unknown[]): string | null {
+  const payload = args[0];
+  if (payload !== null && typeof payload === 'object' && 'playerId' in payload) {
+    const { playerId } = payload;
+    if (typeof playerId === 'string') return playerId;
+  }
+  return null;
+}
+
+function renamePayloadOf(args: readonly unknown[]): { playerId: string; nickname: string } | null {
+  const payload = args[0];
+  if (payload !== null && typeof payload === 'object' && 'playerId' in payload && 'nickname' in payload) {
+    const { playerId, nickname } = payload;
+    if (typeof playerId === 'string' && typeof nickname === 'string') {
+      return { playerId, nickname };
+    }
+  }
+  return null;
+}
+
+export function createOnlineSession(options: CreateOnlineSessionOptions = {}): OnlineGameSession {
+  const storage = options.storage ?? browserStorage();
+  const crypto = options.crypto ?? globalThis.crypto;
+  // 同源部署连 `location.origin`；跨域部署（H5 挂第三方域名）必须连真正的服务端，
+  // 否则会在对方的服务器上找 socket.io，永远连不上。
+  const fallbackUrl = resolveServerOrigin(import.meta.env) || browserGlobals.location?.origin;
+  const socket = (options.socketFactory ?? ((url: string): OnlineSocket => {
+    const productionSocket: ProductionSocket = io(url);
+    return productionSocket as unknown as OnlineSocket;
+  })) (options.url ?? fallbackUrl ?? '');
+  const ackTimeoutMs = options.ackTimeoutMs ?? DEFAULT_ACK_TIMEOUT_MS;
+  const state = shallowRef<RenderableGameState | null>(null);
+  const room = shallowRef<PublicRoomState | null>(null);
+  const localPlayerId = ref<string | null>(null);
+  const connectionStatus = ref<ConnectionStatus>(socket.connected ? 'connected' : 'connecting');
+  const displayPositions = ref<Record<string, number>>({});
+  const dice = ref<number[] | null>(null);
+  const activeCard = ref<DisplayCard | null>(null);
+  const eventMessage = ref('');
+  const isAnimating = ref(false);
+  const isBotThinking = ref(false);
+  const connectionReady = deferred<void>();
+  if (socket.connected) connectionReady.resolve();
+  const lastError = ref<string | null>(null);
+  let lastErrorState: LastErrorState | null = null;
+  const setLastError = (next: LastErrorState): void => {
+    if (lastErrorState !== null && ERROR_PRIORITY[next.kind] < ERROR_PRIORITY[lastErrorState.kind]) return;
+    lastErrorState = next;
+    lastError.value = next.message;
+  };
+  const clearLastError = (matches: (current: LastErrorState) => boolean = () => true): void => {
+    if (lastErrorState === null || !matches(lastErrorState)) return;
+    lastErrorState = null;
+    lastError.value = null;
+  };
+  const clearOperationError = (operation: Operation, marker?: ReconciliationMarker): void => {
+    clearLastError((current) => (
+      current.kind === 'operation'
+      && current.operation === operation
+      && (marker === undefined || current.marker === marker)
+    ));
+  };
+  const compatibilityError = ref<string | null>(null);
+  const entryFailure = ref<EntryFailureKind | null>(null);
+  const pendingCommand = ref<LobbyCommand | null>(null);
+  const cashNotices = ref<CashNotice[]>([]);
+  const displayCash = ref<Record<string, number>>({});
+  const transientNotice = ref<TransientNotice | null>(null);
+  let transientNoticeId = 0;
+  const chatLog = ref<ChatMessage[]>([]);
+  /** 房间设置（#4 / #6）：服务端广播的权威副本，仅大厅期间有意义。 */
+  const roomSettings = ref<RoomSettings | null>(null);
+  /**
+   * 悔棋（#101）：当前悬而未决的悔棋请求；`null` = 没有。
+   * 服务端广播的权威副本——发起者与每个需要表态的对手读的是同一份，
+   * 「谁在等 / 谁还没确认」不会各端各说各话。
+   */
+  const undoRequest = ref<UndoRequestInfo | null>(null);
+  /**
+   * 「此刻谁可以发起悔棋」：服务端给出的玩家 id，`null` = 没人可悔。
+   * 由 `room:undo_available` 驱动（进入房间 / 重连时服务端还会单播一次），
+   * 因此刷新页面不会把按钮弄丢。
+   */
+  const undoAvailability = ref<string | null>(null);
+  /**
+   * 回合限时（#107）：服务端给出的「此刻谁的回合钟在走、走到几点」。
+   * 由 `room:turn_deadline` 驱动（进入房间 / 重连时服务端还会单播一次），
+   * 因此刷新页面不会把倒计时弄丢。`playerId === null` = 此刻不限时（未开启 / 轮到电脑 / 行动者离线）。
+   */
+  const turnDeadline = ref<TurnDeadlineInfo | null>(null);
+  /**
+   * 悔棋回退后紧接着到达的那份 `game:snapshot` 必须按**硬重置**处理：
+   * 对局时间线倒退了，当成增量去播会把动画播歪。
+   * `room:undo_result`(applied) 恒先于那份快照到达，靠它立这个标记。
+   */
+  let pendingUndoReset = false;
+  let transientNoticeTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
+  type Attempt<T extends object> = {
+    settled: boolean;
+    timer: Parameters<typeof globalThis.clearTimeout>[0];
+    resolve: (response: Ack<T>) => void;
+    finish: (response: Ack<T>) => void;
+    readonly marker: ReconciliationMarker;
+  };
+  type ConnectionWaiter = {
+    timer: Parameters<typeof globalThis.clearTimeout>[0];
+    resolve: () => void;
+  };
+  type EntryAttempt = {
+    readonly request: PendingRoomRequest;
+    room: PublicRoomState | null;
+    roomFromBroadcast: boolean;
+    snapshot: PublicGameSnapshot | null;
+    eventBatches: GameEvent[][];
+    transitions: Array<{ events: GameEvent[]; snapshot: PublicGameSnapshot }>;
+  };
+  const inFlight = new Map<Operation, Attempt<object>>();
+  const timedOutMarkers = new Map<Operation, ReconciliationMarker[]>();
+  const preconnectWaiters = new Set<ConnectionWaiter>();
+  let entryAttempt: EntryAttempt | null = null;
+  let activeSession: OnlineSession | null = null;
+  let hasActiveSession = false;
+  let disposed = false;
+  const clearTransientNotice = (id: number): void => {
+    if (transientNotice.value?.id !== id) return;
+    transientNotice.value = null;
+    if (transientNoticeTimer !== undefined) {
+      globalThis.clearTimeout(transientNoticeTimer);
+      transientNoticeTimer = undefined;
+    }
+  };
+  const clearTransientFeedback = (): void => {
+    if (transientNoticeTimer !== undefined) {
+      globalThis.clearTimeout(transientNoticeTimer);
+      transientNoticeTimer = undefined;
+    }
+    transientNotice.value = null;
+  };
+  /**
+   * 直接给一句提示（不查错误码表）：用于「服务端已经把事情定了、只是告知一声」的场景，
+   * 比如悔棋的四种结局。文案由调用方给，因为那里才知道该说什么。
+   */
+  const showTransientMessage = (message: string): void => {
+    if (disposed) return;
+    clearLastError((current) => current.kind === 'operation' || current.kind === 'derived');
+    clearTransientFeedback();
+    const id = ++transientNoticeId;
+    transientNotice.value = { id, message };
+    transientNoticeTimer = globalThis.setTimeout(() => clearTransientNotice(id), TRANSIENT_NOTICE_MS);
+  };
+  const showTransientNotice = (code: string): boolean => {
+    const message = INTENT_REJECTION_MESSAGES[code];
+    if (message === undefined || disposed) return false;
+    showTransientMessage(message);
+    return true;
+  };
+  /**
+   * 「点一下才发现不行」是常态的操作（现金不足、还没轮到你、这一步没得悔…）：
+   * 一律走即时提示，不占持久错误位——否则界面会挂一条再也消不掉的错误，
+   * 而引发它的那次点击早就过去了。其它操作（建房 / 加入 / 踢人…）的失败仍要留下来。
+   */
+  const TRANSIENT_OPERATIONS: ReadonlySet<Operation> = new Set<Operation>(['intent', 'undoRequest', 'undoVote', 'undoCancel']);
+  const handleFailure = (operation: Operation, code: string, marker?: ReconciliationMarker): void => {
+    if (TRANSIENT_OPERATIONS.has(operation) && showTransientNotice(code)) return;
+    fail(code, operation, marker);
+  };
+  let generation = 0;
+  let authoritativeRevision = 0;
+  const pendingTransitionRevisions: number[] = [];
+  let stagedEntry: EntryAttempt | null = null;
+  let resumeGeneration = 0;
+  let resumePromise: Promise<void> | null = null;
+  let resumeDeferred = false;
+  let connectedHandled = false;
+  // True between an explicit retry that re-opens a dead transport and the next connect/disconnect,
+  // so a second retry never fires a duplicate socket.connect() while one is already in flight.
+  let reconnectPending = false;
+  let presenter: GamePresenterResult | null = null;
+  let stopPresenterSync: Array<() => void> = [];
+  const clearRenderedState = (): void => {
+    presenter?.dispose();
+    for (const stop of stopPresenterSync) stop();
+    stopPresenterSync = [];
+    presenter = null;
+    pendingTransitionRevisions.length = 0;
+    state.value = null;
+    displayPositions.value = {};
+    displayCash.value = {};
+    dice.value = null;
+    activeCard.value = null;
+    eventMessage.value = '';
+    isAnimating.value = false;
+    cashNotices.value = [];
+  };
+  const rejectIncompatibleSnapshot = (): void => {
+    clearRenderedState();
+    compatibilityError.value = MAP_COMPATIBILITY_ERROR;
+  };
+  const resetAuthoritativeRecovery = (): void => {
+    generation += 1;
+    pendingTransitionRevisions.length = 0;
+    timedOutMarkers.clear();
+    for (const [operation, attempt] of inFlight) {
+      if (operation === 'resume' || attempt.settled) continue;
+      attempt.settled = true;
+      globalThis.clearTimeout(attempt.timer);
+      inFlight.delete(operation);
+      attempt.resolve({ ok: false, code: 'DISCONNECTED', message: '' });
+    }
+  };
+
+
+  const clearSession = (): void => {
+    try { storage.removeItem(ACTIVE_ONLINE_SESSION_KEY); } catch { /* storage is optional */ }
+    activeSession = null;
+    hasActiveSession = false;
+    localPlayerId.value = null;
+  };
+  const clearPending = (): void => {
+    try { storage.removeItem(PENDING_ROOM_REQUEST_KEY); } catch { /* storage is optional */ }
+  };
+  const resetSession = (): void => {
+    resumeGeneration += 1;
+    cancelResume();
+    resetAuthoritativeRecovery();
+    clearPending();
+    clearSession();
+    entryAttempt = null;
+    stagedEntry = null;
+    clearRenderedState();
+    compatibilityError.value = null;
+    room.value = null;
+    roomSettings.value = null;
+    undoRequest.value = null;
+    undoAvailability.value = null;
+    turnDeadline.value = null;
+    pendingUndoReset = false;
+    chatLog.value = [];
+    clearTransientFeedback();
+  };
+  const withCurrentPresence = (snapshot: RenderableGameState): RenderableGameState => {
+    const currentRoom = room.value;
+    if (currentRoom === null) return snapshot;
+    if (!Array.isArray(snapshot.players)) return snapshot;
+    const onlineById = new Map(currentRoom.players.map((player) => [player.id, player.online]));
+    return {
+      ...snapshot,
+      players: snapshot.players.map((player) => ({
+        ...player,
+        online: onlineById.get(player.id) ?? player.online,
+      })),
+    };
+
+  };
+  const refreshTakeoverStatus = (currentState: RenderableGameState | null = state.value): void => {
+    if (room.value?.takeoverPlayerId === localPlayerId.value) {
+      const debtorId = currentState?.debt?.debtorId;
+      const debtor = room.value.players.find((player) => player.id === debtorId);
+      setLastError({
+        kind: 'derived',
+        message: debtor === undefined ? '房主托管正在执行' : `需要 ${debtor.nickname} 回来处理债务`,
+        derivedSource: 'takeover',
+        debtorId,
+      });
+      return;
+    }
+    if (lastErrorState?.kind === 'derived' && lastErrorState.derivedSource === 'offline-debt') {
+      const debtorId = currentState?.debt?.debtorId;
+      const debtor = room.value?.players.find((player) => player.id === debtorId);
+      if (debtorId === lastErrorState.debtorId && debtor !== undefined && !debtor.online) {
+        setLastError({
+          kind: 'derived',
+          message: `需要 ${debtor.nickname} 回来处理债务`,
+          derivedSource: 'offline-debt',
+          debtorId: debtor.id,
+        });
+        return;
+      }
+    }
+    clearLastError((current) => current.kind === 'derived');
+  };
+  const applyRoom = (nextRoom: PublicRoomState): void => {
+    if (disposed) return;
+    room.value = nextRoom;
+    if (state.value !== null) state.value = withCurrentPresence(state.value);
+    refreshTakeoverStatus();
+  };
+  const resolveSnapshot = (snapshot: PublicGameSnapshot): RenderableGameState | null => {
+    try {
+      const renderable = resolvePublicGameSnapshot(snapshot);
+      compatibilityError.value = null;
+      return renderable;
+    } catch {
+      rejectIncompatibleSnapshot();
+      return null;
+    }
+  };
+  const ensurePresenter = (snapshot: RenderableGameState): GamePresenterResult => {
+    if (presenter !== null) return presenter;
+    presenter = createGamePresenter(snapshot, undefined, paceMultiplier);
+    stopPresenterSync = [
+      watch(presenter.state, (next) => { state.value = withCurrentPresence(next); }, { flush: 'sync' }),
+      watch(presenter.displayPositions, (next) => { displayPositions.value = next; }, { flush: 'sync' }),
+      watch(presenter.dice, (next) => { dice.value = next; }, { flush: 'sync' }),
+      watch(presenter.activeCard, (next) => { activeCard.value = next; }, { flush: 'sync' }),
+      watch(presenter.eventMessage, (next) => { eventMessage.value = next; }, { flush: 'sync' }),
+      watch(presenter.isAnimating, (next) => { isAnimating.value = next; }, { flush: 'sync' }),
+      watch(presenter.cashNotices, (next) => { cashNotices.value = next; }, { flush: 'sync' }),
+      watch(presenter.displayCash, (next) => { displayCash.value = next; }, { flush: 'sync' }),
+    ];
+    state.value = withCurrentPresence(snapshot);
+    displayPositions.value = presenter.displayPositions.value;
+    dice.value = presenter.dice.value;
+    activeCard.value = presenter.activeCard.value;
+    eventMessage.value = presenter.eventMessage.value;
+    isAnimating.value = presenter.isAnimating.value;
+    cashNotices.value = presenter.cashNotices.value;
+    displayCash.value = presenter.displayCash.value;
+    return presenter;
+  };
+  const applySnapshot = (snapshot: PublicGameSnapshot, reset = false): boolean => {
+    if (disposed) return false;
+    if (!Array.isArray(snapshot.players)) {
+      rejectIncompatibleSnapshot();
+      return false;
+    }
+    const renderable = resolveSnapshot(snapshot);
+    if (renderable === null) return false;
+    const currentPresenter = ensurePresenter(renderable);
+    if (reset) currentPresenter.reset(renderable);
+    else void currentPresenter.receiveSnapshot(renderable).catch(() => undefined);
+    refreshTakeoverStatus(renderable);
+    return true;
+  };
+  const fail = (code: string, operation?: Operation, marker?: ReconciliationMarker): void => {
+    if (disposed) return;
+    if (BLOCKING_ERROR_CODES.has(code)) {
+      setLastError({ kind: 'blocking', message: publicError(code), code });
+      return;
+    }
+    setLastError({ kind: 'operation', message: publicError(code), code, operation, marker });
+  };
+  const canIssueActiveCommands = (): boolean => {
+    const stored = readOnlineSession(storage);
+    const entryRecoveryLocked = readPendingRoomRequest(storage) !== null && activeSession === null;
+    return stored !== null
+      && activeSession !== null
+      && stored.roomCode === activeSession.roomCode
+      && stored.playerId === activeSession.playerId
+      && stored.token === activeSession.token
+      && socket.connected
+      && connectionStatus.value === 'connected'
+      && resumePromise === null
+      && !entryRecoveryLocked;
+  };
+  const isHost = computed(() => room.value !== null && room.value.hostId === localPlayerId.value);
+  // Real command authority for the UI: a live, recovered, owned session — connected, active, and
+  // not mid-recovery. Derived from connectionStatus (which flips to 'reconnecting' on disconnect
+  // and during resume) so a stale lobby left on screen disables every mutation until resume lands.
+  const isLobbyCommandReady = computed(() =>
+    room.value !== null
+    && localPlayerId.value !== null
+    && socket.connected
+    && connectionStatus.value === 'connected',
+  );
+  // Spectator identity is derived, never stored: the authenticated member id (playerId) is
+  // looked up in the room's spectator roster, so a resume restores the same role and a
+  // spectator id is never mistaken for an engine player.
+  const isSpectator = computed(() => {
+    const currentRoom = room.value;
+    const memberId = localPlayerId.value;
+    return currentRoom !== null && memberId !== null && currentRoom.spectators.some((member) => member.id === memberId);
+  });
+  const startBlockedReason = computed<string | null>(() => {
+    const currentRoom = room.value;
+    // Ordering mirrors the lobby's control hierarchy: only the host acts, single-flight beats
+    // everything, an unsynced socket beats a stale roster, then the server's own start rule.
+    if (currentRoom === null) return '正在与房间同步，请稍候';
+    if (currentRoom.hostId !== localPlayerId.value) return '只有房主可以开始游戏';
+    if (pendingCommand.value !== null) return '正在处理上一步操作';
+    if (!socket.connected || connectionStatus.value !== 'connected') return '正在与房间同步，请稍候';
+    if (currentRoom.players.length < 2) return '至少需要 2 位玩家';
+    if (currentRoom.players.every((player) => player.isBot)) return '至少需要 1 位真人玩家';
+    return null;
+  });
+  const activeActorId = computed(() => state.value?.debt?.debtorId ?? state.value?.currentPlayerId ?? null);
+  const canControlActiveActor = computed(() => {
+    const current = state.value;
+    const currentRoom = room.value;
+    const actorId = activeActorId.value;
+    const actor = currentRoom?.players.find((player) => player.id === actorId);
+    return current !== null
+      && actorId !== null
+      && localPlayerId.value === actorId
+      && actor !== undefined
+      && actor.online
+      && !actor.isBot
+      && currentRoom?.takeoverPlayerId !== localPlayerId.value
+      && socket.connected
+      && connectionStatus.value === 'connected'
+      && !isAnimating.value;
+  });
+  const canSkipOfflineTurn = computed(() => {
+    const current = state.value;
+    const currentRoom = room.value;
+    const actorId = activeActorId.value;
+    const actor = currentRoom?.players.find((player) => player.id === actorId);
+    return current !== null
+      && current.debt === null
+      && currentRoom?.hostId === localPlayerId.value
+      && currentRoom.takeoverPlayerId === null
+      && actor !== undefined
+      && !actor.isBot
+      && !actor.online;
+  });
+  /**
+   * 悔棋（#101）：本机玩家此刻能否发起悔棋。
+   *
+   * 判据（房主开了、还在 playing、没有未清债务、上一手是真人、且那名真人就是我）
+   * 全部由服务端算好，通过 `room:undo_available` 广播「谁可悔」——客户端只判断
+   * 「那个人是不是我 + 我没有正在等待的请求 + 连接可用」。
+   * 在客户端复刻一遍服务端规则只会制造两边不一致的分歧，而按钮的真假从来由服务端说了算。
+   */
+  const canRequestUndo = computed(() =>
+    undoRequest.value === null
+    && undoAvailability.value !== null
+    && undoAvailability.value === localPlayerId.value
+    && socket.connected
+    && connectionStatus.value === 'connected',
+  );
+  /** 本机玩家是否需要对当前这次悔棋表态（= 请求创建时快照下来的对手之一，且尚未表态）。 */
+  const canVoteUndo = computed(() => {
+    const pending = undoRequest.value;
+    const memberId = localPlayerId.value;
+    if (pending === null || memberId === null) return false;
+    if (pending.requesterId === memberId) return false;
+    if (pending.approvals.includes(memberId)) return false;
+    return pending.voterIds.includes(memberId);
+  });
+  /** 当前请求是否由我发起：界面据此在「等待对手确认」与「同意 / 拒绝」之间切换。 */
+  const isUndoRequester = computed(() =>
+    undoRequest.value !== null && undoRequest.value.requesterId === localPlayerId.value,
+  );
+  /**
+   * 等 socket 连上（最多 `ackTimeoutMs`）。
+   *
+   * 抽出来是因为有两条路径需要它：`emitAck`（房间内命令）和 `listRooms`（进房前的查询）。
+   * 首页一打开就会去拉公开房间列表，那一刻握手很可能还没完成——不等待就会直接判定「连不上」。
+   *
+   * ★ 已经连上时返回 `null` 而**不是**一个已 resolve 的 Promise：调用点写成
+   * `const wait = waitForConnection(); if (wait !== null) await wait;`，于是「已连接」这条
+   * 最常见路径上不会因为一个多余的 `await` 而凭空多出一个微任务 tick（本文件的测试是逐 tick
+   * 精确推进的，多一个 tick 就会让「发射顺序 / ack 落点」的断言整体错位）。
+   */
+  const waitForConnection = (): Promise<void> | null => {
+    if (socket.connected || disposed) return null;
+    const connectionTimeout = deferred<void>();
+    const waiter: ConnectionWaiter = {
+      timer: globalThis.setTimeout(connectionTimeout.resolve, ackTimeoutMs),
+      resolve: connectionTimeout.resolve,
+    };
+    preconnectWaiters.add(waiter);
+    return Promise.race([connectionReady.promise, connectionTimeout.promise]).then(() => {
+      globalThis.clearTimeout(waiter.timer);
+      preconnectWaiters.delete(waiter);
+    });
+  };
+
+  /**
+   * 拉取公开房间列表（#108）。
+   *
+   * 刻意**不走 `emitAck`**：那套机制绑定在「房间内的一条大厅变更」上（同操作互斥锁、房间状态
+   * 和解、持久错误位、超时后的重连补偿），而房间列表恰恰是**还没进任何房间的人**用的，
+   * 走那套会在 `canIssueActiveCommands()` 上直接被判成 SESSION_NOT_RECOVERED。
+   * 这里只要一个「连上就发、到点算超时」的最小实现，失败也**不写持久错误位**——
+   * 列表刷不出来不该妨碍用户直接手输房间码进屋。
+   */
+  const listRooms = async (): Promise<Ack<RoomListAck>> => {
+    if (disposed) return { ok: false, code: 'DISCONNECTED', message: '' };
+    const wait = waitForConnection();
+    if (wait !== null) await wait;
+    if (disposed || !socket.connected) return { ok: false, code: 'DISCONNECTED', message: '' };
+    return await new Promise<Ack<RoomListAck>>((resolve) => {
+      let settled = false;
+      let timer: Parameters<typeof globalThis.clearTimeout>[0] | undefined;
+      const finish = (response: Ack<RoomListAck>): void => {
+        if (settled) return;
+        settled = true;
+        if (timer !== undefined) globalThis.clearTimeout(timer);
+        resolve(response);
+      };
+      timer = globalThis.setTimeout(
+        () => finish({ ok: false, code: 'REQUEST_TIMEOUT', message: '' }),
+        ackTimeoutMs,
+      );
+      socket.emit('room:list', finish);
+    });
+  };
+
+  const emitAck = async <T extends object>(operation: Operation, event: keyof ClientToServerEvents, ...args: unknown[]): Promise<Ack<T>> => {
+    const commandGeneration = generation;
+    const noticeIdAtStart = transientNotice.value?.id;
+    if (operation !== 'create' && operation !== 'join' && operation !== 'resume' && !canIssueActiveCommands()) {
+      handleFailure(operation, 'SESSION_NOT_RECOVERED');
+      return { ok: false, code: 'SESSION_NOT_RECOVERED', message: '' };
+    }
+    const connectionWait = waitForConnection();
+    if (connectionWait !== null) await connectionWait;
+    if (disposed || commandGeneration !== generation || !socket.connected) {
+      handleFailure(operation, 'DISCONNECTED');
+      return { ok: false, code: 'DISCONNECTED', message: '' };
+    }
+    if (inFlight.has(operation)) {
+      handleFailure(operation, 'OPERATION_IN_PROGRESS', inFlight.get(operation)?.marker);
+      return { ok: false, code: 'OPERATION_IN_PROGRESS', message: '' };
+    }
+
+    const pending = deferred<Ack<T>>();
+    const marker: ReconciliationMarker = {
+      generation: commandGeneration,
+      revision: authoritativeRevision,
+      roomStatus: room.value?.status ?? null,
+      botIdsAtEmit: operation === 'addBot'
+        ? new Set((room.value?.players ?? []).filter((player) => player.isBot).map((player) => player.id))
+        : EMPTY_ID_SET,
+      removeTargetId: operation === 'removeBot' ? removeTargetOf(args) : null,
+      renameTargetId: operation === 'renameBot' ? renamePayloadOf(args)?.playerId ?? null : null,
+      renameExpectedNickname: operation === 'renameBot'
+        ? (renamePayloadOf(args)?.nickname.trim() ?? null)
+        : null,
+      gameTurn: state.value?.turn ?? null,
+      actorId: activeActorId.value,
+    };
+    const attempt: Attempt<T> = {
+      settled: false,
+      timer: undefined,
+      resolve: pending.resolve,
+      finish: () => undefined,
+      marker,
+    };
+    const owner = attempt as unknown as Attempt<object>;
+    const finish = (response: Ack<T>): void => {
+      if (attempt.settled) return;
+      attempt.settled = true;
+      globalThis.clearTimeout(attempt.timer);
+      if (operation === 'resume') resumePromise = null;
+      if (inFlight.get(operation) === owner) inFlight.delete(operation);
+      attempt.resolve(response);
+    };
+    attempt.finish = finish;
+    attempt.timer = globalThis.setTimeout(() => finish({ ok: false, code: 'REQUEST_TIMEOUT', message: '' }), ackTimeoutMs);
+    inFlight.set(operation, owner);
+    socket.emit(event, ...args, finish);
+    const response = await pending.promise;
+    if (!disposed && commandGeneration === generation) {
+      if (!response.ok && response.code === 'REQUEST_TIMEOUT' && (
+        operation === 'start'
+        || operation === 'addBot'
+        || operation === 'removeBot'
+        || operation === 'renameBot'
+        || operation === 'intent'
+        || operation === 'skip'
+      )) {
+        const markers = timedOutMarkers.get(operation) ?? [];
+        markers.push(attempt.marker);
+        timedOutMarkers.set(operation, markers);
+      }
+      if (!response.ok && !(operation === 'resume' && resumeDeferred)) handleFailure(operation, response.code, attempt.marker);
+      if (response.ok) {
+        clearOperationError(operation);
+      }
+      if (response.ok && noticeIdAtStart !== undefined) clearTransientNotice(noticeIdAtStart);
+    }
+    return response;
+  };
+
+  const reconcileRoom = (nextRoom: PublicRoomState): void => {
+    reconcileStart(nextRoom);
+    reconcileAddBot(nextRoom);
+    reconcileRemoveBot(nextRoom);
+    reconcileRenameBot(nextRoom);
+  };
+  // A newer authoritative room within the same recovery generation is proof a lost-ack command
+  // landed: the status progressed to playing, an unseen bot joined, or the target bot left. Each
+  // matches only its own kind of change, so an unrelated broadcast never falsely settles a command.
+  const reconcileOperation = (
+    operation: Operation,
+    revision: number | undefined,
+    matches: (marker: ReconciliationMarker) => boolean,
+  ): void => {
+    if (revision === undefined) return;
+    const attempt = inFlight.get(operation);
+    const markers = timedOutMarkers.get(operation);
+    const markerIndex = markers?.findIndex((marker) => (
+      marker.generation === generation
+      && revision > marker.revision
+      && matches(marker)
+    )) ?? -1;
+    if (markers !== undefined && markerIndex >= 0) {
+      const [timedOutMarker] = markers.splice(markerIndex, 1);
+      if (markers.length === 0) timedOutMarkers.delete(operation);
+      clearOperationError(operation, timedOutMarker);
+      return;
+    }
+    if (attempt === undefined) return;
+    const marker = attempt.marker;
+    if (marker?.generation !== generation || revision <= marker.revision || !matches(marker)) return;
+    attempt.finish({ ok: true });
+  };
+  const reconcileStart = (nextRoom: PublicRoomState): void => {
+    reconcileOperation('start', authoritativeRevision, (marker) => (
+      marker.roomStatus !== 'playing' && nextRoom.status === 'playing'
+    ));
+  };
+  const reconcileAddBot = (nextRoom: PublicRoomState): void => {
+    reconcileOperation('addBot', authoritativeRevision, (marker) => (
+      nextRoom.players.some((player) => player.isBot && !marker.botIdsAtEmit.has(player.id))
+    ));
+  };
+  const reconcileRemoveBot = (nextRoom: PublicRoomState): void => {
+    reconcileOperation('removeBot', authoritativeRevision, (marker) => (
+      marker.removeTargetId !== null
+      && !nextRoom.players.some((player) => player.id === marker.removeTargetId)
+    ));
+  };
+  const reconcileRenameBot = (nextRoom: PublicRoomState): void => {
+    reconcileOperation('renameBot', authoritativeRevision, (marker) => {
+      if (marker.renameTargetId === null || marker.renameExpectedNickname === null) return false;
+      const target = nextRoom.players.find((player) => player.id === marker.renameTargetId);
+      return target !== undefined && target.nickname === marker.renameExpectedNickname;
+    });
+  };
+  const reconcileTransition = (eventRevision: number | undefined, snapshot: PublicGameSnapshot): void => {
+    reconcileOperation('intent', eventRevision, () => true);
+    reconcileOperation('skip', eventRevision, (marker) => (
+      marker.gameTurn !== snapshot.turn
+      || marker.actorId !== (snapshot.debt?.debtorId ?? snapshot.currentPlayerId)
+    ));
+  };
+  const onRoomState = (nextRoom: PublicRoomState): void => {
+    authoritativeRevision += 1;
+    const entryOwner = entryAttempt ?? stagedEntry;
+    if (entryOwner !== null) {
+      entryOwner.room = nextRoom;
+      entryOwner.roomFromBroadcast = true;
+      return;
+    }
+    if (!hasActiveSession) return;
+    applyRoom(nextRoom);
+    reconcileRoom(nextRoom);
+    refreshTakeoverStatus();
+  };
+  const onConnection = (change: { playerId: string; online: boolean }): void => {
+    if (disposed || !hasActiveSession || !room.value) return;
+    // The server reuses this broadcast for spectator presence: the id matches exactly one of
+    // the two rosters, so both are mapped and the other is left untouched.
+    applyRoom({
+      ...room.value,
+      players: room.value.players.map((player) => player.id === change.playerId ? { ...player, online: change.online } : player),
+      spectators: room.value.spectators.map((member) => member.id === change.playerId ? { ...member, online: change.online } : member),
+    });
+  };
+  /** 托管状态：每人一个开关，一条事件只描述一个人，所以按playerId 合并进表。 */
+  const onPlayerTakeover = (change: { playerId: string; nickname: string; on: boolean }): void => {
+    if (disposed) return;
+    takeoverOnByPlayer.value = { ...takeoverOnByPlayer.value, [change.playerId]: change.on };
+  };
+
+  const onClosed = (payload: { reason?: string }): void => {    if (disposed || entryAttempt !== null) return;
+    resetSession();
+    const messages: Record<string, string> = {
+      empty_lobby: '房间因无人而关闭',
+      lobby_idle_timeout: '房间等待超时已关闭',
+      game_over: '本局游戏已结束',
+    };
+    setLastError({ kind: 'terminal', message: messages[payload.reason ?? ''] ?? '房间已关闭' });
+    connectionStatus.value = 'failed';
+  };
+  const onEvents = (payload: { events: GameEvent[] }): void => {
+    if (disposed) return;
+    authoritativeRevision += 1;
+    const entryOwner = entryAttempt ?? stagedEntry;
+    if (entryOwner !== null) {
+      entryOwner.eventBatches.push(payload.events);
+      return;
+    }
+    pendingTransitionRevisions.push(authoritativeRevision);
+    if (hasActiveSession) presenter?.receiveEvents(payload.events);
+  };
+  const onSnapshot = (payload: { state: PublicGameSnapshot }): void => {
+    if (disposed) return;
+    authoritativeRevision += 1;
+    const entryOwner = entryAttempt ?? stagedEntry;
+    if (entryOwner !== null) {
+      const events = entryOwner.eventBatches.shift();
+      if (events === undefined) entryOwner.snapshot = payload.state;
+      else entryOwner.transitions.push({ events, snapshot: payload.state });
+      return;
+    }
+    const eventRevision = pendingTransitionRevisions.shift();
+    reconcileTransition(eventRevision, payload.state);
+    if (hasActiveSession) {
+      // 悔棋回退的那份快照按硬重置处理；标记只用一次，用掉即清（见 pendingUndoReset 的说明）。
+      const reset = pendingUndoReset;
+      pendingUndoReset = false;
+      applySnapshot(payload.state, reset);
+    }
+  };
+  const resumeStoredSession = (): Promise<void> => {
+    if (resumePromise !== null) return resumePromise;
+    const active = readOnlineSession(storage);
+    if (resumeDeferred || !active || disposed || !socket.connected) return Promise.resolve();
+    const owner = ++resumeGeneration;
+    const resume = async (): Promise<void> => {
+      connectionStatus.value = 'reconnecting';
+      const ack = await emitAck<ResumeAck>('resume', 'session:resume', active);
+      if (disposed || owner !== resumeGeneration) return;
+      if (!ack.ok) {
+        if (ack.code === 'INVALID_TOKEN' || ack.code === 'ROOM_NOT_FOUND') {
+          resetSession();
+        }
+        connectionStatus.value = 'failed';
+        return;
+      }
+      resetAuthoritativeRecovery();
+      activeSession = active;
+      hasActiveSession = true;
+      localPlayerId.value = active.playerId;
+      applyRoom(ack.room);
+      const snapshotCompatible = ack.snapshot === undefined || applySnapshot(ack.snapshot, true);
+      if (snapshotCompatible) {
+        clearLastError();
+        refreshTakeoverStatus();
+      }
+      connectionStatus.value = 'connected';
+    };
+    const promise = resume();
+    resumePromise = promise;
+    return promise;
+  };
+  const cancelResume = (): void => {
+    const attempt = inFlight.get('resume');
+    if (attempt === undefined || attempt.settled) return;
+    attempt.settled = true;
+    globalThis.clearTimeout(attempt.timer);
+    inFlight.delete('resume');
+    attempt.resolve({ ok: false, code: 'DISCONNECTED', message: '' });
+    resumePromise = null;
+  };
+  const onChat = (message: ChatMessage): void => {
+    if (disposed) return;
+    chatLog.value.push(message);
+    if (chatLog.value.length > 200) chatLog.value.splice(0, chatLog.value.length - 200);
+  };
+  // 服务端单播的“最近聊天”快照（进入房间 / 重连时）：以服务端为准整体覆盖，
+  // 这样刷新页面、换设备重连后仍然看得到之前的聊天记录。
+  const onChatHistory = (payload: { messages: ChatMessage[] }): void => {
+    if (disposed) return;
+    if (!Array.isArray(payload?.messages)) return;
+    chatLog.value = payload.messages.slice(-200);
+  };
+  // 房间设置的唯一收敛点（#4 / #6 / #101 / #106 / #107 / #108 / #23 ③）：广播与 update 的 ack
+  // 两条路径都走它。少了这一层，每加一个设置项就要在兩处同步补字段，
+  // 而「一边补了、另一边忘了」不会报错，只会让刷新前后看到不同的设置。
+  const normalizeRoomSettings = (settings: RoomSettings): RoomSettings => ({
+    botDifficulty: settings.botDifficulty,
+    ruleConfig: settings.ruleConfig ?? null,
+    minimalUndoEnabled: settings.minimalUndoEnabled === true,
+    auctionOnDecline: settings.auctionOnDecline === true,
+    turnTimeLimitSec: normalizeTurnTimeLimitSec(settings.turnTimeLimitSec),
+    isPublic: settings.isPublic === true,
+    // 现金目标（#23 ③）：`null` 与「值不合法」都归一成 `null`（= 不设目标），
+    // 因为 UI 只认「关了 / 开着」两态，一个 NaN 或负数在界面上没有任何可展示的语义。
+    cashGoal: normalizeCashGoal(settings.cashGoal),
+    // 密码**只有布尔**（#23 ③）：服务端从不广播凭据，客户端也就无从（也不该）缓存它。
+    passwordProtected: settings.passwordProtected === true,
+    // 观战开关（#23 ③）：服务端缺省即 `true`，所以这里用 `!== false`——
+    // 与 `isPublic` 的 `=== true` 方向相反，因为两者的默认值本来就相反。
+    allowSpectators: settings.allowSpectators !== false,
+  });
+  // 房间设置（#4 / #6）由服务端广播/单播，整间共用一份：直接整体覆盖即可（低频、幂等）。
+  const onRoomSettings = (settings: RoomSettings): void => {
+    if (disposed) return;
+    roomSettings.value = normalizeRoomSettings(settings);
+  };
+  // 悔棋（#101）三条广播：请求本身 / 谁可悔 / 结果。同样整体覆盖（低频、幂等）。
+  const onUndoRequest = (payload: UndoRequestInfo): void => {
+    if (disposed || payload === null || typeof payload !== 'object') return;
+    undoRequest.value = payload;
+  };
+  const onUndoAvailable = (payload: { playerId: string | null }): void => {
+    if (disposed) return;
+    undoAvailability.value = payload?.playerId ?? null;
+  };
+  /**
+   * 回合限时（#107）：服务端每次重新排钟都会广播一次，这里整体覆盖。
+   *
+   * 刻意**不做本地推算**：`deadlineAt` 是服务端的时钟，客户端只负责把它换算成剩余秒数。
+   * 想要「本地时钟与服务端有偏差」的情况下也不出错，唯一稳的做法就是认服务端的数。
+   */
+  const onTurnDeadline = (payload: TurnDeadlineInfo): void => {
+    if (disposed) return;
+    turnDeadline.value = normalizeTurnDeadline(payload);
+  };
+  /** 有人被限时判超时、服务端代走了一步：只给一句人话提示，真正的状态走 game:events。 */
+  const onTurnTimeout = (payload: { playerId: string; nickname: string }): void => {
+    if (disposed || payload === null || typeof payload !== 'object') return;
+    const nickname = typeof payload.nickname === 'string' && payload.nickname.length > 0 ? payload.nickname : '有玩家';
+    showTransientMessage(`${nickname} 超时，已自动代走一步`);
+  };
+  /** 四种结局各给一句人话。对全房间广播，所以措辞是「中立叙述」而非「针对你」。 */
+  const UNDO_OUTCOME_MESSAGES: Readonly<Record<UndoOutcome, string>> = {
+    applied: '悔棋已通过，退回上一步',
+    rejected: '悔棋被拒绝',
+    cancelled: '悔棋请求已撤回',
+    expired: '悔棋请求超时，未获全部确认',
+  };
+  const onUndoResult = (payload: { requestId: string; outcome: UndoOutcome }): void => {
+    if (disposed || payload === null || typeof payload !== 'object') return;
+    // 只清「就是这一次」的等待态：一条迟到的结果不该把刚发起的新请求抹掉。
+    if (undoRequest.value !== null && undoRequest.value.requestId === payload.requestId) {
+      undoRequest.value = null;
+    }
+    // applied 时服务端紧跟着推一份回退后的快照，那份必须按硬重置播（见 pendingUndoReset）。
+    if (payload.outcome === 'applied') pendingUndoReset = true;
+    const message = UNDO_OUTCOME_MESSAGES[payload.outcome];
+    if (message !== undefined) showTransientMessage(message);
+  };
+  const onConnect = (): void => {
+    connectionReady.resolve();
+    reconnectPending = false;
+    if (disposed || connectedHandled) return;
+    connectedHandled = true;
+    if (resumeDeferred || readOnlineSession(storage) === null) {
+      clearLastError((current) => current.kind === 'blocking' && (current.code === 'CONNECT_ERROR' || current.code === 'DISCONNECTED'));
+      connectionStatus.value = 'connected';
+      return;
+    }
+    void resumeStoredSession();
+  };
+  const onDisconnect = (): void => {
+    connectedHandled = false;
+    reconnectPending = false;
+    resumeGeneration += 1;
+    cancelResume();
+    if (!disposed) connectionStatus.value = 'reconnecting';
+  };
+  const onConnectError = (): void => {
+    // A failed transport attempt is terminal for this retry cycle. Release the latch so a
+    // subsequent explicit retry can open a fresh transport; dispose makes late errors inert.
+    reconnectPending = false;
+    if (disposed) return;
+    connectionStatus.value = 'failed';
+    fail('CONNECT_ERROR');
+  };
+
+  socket.on('room:state', onRoomState);
+  socket.on('player:connection', onConnection);
+  socket.on('player:takeover', onPlayerTakeover);
+  socket.on('room:closed', onClosed);
+  socket.on('game:events', onEvents);
+  socket.on('game:snapshot', onSnapshot);
+  socket.on('room:chat_broadcast', onChat);
+  socket.on('room:chat_history', onChatHistory);
+  socket.on('room:settings', onRoomSettings);
+  socket.on('room:undo_request', onUndoRequest);
+  socket.on('room:undo_result', onUndoResult);
+  socket.on('room:undo_available', onUndoAvailable);
+  socket.on('room:turn_deadline', onTurnDeadline);
+  socket.on('room:turn_timeout', onTurnTimeout);
+  socket.on('connect', onConnect);
+  socket.on('disconnect', onDisconnect);
+  socket.on('connect_error', onConnectError);
+  if (socket.connected) onConnect();
+
+  const submit = async (request: PendingRoomRequest): Promise<void> => {
+    if (entryAttempt !== null || (stagedEntry !== null && stagedEntry.request.requestId !== request.requestId)) {
+      fail('OPERATION_IN_PROGRESS', request.operation);
+      return;
+    }
+    clearLastError((current) => current.kind === 'terminal' || current.kind === 'blocking');
+    // 持久化待恢复请求仅用于断线重连，属"尽力而为"：localStorage 不可用/写满/隐私模式时不应阻断
+    // 建房/进房，更不应误报成"请求超时"（会让用户误判为网络问题）。保存失败仅意味着失去自动恢复能力。
+    savePendingRoomRequest(storage, request);
+    const owner = stagedEntry?.request.requestId === request.requestId
+      ? stagedEntry
+      : { request, room: null, roomFromBroadcast: false, snapshot: null, eventBatches: [], transitions: [] };
+    stagedEntry = null;
+    entryAttempt = owner;
+    try {
+      const ack = request.operation === 'create'
+        ? await emitAck<CreateRoomAck>('create', 'room:create', {
+          nickname: request.nickname,
+          requestId: request.requestId,
+          mapId: request.mapId,
+          ...(request.botDifficulty !== undefined && request.botDifficulty !== 'normal' ? { botDifficulty: request.botDifficulty } : {}),
+        })
+        : await emitAck<JoinRoomAck>('join', 'room:join', {
+          roomCode: request.roomCode,
+          nickname: request.nickname,
+          requestId: request.requestId,
+          role: request.role,
+          // 没设密码的房间带上 undefined 会被适配器当作「未提供」（它只查类型），
+          // 但显式省略更诚实：载荷里就不该出现一个语义为空的字段。
+          ...(request.password === undefined ? {} : { password: request.password }),
+        });
+      if (!ack.ok || disposed || entryAttempt !== owner) {
+        if (!disposed && entryAttempt === owner) {
+          stagedEntry = owner;
+          if (!ack.ok) {
+            entryFailure.value = classifyEntryFailure(ack.code);
+            // 失败原因必须落到界面上：只有「上次操作未完成」这一句话，玩家既不知道
+            // 为什么失败，也不知道该等还是该改输入（例如限流该等、昵称重复该换）。
+            // 服务端 message 不直接用（可能是内部英文串），统一走本地文案表。
+            setLastError({ kind: 'operation', message: publicError(ack.code), code: ack.code });
+          }
+        }
+        return;
+      }
+      if (!owner.roomFromBroadcast) owner.room = ack.room;
+      const active: OnlineSession = { roomCode: ack.room.roomCode, playerId: ack.playerId, token: ack.token };
+      // 持久化活跃会话仅用于断线自动恢复，属尽力而为：保存失败不阻断已成功的建房/进房，
+      // 也不应误报成"请求超时"。
+      commitOnlineSession(storage, active);
+      activeSession = active;
+      hasActiveSession = true;
+      localPlayerId.value = ack.playerId;
+      applyRoom(owner.room ?? ack.room);
+      let snapshotCompatible = true;
+      if (owner.transitions.length > 0) {
+        for (const transition of owner.transitions) {
+          const renderable = resolveSnapshot(transition.snapshot);
+          if (renderable === null) {
+            snapshotCompatible = false;
+            break;
+          }
+          const currentPresenter = ensurePresenter(renderable);
+          currentPresenter.receiveEvents(transition.events);
+          void currentPresenter.receiveSnapshot(renderable).catch(() => undefined);
+          refreshTakeoverStatus(renderable);
+        }
+      } else if (owner.snapshot !== null) {
+        snapshotCompatible = applySnapshot(owner.snapshot);
+      } else if ('snapshot' in ack && ack.snapshot !== undefined) {
+        // A mid-game spectator joins straight into the live board: the ack carries the same
+        // public snapshot a resume would, so applying it here mirrors the resume path.
+        snapshotCompatible = applySnapshot(ack.snapshot);
+      }
+      stagedEntry = null;
+      entryFailure.value = null;
+      connectionStatus.value = 'connected';
+      if (snapshotCompatible) {
+        clearLastError();
+        refreshTakeoverStatus();
+      }
+    } finally {
+      if (entryAttempt === owner) entryAttempt = null;
+    }
+  };
+  const create = async (nickname: string, mapId: string, botDifficulty: BotDifficulty = 'normal'): Promise<void> => submit({
+    operation: 'create',
+    nickname,
+    requestId: requestId(crypto),
+    mapId,
+    botDifficulty,
+  });
+  const join = async (
+    roomCode: string,
+    nickname: string,
+    role: RoomRole = 'player',
+    password?: string,
+  ): Promise<void> => submit({
+    operation: 'join',
+    roomCode,
+    nickname,
+    role,
+    // 先 trim 再判空（#23 ③）：输入框里一个误敲的空格不该被当成「带了密码」，
+    // 否则服务端会把「 1234」当成与「1234」不同的凭据并驳回。
+    // 服务端同样 trim，两边口径一致，避免「这边当有效、那边当不同」。
+    ...(typeof password === 'string' && password.trim().length > 0 ? { password: password.trim() } : {}),
+    requestId: requestId(crypto),
+  });
+  const abortEntry = (): boolean => {
+    if (entryAttempt !== null) {
+      fail('OPERATION_IN_PROGRESS');
+      return false;
+    }
+    // Storage-first: only drop in-memory staging once the pending record is gone, so a
+    // rejected removal keeps the entry retryable and consistent with a page refresh.
+    if (!clearPendingRoomRequest(storage)) {
+      fail('STORAGE_UNAVAILABLE');
+      return false;
+    }
+    stagedEntry = null;
+    entryFailure.value = null;
+    clearLastError();
+    return true;
+  };
+  const discardStoredSession = (): boolean => {
+    if (!clearStoredOnlineSession(storage)) {
+      fail('STORAGE_UNAVAILABLE');
+      return false;
+    }
+    activeSession = null;
+    hasActiveSession = false;
+    localPlayerId.value = null;
+    clearLastError();
+    return true;
+  };
+  const retryPending = async (): Promise<void> => {
+    const pending = readPendingRoomRequest(storage);
+    if (!pending) return;
+    await submit(pending);
+  };
+  const retryResume = async (): Promise<void> => {
+    resumeDeferred = false;
+    // A live socket resumes straight away; a dead one must first re-open the transport, so the
+    // subsequent `connect` drives exactly one resume. Guard against a double open while connecting.
+    if (socket.connected) {
+      await resumeStoredSession();
+      return;
+    }
+    if (disposed || reconnectPending) return;
+    reconnectPending = true;
+    connectionStatus.value = 'reconnecting';
+    clearLastError((current) => current.kind === 'blocking' && (current.code === 'CONNECT_ERROR' || current.code === 'DISCONNECTED'));
+    socket.connect();
+  };
+  const deferResume = (): void => {
+    resumeDeferred = true;
+    resumeGeneration += 1;
+    cancelResume();
+    if (!disposed && socket.connected) {
+      clearLastError((current) => current.kind === 'blocking' && (current.code === 'CONNECT_ERROR' || current.code === 'DISCONNECTED'));
+      connectionStatus.value = 'connected';
+    }
+  };
+  // Spectators are read-only members: every mutating command is refused locally before any
+  // emit (the server re-checks the role, but a doomed command should never leave the client).
+  // `leave` is deliberately NOT guarded — leaving the spectator seat is always allowed.
+  const guardSpectatorCommand = (command: LobbyCommand): boolean => {
+    if (!isSpectator.value) return false;
+    fail('NOT_HOST', command);
+    return true;
+  };
+  // A single reactive lock across every host lobby mutation: while one command awaits its
+  // server acknowledgement, the rest are rejected safely (no duplicate emit, no local mutation).
+  // The recovery gate wins over this lock — an un-recovered session lets emitAck reject each
+  // command independently (SESSION_NOT_RECOVERED / DISCONNECTED) rather than a stale in-progress.
+  const runLobbyCommand = async (command: LobbyCommand, run: () => Promise<Ack<Record<string, never>>>): Promise<void> => {
+    if (!canIssueActiveCommands()) {
+      await run();
+      return;
+    }
+    if (pendingCommand.value !== null) {
+      fail('OPERATION_IN_PROGRESS', pendingCommand.value);
+      return;
+    }
+    pendingCommand.value = command;
+    try {
+      await run();
+    } finally {
+      if (!disposed) pendingCommand.value = null;
+    }
+  };
+  const start = async (): Promise<void> => {
+    if (guardSpectatorCommand('start')) return;
+    await runLobbyCommand('start', () => emitAck<Record<string, never>>('start', 'room:start'));
+  };
+  const addBot = async (): Promise<void> => {
+    if (guardSpectatorCommand('addBot')) return;
+    await runLobbyCommand('addBot', () => emitAck<Record<string, never>>('addBot', 'room:add_bot'));
+  };
+  const removeBot = async (playerId: string): Promise<void> => {
+    if (guardSpectatorCommand('removeBot')) return;
+    await runLobbyCommand('removeBot', () => emitAck<Record<string, never>>('removeBot', 'room:remove_bot', { playerId }));
+  };
+  const renameBot = async (playerId: string, nickname: string): Promise<void> => {
+    if (guardSpectatorCommand('renameBot')) return;
+    await runLobbyCommand('renameBot', () => emitAck<Record<string, never>>('renameBot', 'room:rename_bot', { playerId, nickname }));
+  };
+  /**
+   * 房主调整房间设置（#4 / #6）。走 `runLobbyCommand` 复用「同一时刻只允许一条大厅变更」
+   * 的互斥锁与待确认态；结果既用 ack 立即收敛、也接受随后的 `room:settings` 广播覆盖。
+   */
+  const updateRoomSettings = async (patch: RoomSettingsPatch): Promise<void> => {
+    if (guardSpectatorCommand('updateSettings')) return;
+    await runLobbyCommand('updateSettings', async () => {
+      const response = await emitAck<RoomSettings>('updateSettings', 'room:update_settings', patch);
+      if (!response.ok) return response;
+      roomSettings.value = normalizeRoomSettings(response);
+      return { ok: true };
+    });
+  };
+  const kickPlayer = async (playerId: string): Promise<void> => {
+    if (guardSpectatorCommand('kick')) return;
+    await runLobbyCommand('kick', () => emitAck<Record<string, never>>('kick', 'room:kick_player', { playerId }));
+  };
+  const sendChat = (text: string): void => {
+    if (disposed || !socket.connected || !hasActiveSession) return;
+    const trimmed = text.trim();
+    if (trimmed.length === 0 || trimmed.length > CHAT_TEXT_MAX_LENGTH) return;
+    socket.emit('room:chat_message', { text: trimmed });
+  };
+  const sendIntent = async (intent: Intent): Promise<void> => {
+    if (isSpectator.value) return;
+    // 投降不受“是否轮到该玩家 / 是否处于接管态”限制：任何在局真人都能随时认输退出房间。
+    if (intent.type !== 'surrender' && !canControlActiveActor.value) {
+      if (room.value?.takeoverPlayerId === localPlayerId.value) refreshTakeoverStatus();
+      return;
+    }
+    await emitAck<Record<string, never>>('intent', 'game:intent', { intent });
+  };
+  const skipOfflineTurn = async (): Promise<void> => {
+    if (isSpectator.value) return;
+    if (!canSkipOfflineTurn.value) {
+      const debtorId = state.value?.debt?.debtorId;
+      const debtor = room.value?.players.find((player) => player.id === debtorId);
+      if (debtor !== undefined && !debtor.online) {
+        setLastError({
+          kind: 'derived',
+          message: `需要 ${debtor.nickname} 回来处理债务`,
+          derivedSource: 'offline-debt',
+          debtorId: debtor.id,
+        });
+      }
+      return;
+    }
+    await emitAck<Record<string, never>>('skip', 'room:skip_offline_turn');
+  };
+
+  /**
+   * AI 托管开关。开启后服务端会替本机玩家走完每一步，直到这里再发一次 `on: false`。
+   *
+   * 不做乐观更新：托管状态必须由服务端的 `room_state` 广播说了算，否则「我以为托管开了
+   * 但其实没开」会让玩家干等。失败时按 `lastError` 提示。
+   */
+  const setTakeover = async (on: boolean): Promise<void> => {
+    const response = await emitAck<Record<string, never>>('set-takeover', 'room:set_takeover', { on });
+    if (!response.ok) {
+      lastError.value = '切换 AI 托管失败，请重试';
+    }
+  };
+
+  /**
+   * 托管状态由服务端的 `player_takeover` 事件驱动（该玩家的最新一次开关结果），
+   * 本地不另存一份 —— 两份状态必然会在「发出去但服务端拒绝」时不一致。
+   */
+  const takeoverOnByPlayer = ref<Record<string, boolean>>({});
+  const isTakeoverOn = computed(() => {
+    const me = localPlayerId.value;
+    if (me === null) return false;
+    return takeoverOnByPlayer.value[me] === true;
+  });
+  const takeoverOnPlayers = computed(() => takeoverOnByPlayer.value);
+  /**
+   * 发起悔棋（#101）。**不预判**「我是不是上一手行动者」——那是服务端的判断，
+   * 这里直接发；不行就由服务端回一个 `UNDO_*`，走即时提示告诉玩家为什么不行。
+   * 结果本身不在这里落地：服务端会向全房间广播 `room:undo_request`，等待态由那份广播驱动。
+   */
+  const requestUndo = async (): Promise<void> => {
+    if (isSpectator.value) return;
+    await emitAck<UndoRequestInfo>('undoRequest', 'room:undo_request');
+  };
+  /** 对手对悔棋请求表决（#101）：**全部同意**才真正回退，任一人拒绝立即作废。 */
+  const voteUndo = async (requestId: string, approve: boolean): Promise<void> => {
+    if (isSpectator.value) return;
+    await emitAck<Record<string, never>>('undoVote', 'room:undo_vote', { requestId, approve });
+  };
+  /** 撤回自己尚未有结果的悔棋请求（#101）。 */
+  const cancelUndo = async (): Promise<void> => {
+    if (isSpectator.value) return;
+    await emitAck<Record<string, never>>('undoCancel', 'room:undo_cancel');
+  };
+  const leave = async (): Promise<void> => runLobbyCommand('leave', async () => {
+    const ack = await emitAck<Record<string, never>>('leave', 'room:leave');
+    if (ack.ok && !disposed) resetSession();
+    return ack;
+  });
+  // A local give-up for an unreachable game: no server round-trip. Storage-first — the stored
+  // active session and pending request must leave storage before any in-memory teardown, so a
+  // rejected removal keeps the room/state/local record intact, reports a safe error, and stays
+  // retryable. Distinct from leave(), which notifies the room over a live socket. Returns whether
+  // the abandon committed.
+  const abandon = (): boolean => {
+    if (!clearStoredOnlineSession(storage)) {
+      fail('STORAGE_UNAVAILABLE');
+      return false;
+    }
+    resetSession();
+    return true;
+  };
+  const dispose = (): void => {
+    if (disposed) return;
+    disposed = true;
+    generation += 1;
+    entryAttempt = null;
+    stagedEntry = null;
+    pendingTransitionRevisions.length = 0;
+    timedOutMarkers.clear();
+    cashNotices.value = [];
+    clearTransientFeedback();
+    presenter?.dispose();
+    for (const stop of stopPresenterSync) stop();
+    stopPresenterSync = [];
+    for (const waiter of preconnectWaiters) {
+      globalThis.clearTimeout(waiter.timer);
+      waiter.resolve();
+    }
+    preconnectWaiters.clear();
+    for (const attempt of inFlight.values()) {
+      if (attempt.settled) continue;
+      attempt.settled = true;
+      globalThis.clearTimeout(attempt.timer);
+      attempt.resolve({ ok: false, code: 'DISCONNECTED', message: '' });
+    }
+    inFlight.clear();
+    socket.off('room:state', onRoomState);
+    socket.off('player:connection', onConnection);
+  socket.off('player:takeover', onPlayerTakeover);
+    socket.off('room:closed', onClosed);
+    socket.off('game:events', onEvents);
+    socket.off('game:snapshot', onSnapshot);
+    socket.off('room:chat_broadcast', onChat);
+    socket.off('room:chat_history', onChatHistory);
+    socket.off('room:settings', onRoomSettings);
+    socket.off('room:undo_request', onUndoRequest);
+    socket.off('room:undo_result', onUndoResult);
+    socket.off('room:undo_available', onUndoAvailable);
+    socket.off('room:turn_deadline', onTurnDeadline);
+    socket.off('room:turn_timeout', onTurnTimeout);
+    socket.off('connect', onConnect);
+    socket.off('disconnect', onDisconnect);
+    socket.off('connect_error', onConnectError);
+    socket.disconnect();
+  };
+
+  return {
+    mode: 'online', state, room, localPlayerId, connectionStatus, displayPositions, dice, activeCard, eventMessage,
+    isAnimating, isBotThinking, lastError, compatibilityError, cashNotices, displayCash, transientNotice, entryFailure, availableActions: computed<ClientAction[]>(() => (
+      canControlActiveActor.value && state.value !== null ? getAvailableActions(state.value) : []
+    )),
+    chatLog, sendChat, create, retryPending, retryResume, deferResume, join, start, addBot, removeBot, renameBot, roomSettings, updateRoomSettings, listRooms, kickPlayer, sendIntent, skipOfflineTurn, leave, dispose,
+    undoRequest, undoAvailability, canRequestUndo, canVoteUndo, isUndoRequester, requestUndo, voteUndo, cancelUndo,
+    turnDeadline, isTakeoverOn, takeoverOnPlayers, setTakeover,
+    abortEntry, discardStoredSession, abandon, isHost, isSpectator, isLobbyCommandReady, pendingCommand, startBlockedReason,
+  };
+}

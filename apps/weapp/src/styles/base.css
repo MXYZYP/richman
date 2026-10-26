@@ -1,0 +1,229 @@
+/* 全局样式：M3-1.5 主题 A（实体复刻暖纸风），配色板取自 plan/02 §4.1。
+   变量集中在此，组件不写裸色值，便于将来换肤只改这一处。*/
+page {
+  /* 页面与文字 */
+  --color-bg: #F7F3EA;       /* 页面背景 米白 */
+  --color-cell: #FFFFFF;     /* 棋盘格底 */
+  --color-border: #D8D2C4;   /* 描边 */
+  --color-primary: #9C3A2A;  /* 品牌主色 朱砂：标题/选中态/品牌点缀。不再兼作危险色 */
+  --color-accent: #D9A441;   /* 点缀金 */
+  --color-text: #2B2B2B;     /* 正文 */
+  --color-muted: #6B6658;    /* 次要文字（AA 对比） */
+  --color-gain: #2F8F5B;     /* 收钱 竹青（只调饱和，与新色板对齐）*/
+  --color-pay: #D2402F;      /* 付钱 正红：危险的唯一出口（欠款/破产/亏钱/表单报错）*/
+  --cash-profit-text: #7B2417;
+  --cash-profit-bg: #F3DDD9;
+  --cash-loss-text: #145A32;
+  --cash-loss-bg: #DDEDE3;
+  --price-color: #8A5A22;    /* 地产价格 赭棕：与 --color-accent 同色相、明度低两档，形成金→棕梯度 */
+
+  /* 棋盘底与阴影 */
+  --board-bg: #E4D9C4;       /* 棋盘底 暖纸板（与格面明度差拉到 22，不靠描边也分得清）*/
+  --board-surface: #FFFCF3;   /* 面板卡片暖纸面 */
+  --board-shadow: 0 14px 40px rgb(53 39 20 / 14%);
+  --board-radius: 24px;
+
+  /* 中央面板 */
+  --center-bg: linear-gradient(135deg, rgb(255 255 255 / 82%), rgb(247 237 221 / 72%));
+  --center-border: #cbbd9d;
+  --title-color: #6B2A1C;    /* 棋盘题字 墨朱：比品牌朱砂深一档，墨压色 */
+  --event-bg: #fff3c2;       /* 事件提示条 暖黄票根 */
+  --event-text: #79552a;
+  --overlay-scrim: rgb(43 35 26 / 48%);  /* 模态遮罩 暖墨 */
+
+  /* 支线虚线轨迹 */
+  --branch-track: #8a5b2d;   /* 暖棕航线 */
+
+  /* 地产色带：normal 地皮按飞书表格 A 列背景色匹配；车站/utility 保留专用色 */
+  --band-feishu-d73a49: #B33A32;  /* 朱 */
+  --band-feishu-1677ff: #4A5E8C;  /* 靛 */
+  --band-feishu-8e44ad: #7B5E92;  /* 紫 */
+  --band-feishu-1f5fbf: #3F6E7A;  /* 黛 */
+  --band-feishu-e66a95: #B96A78;  /* 藕 */
+  --band-feishu-2ea44f: #6E8F5A;  /* 竹 */
+  --band-feishu-c2185b: #A6553F;  /* 赭 */
+  --band-feishu-757575: #8A6A50;  /* 褐 */
+  --band-station: #546E7A;   /* 火车站 蓝灰 */
+  --band-utility: #8E7CC3;   /* utility 紫 */
+
+  /* 玩家身份色（跨主题保持稳定，handoff §6.4）*/
+  --player-red: #d84b3f;
+  --player-blue: #3478c6;
+  --player-yellow: #d8a725;
+  --player-green: #2f9d63;
+  --player-purple: #8656c9;
+  --player-orange: #e2711d;
+  --owner-mortgaged: #757575;
+
+  /* 棋子 */
+  --token-ring: #fff;
+  --token-shadow: 0 2px 6px rgb(0 0 0 / 30%);
+
+  /* 按钮 */
+  --button-enabled-bg: #E0A83C;   /* 主行动色 金：与对局内琥珀按键同色相，红腾出来专管亏钱 */
+  --button-enabled-text: #3A2A08; /* 深字压在金面上 */
+  --button-disabled-bg: #eadfcb;  /* 暖灰纸 */
+  --button-disabled-text: #6B6658;
+
+  /* 两个玩法入口的专属色（首页 hero）：在线 = 朱砂，单机 = 竹青。
+     刻意不复用 --color-pay / --color-gain —— 那两个是「钱在动」的语义色，
+     拿它们给模式按钮上色，会让「收钱」和「单机」混成同一个绿。 */
+  --mode-online: #9C3A2A;
+  --mode-local: #2F8F5B;
+
+  /* 首页背景插画上的一层（图是 apps/client/public/home-bg.webp）。
+     浅色用暖白柔光把中央留白提亮，卡片与文字压在图上也读得清；
+     深色换一套暗幕（ui/darkMode.css）—— 首页因此不必写 appearance 分支。
+     注意：.home-scene 直接引用本变量，值必须存在，否则整条 background-image 失效。 */
+  --home-scrim:
+    radial-gradient(1100px 640px at 50% 6%, rgb(255 252 243 / 72%), transparent 74%),
+    linear-gradient(180deg, rgb(255 252 243 / 14%), rgb(255 252 243 / 46%));
+
+  /* 连接横幅：重连中 琥珀警示；断开 红警（暖纸底，非纯色块）*/
+  --color-warning: #B7791F;
+  --banner-warning-bg: #fdf1d8;
+  --banner-error-bg: #fbe0d8;
+
+  /* 页面级表面色（首页 / 大厅 / 单机建房 / 设置等）：浅色下是「半透明白叠在暖纸底上」，
+     靠透明度叠出卡片与输入框的层次。集中在这里是为了让深色模式（ui/darkMode.css）
+     只覆盖这一组就能整站换肤，组件不必各写一套深色分支。 */
+  --surface-card: linear-gradient(180deg, rgb(255 255 255 / 94%), rgb(247 243 234 / 84%));
+  --surface-raised: rgb(255 255 255 / 88%);
+  --surface-soft: rgb(255 255 255 / 72%);
+  --surface-quiet: rgb(255 255 255 / 62%);
+  --surface-input: rgb(255 255 255 / 84%);
+  --color-error-bg: #ffe1d8;
+
+  /* ---- 控件规格档位（页面级界面）----
+     与对局内的 --game-radius-* 系列（gameTheme.css）平行存在、互不覆盖：
+     对局皮肤换肤不动这里，页面级换肤也不动对局。
+
+     此前页面级的圆角散落在各组件里写成裸 px（4/6/7/8/9/10/12/14/16/18/20/22/24/28px），
+     控件最小高度也散成 12 档（14/18/24/32/36/40/44/45/48/50/72/120px），同级控件在不同页面
+     观感不一致。这里给出命名档位作为归并目标——**不是要求全站统一到同一个值**：
+     卡片/面板/按钮/胶囊本就该有不同圆角，问题是「缺命名档位」而非「数值本身不对」。
+
+     新增组件请优先引用这些变量；既有组件可按模块渐进归并，不必一次改完。 */
+  --radius-card: 28px;      /* 页面主卡片（首页/大厅/恢复页外壳） */
+  --radius-panel: 18px;     /* 卡内分组面板（统计块、排行榜、设置分组） */
+  --radius-control: 10px;   /* 按钮、输入框、下拉 */
+  --radius-chip: 999px;     /* 胶囊标签、徽标 */
+  /* ★ 弹窗圆角（11-17）：**所有**浮层——首页四个详情弹窗、玩法说明、成就，以及局内的
+     结算 / 我的资产 / 玩家资产 / 格子详情——四角都走这一档，别在组件里再拍一个数。
+     MobileSheet 的 modal 变体与局内三个弹窗都引用它；ui/gameDialogStyle.test.ts 守着。 */
+  --radius-dialog: 16px;
+
+  --control-height-sm: 36px;   /* 次要按钮（返回、重试、取消） */
+  --control-height-md: 44px;   /* 主要按钮与开关行：移动端触摸目标下限 44px */
+
+  /* ---- 三级文字规则（视觉升级提案 §三）----
+     字号 / 字重 / 颜色必须同时拉开，一眼就能抓住重点；只差一级等于没分级。 */
+  --text-l1-size: 15px;      /* L1 标题 / 名称 */
+  --text-l1-weight: 600;
+  --text-l2-size: 20px;      /* L2 数据 / 金额 */
+  --text-l2-weight: 700;
+  --text-l3-size: 11px;      /* L3 元信息 */
+  --text-l3-weight: 400;
+
+  /* ---- 弹窗 / 二级整页的正文阶（10-16 第五版）----
+     用户的第二条：弹窗「样式大小统一、字体大小统一」。原来同一个「小标题」在更新说明里
+     22px、在设置面板里 14px、在战绩页里 15px —— 同一个东西三种字号，一看就不是一套。
+     这里只留四档正文：徽标 11 / 元信息 12 / 正文 13 / 小标题 14；标题单独一档，
+     且**弹窗标题与二级页标题同号**（都是 1.15rem），点开哪个都不跳字号。
+     新增弹窗 / 二级页请引用这些变量；components/sheetTypography.test.ts 扫全仓守着。 */
+  --text-sheet-title: 1.15rem;
+  --text-section-size: 14px;
+  --text-body-size: 13px;
+  --text-meta-size: 12px;
+  --text-badge-size: 11px;
+
+  /* 功能格背景（机会/命运/税/机场/起点/特殊/支线）*/
+  --cell-function-bg: linear-gradient(180deg, #fffdf8, #f4ecdd);
+
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+page {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+page {
+  /* 关闭移动端字体自动放大（font boosting）：对局中战报/提示文字一增减，浏览器会重算字号，
+     造成画面“忽大忽小”。固定 100% 后字号只由我们的 CSS 决定，不再随内容变化。*/
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* 触摸按下时的系统高光：即使系统开了“移除动画”（reduced motion），按下也有即时视觉回应。 */
+  -webkit-tap-highlight-color: rgb(53 39 20 / 14%);
+}
+
+button, input, textarea { font: inherit; }
+
+/* ---- 通用按压反馈 ----
+   覆盖所有按钮（棋格除外）：按下即时下沉，160ms 顺滑回弹。
+   只动 transform / 阴影 / 背景这类合成层属性，不触发重排。
+   系统开启“减少动态效果”时不做位移，改成瞬时压暗——仍然看得见反馈。 */
+button:not(:disabled):not(.board-cell) {
+  touch-action: manipulation; /* 去掉 300ms 点击延迟，按压手感更跟手 */
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease,
+    filter 160ms ease;
+}
+
+button:not(:disabled):not(.board-cell):active {
+  transform: translateY(1px) scale(0.985);
+}
+
+@media (hover: hover) {
+  button:not(:disabled):not(.board-cell):hover {
+    filter: brightness(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):not(.board-cell) {
+    transition: none;
+  }
+
+  button:not(:disabled):not(.board-cell):active {
+    transform: none;
+    filter: brightness(0.92);
+  }
+}
+
+button:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* 页面背景（首页 / 大厅等）：暖纸底 + 顶部柔光 + 淡绿台面晕 + 细点阵，
+   与大富翁“纸面棋盘 + 骰子”的质感一致。纯背景绘制，不参与布局、不触发重排。 */
+.app-root {
+  min-height: 100vh;
+  background-color: var(--color-bg);
+  background-image:
+    radial-gradient(circle, rgb(122 136 109 / 7%) 1.1px, transparent 1.3px),
+    radial-gradient(1000px 520px at 50% 0%, rgb(255 253 246 / 92%), transparent 68%),
+    radial-gradient(900px 620px at 50% 28%, rgb(198 222 178 / 24%), transparent 72%);
+  background-size: 26px 26px, auto, auto;
+  background-repeat: repeat, no-repeat, no-repeat;
+}
+
+/* 只在对局页锁死文档滚动（game-view-active 由 GameView 挂载时加到 body），
+   与 .game-view{position:fixed;overflow:hidden} 双保险，杜绝地址栏显隐引发的整页缩放抖动。
+   首页/大厅/设置等普通页面不受影响，保持正常上下滚动。
+   注意：这里不能加宽度断点——折叠屏内屏/平板宽度 >767px 但同样是移动端形态，
+   漏掉它们就会出现“内容变多 → 文档变高 → 地址栏伸缩 → 整页放大缩小”。 */
+page.game-view-active {
+  overflow: hidden;
+  height: 100%;
+}

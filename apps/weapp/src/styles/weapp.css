@@ -1,0 +1,75 @@
+/* 小程序端专用补充样式。
+   只放 WXSS 与 Web 的差异修补，不复制源站规则——
+   源站规则由 scripts/sync-sources.mjs 从 apps/client/src 同步后自动适配。 */
+
+/* 小程序 page 即根容器，兜住源站 html/body 的那层基础排版。 */
+page {
+  min-height: 100vh;
+  background: var(--color-bg, #f7f3ea);
+  color: var(--color-text, #2b2b2b);
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 源站用 #app 承载页面底色与点阵纹理，小程序改由 .app-root 承载。 */
+.app-root {
+  min-height: 100vh;
+  background-color: var(--color-bg, #f7f3ea);
+  background-image:
+    radial-gradient(circle, rgb(122 136 109 / 7%) 1.1px, transparent 1.3px),
+    radial-gradient(1000rpx 520rpx at 50% 0%, rgb(255 253 246 / 92%), transparent 68%),
+    radial-gradient(900rpx 620rpx at 50% 28%, rgb(198 222 178 / 24%), transparent 72%);
+  background-size: 26rpx 26rpx, auto, auto;
+  background-repeat: repeat, no-repeat, no-repeat;
+}
+
+/* 小程序 button 自带 min-width / 默认背景，源站按普通元素设计按钮，这里抹平。 */
+button {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  line-height: inherit;
+  border-radius: 0;
+}
+
+button::after {
+  border: none;
+}
+
+/* 内联 SVG 图标在小程序端的替代字形（见 scripts/sync-sources.mjs 的 SVG_ICON_GLYPHS）。 */
+.icon-glyph {
+  display: inline-block;
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* <select> 换成 <picker> 后的取值展示：外观与源站下拉框一致，点开由 picker 接管。 */
+.setup-picker,
+.bargain-target-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border, #d8d2c4);
+  border-radius: 8px;
+  background: var(--color-cell, #fff);
+  font-size: 14px;
+  color: var(--color-text, #2b2b2b);
+}
+
+.setup-picker::after,
+.bargain-target-picker::after {
+  content: '▾';
+  margin-left: 8px;
+  color: var(--color-muted, #6b6658);
+}
+
+/* 对局外壳必须撑满宽度。
+   .game-shell 带着 margin-inline:auto（桌面端用来在 1500px 上限内居中），
+   而移动端父级 .game-view 是 flex 列布局 —— flex item 一旦有 auto 行向内边距，
+   就不再被 stretch，宽度会塌成内容宽度（实测 412 的手机上只有 268），
+   连带 --board-size 被算小、棋盘缩在中间。补一条 width 即可，不改源站规则。 */
+.game-view > .game-shell {
+  width: 100%;
+}

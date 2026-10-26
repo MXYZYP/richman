@@ -1,0 +1,1373 @@
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import type { ChatMessage, PublicRoomState, RoomRuleConfig, RoomSettings, RoomSettingsPatch } from '@richman/protocol';
+import { ROOM_PASSWORD_MAX_LENGTH, ROOM_PASSWORD_MIN_LENGTH, TURN_TIME_LIMIT_OPTIONS } from '@richman/protocol';
+import { getActiveMapPack } from '@richman/board-data';
+import { formatCash, setCashUnitForMap } from '../ui/format';
+import type { BotDifficulty } from '@richman/engine';
+import { BOT_DIFFICULTY_OPTIONS } from '../game/gameSetup';
+import type { LobbyCommand } from '../session/onlineSession';
+import ChatPanel from '../components/ChatPanel.vue';
+import SettingsDialog from '../components/SettingsDialog.vue';
+// 11-17 第六版：联机大厅原来是**第三个**自己画壳的整页（.lobby-shell / .lobby-card），
+// 于是这一页连「返回」都没有——「离开房间」被压在整页最下面，房间规则越长它越远。
+// 现在与在线 / 单机两页共用 ViewShell：返回条在左上、卡片尺寸只在 ViewShell 里写一次。
+import ViewShell from './ViewShell.vue';
+
+// Mirrors the server's room capacity (roomManager MAX_PLAYERS, humans + bots combined).
+// Adding a bot past this is rejected server-side; the client disables the control so the
+// host never fires a doomed command.
+const MAX_ROOM_PLAYERS = 6;
+// Independent spectator seats: read-only members that never count toward MAX_ROOM_PLAYERS.
+const MAX_ROOM_SPECTATORS = 3;
+
+const props = withDefaults(defineProps<{
+  room: PublicRoomState;
+  localPlayerId: string | null;
+  isHost: boolean;
+  /** A human reason the host cannot start yet, or null when start is allowed. */
+  startBlockedReason: string | null;
+  /** The lobby command awaiting a server acknowledgement, or null while idle. */
+  pendingCommand: LobbyCommand | null;
+  /**
+   * True only when a live, recovered session can accept a mutation (connected, active, no
+   * recovery). While false every host control is disabled — a stale lobby fires no doomed command.
+   */
+  isCommandReady: boolean;
+  error?: string | null;
+  /** The canonical invitation URL — the single string shared by copy and the QR encoder. */
+  inviteUrl: string;
+  connectionLabel: string;
+  showMapTitle?: boolean;
+  /** 房间聊天消息（联机）。 */
+  chatLog?: ChatMessage[];
+  /** 发送聊天消息。 */
+  chatSend?: (text: string) => void;
+  /**
+   * 房间设置（#4 规则自定义 / #6 电脑难度）：服务端 `room:settings` 广播的权威副本。
+   * `null` = 还没收到，此时不渲染规则面板，避免先闪一帧默认值再跳变。
+   */
+  roomSettings?: RoomSettings | null;
+}>(), {
+  error: null,
+  showMapTitle: false,
+  roomSettings: null,
+});
+
+// 大厅里的金额（初始资金 / 现金目标 / 规则摘要）也要按本房间的地图选单位。
+// 必须写在 props 之后 —— 写在前面会踩「使用了未初始化的 props」。
+watch(() => props.room.map.ref.id, (mapId) => setCashUnitForMap(mapId), { immediate: true });
+
+const emit = defineEmits<{
+  addBot: [];
+  removeBot: [playerId: string];
+  renameBot: [playerId: string, nickname: string];
+  kick: [playerId: string];
+  /** 房主修改房间设置（#4 / #6）：只传要改的字段。 */
+  updateSettings: [patch: RoomSettingsPatch];
+  start: [];
+  leave: [];
+  copy: [];
+  showQR: [];
+}>();
+
+// 房间聊天（#50）：改为大厅卡片文档流内的可折叠区块，取代此前的固定浮动按钮——
+// 浮动面板会压住房间卡片底部的操作按钮。折叠态由 isChatOpen 控制。
+const isChatOpen = ref(false);
+const chatMessages = computed<ChatMessage[]>(() => props.chatLog ?? []);
+function handleSendChat(text: string): void {
+  props.chatSend?.(text);
+}
+
+// 统一设置弹窗（#13）：大厅与对局内共用同一个 SettingsDialog。
+const settingsOpen = ref(false);
+
+
+const botDrafts = ref<Record<string, string>>({});
+const focusedBotId = ref<string | null>(null);
+
+function syncBotDraftsFromRoom(): void {
+  const nextDrafts = { ...botDrafts.value };
+  for (const player of props.room.players) {
+    if (!player.isBot) continue;
+    if (focusedBotId.value === player.id) continue;
+    nextDrafts[player.id] = player.nickname;
+  }
+  botDrafts.value = nextDrafts;
+}
+
+watch(() => props.room.players, syncBotDraftsFromRoom, { immediate: true, deep: true });
+
+function botDraftFor(playerId: string, fallback: string): string {
+  return botDrafts.value[playerId] ?? fallback;
+}
+
+function updateBotDraft(playerId: string, nickname: string): void {
+  botDrafts.value = { ...botDrafts.value, [playerId]: nickname };
+}
+
+function commitBotNickname(playerId: string): void {
+  const authoritative = props.room.players.find((player) => player.id === playerId)?.nickname ?? '';
+  const draft = (botDrafts.value[playerId] ?? authoritative).trim();
+  if (draft.length === 0) {
+    botDrafts.value = { ...botDrafts.value, [playerId]: authoritative };
+    return;
+  }
+  if (draft === authoritative || !canMutate.value) {
+    botDrafts.value = { ...botDrafts.value, [playerId]: authoritative };
+    return;
+  }
+  botDrafts.value = { ...botDrafts.value, [playerId]: authoritative };
+  emit('renameBot', playerId, draft);
+}
+
+function handleBotNicknameKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    (event.currentTarget as HTMLInputElement).blur();
+  }
+}
+
+// Single-flight: one command in flight at a time. A mutation may fire only from a ready session
+// with nothing pending, so every host control — add, remove, start, and leave — shares one gate.
+const busy = computed(() => props.pendingCommand !== null);
+const canMutate = computed(() => props.isCommandReady && !busy.value);
+const isFull = computed(() => props.room.players.length >= MAX_ROOM_PLAYERS);
+const canAddBot = computed(() => props.isHost && canMutate.value && !isFull.value);
+const canStart = computed(() => props.startBlockedReason === null && canMutate.value);
+const playerCountLabel = computed(() => `参赛 ${props.room.players.length}/${MAX_ROOM_PLAYERS}`);
+const spectatorCountLabel = computed(() => `观众 ${props.room.spectators.length}/${MAX_ROOM_SPECTATORS}`);
+const isSpectator = computed(() => props.room.spectators.some((member) => member.id === props.localPlayerId));
+const waitCopy = computed(() => (
+  isSpectator.value
+    ? '观战中。你可以在开局后继续查看棋盘、资产与战报。'
+    : '等待房主开始游戏，你可以先邀请更多好友加入。'
+));
+
+// ---- 房间规则（#4 房主自定义 / #6 电脑难度）----
+// 联机是「先建房、后加电脑」：`room:create` 那一刻房间里只有房主，还没有任何电脑玩家，
+// 所以难度根本不可能在建房前问出来——它只能在大厅设定，且只在真的有电脑玩家时才出现。
+const botCount = computed(() => props.room.players.filter((player) => player.isBot).length);
+const hasBot = computed(() => botCount.value > 0);
+
+/** 地图自带的默认规则：房主改之前的取值，也是「恢复默认」的目标。 */
+const ruleDefaults = computed(() => {
+  try {
+    const config = getActiveMapPack(props.room.map.ref.id).game.config;
+    return {
+      initialCash: config.initialCash,
+      maxHouseLevel: config.maxHouseLevel,
+      mortgageInterestRate: config.mortgageInterestRate,
+    };
+  } catch {
+    // 地图解析失败（正常不该发生，房间创建时已锁定地图）。退化成隐藏数值面板。
+    return null;
+  }
+});
+const effectiveRule = computed<RoomRuleConfig | null>(() => props.roomSettings?.ruleConfig ?? ruleDefaults.value);
+const isCustomized = computed(() => props.roomSettings?.ruleConfig != null);
+const maxHouseLevelLimit = computed(() => ruleDefaults.value?.maxHouseLevel ?? 1);
+const rulesReadOnly = computed(() => (
+  !props.isHost || !canMutate.value || props.room.status !== 'lobby' || props.roomSettings === null
+));
+const rulesVisible = computed(() => props.roomSettings !== null && ruleDefaults.value !== null);
+/** 悔棋开关（#101）：服务端广播的权威值；旧服务端/未收到时按「关闭」处理。 */
+const undoEnabled = computed(() => props.roomSettings?.minimalUndoEnabled === true);
+const ruleError = ref<string | null>(null);
+
+// 输入框允许中途处于非法状态（例如清空重打），只在 change / blur 时才校验并提交。
+// 注意：草稿只在「生效规则」变化时同步——用户输入了非法值没提交时，草稿保留，便于继续修改。
+const cashDraft = ref('');
+const interestPercentDraft = ref('');
+watch(effectiveRule, (rule) => {
+  cashDraft.value = rule === null ? '' : String(rule.initialCash);
+  interestPercentDraft.value = rule === null ? '' : String(Math.round(rule.mortgageInterestRate * 1000) / 10);
+}, { immediate: true });
+
+function ruleProblem(rule: RoomRuleConfig): string | null {
+  if (!Number.isFinite(rule.initialCash) || rule.initialCash <= 0) return '初始资金需为正数';
+  if (!Number.isInteger(rule.maxHouseLevel) || rule.maxHouseLevel < 1 || rule.maxHouseLevel > maxHouseLevelLimit.value) {
+    return `最高房级需为 1-${maxHouseLevelLimit.value} 之间的整数`;
+  }
+  if (!Number.isFinite(rule.mortgageInterestRate) || rule.mortgageInterestRate < 0 || rule.mortgageInterestRate > 1) {
+    return '抵押利率需为 0% - 100% 之间';
+  }
+  return null;
+}
+
+/** 用「当前生效规则 + 本次改动」拼出完整三项再提交：服务端的 RoomRuleConfig 是全量三项。 */
+function applyRuleChange(partial: Partial<RoomRuleConfig>): void {
+  if (rulesReadOnly.value) {
+    ruleError.value = null;
+    return;
+  }
+  const base = effectiveRule.value;
+  if (base === null) return;
+  const next: RoomRuleConfig = {
+    initialCash: partial.initialCash ?? base.initialCash,
+    maxHouseLevel: partial.maxHouseLevel ?? base.maxHouseLevel,
+    mortgageInterestRate: partial.mortgageInterestRate ?? base.mortgageInterestRate,
+  };
+  const problem = ruleProblem(next);
+  if (problem !== null) {
+    ruleError.value = problem;
+    return;
+  }
+  // 与现金目标的交叉约束（#23 ③）：引擎要求 `现金目标 > 初始资金`，把初始资金抬到目标之上
+  // 会让这局根本开不起来。本地先拦一次，房主立刻看到该先处理哪一项；
+  // 服务端同样的规则仍然保留（它才是权威，且要防住被改过的快照与旧客户端）。
+  if (cashGoal.value !== null && cashGoal.value <= next.initialCash) {
+    ruleError.value = `现金目标 ${formatCash(cashGoal.value)} 必须高于初始资金，请先改为「不设目标」或降低初始资金`;
+    return;
+  }
+  ruleError.value = null;
+  if (next.initialCash === base.initialCash
+    && next.maxHouseLevel === base.maxHouseLevel
+    && next.mortgageInterestRate === base.mortgageInterestRate) {
+    return;
+  }
+  emit('updateSettings', { ruleConfig: next });
+}
+
+function handleCashChange(event: Event): void {
+  applyRuleChange({ initialCash: Number((event.target as HTMLInputElement).value) });
+}
+
+function handleHouseLevelChange(event: Event): void {
+  applyRuleChange({ maxHouseLevel: Number((event.target as HTMLInputElement).value) });
+}
+
+/** 界面上按百分数录入（10 表示 10%），提交前换算成 0-1 的比例。 */
+function handleInterestChange(event: Event): void {
+  applyRuleChange({ mortgageInterestRate: Number((event.target as HTMLInputElement).value) / 100 });
+}
+
+function chooseBotDifficulty(difficulty: BotDifficulty): void {
+  if (rulesReadOnly.value) return;
+  if (props.roomSettings?.botDifficulty === difficulty) return;
+  emit('updateSettings', { botDifficulty: difficulty });
+}
+
+function resetRoomRules(): void {
+  if (rulesReadOnly.value || !isCustomized.value) return;
+  ruleError.value = null;
+  emit('updateSettings', { ruleConfig: null });
+}
+
+/**
+ * 「允许悔棋」开关（#101）。默认**关闭**——它改变的是「已经走过的棋能不能退」这件事，
+ * 必须是房主显式的选择加入，而不是悄悄塞给所有人的默认能力。
+ *
+ * 开启后也不是单方面回退：走错一步的玩家发起后，要由在场对手逐一确认才真的退回，
+ * 因此它是一个「双方同意的一步回退」，不会变成某一方随意改历史。
+ */
+function chooseMinimalUndo(enabled: boolean): void {
+  if (rulesReadOnly.value) return;
+  if (undoEnabled.value === enabled) return;
+  emit('updateSettings', { minimalUndoEnabled: enabled });
+}
+
+/** 回合限时（#107）：0 = 不限时（默认）。档位来自协议常量，避免前后端各写一套数字。 */
+const turnTimeLimitSec = computed(() => props.roomSettings?.turnTimeLimitSec ?? 0);
+const TURN_LIMIT_CHOICES = TURN_TIME_LIMIT_OPTIONS.map((sec) => ({
+  value: sec,
+  label: sec === 0 ? '不限时' : `${sec} 秒`,
+}));
+
+/**
+ * 设置回合限时（#107）。超时后**不是**简单跳过这一回合，而是由服务端按电脑策略替这位玩家
+ * 走一步（与「离线托管」同一套决策）。因此它对挂机者是一种「温和的强制推进」，
+ * 而不是「白丢一回合」——后者会让被限时的人直接输在运气上。
+ */
+function chooseTurnTimeLimit(sec: number): void {
+  if (rulesReadOnly.value) return;
+  if (turnTimeLimitSec.value === sec) return;
+  emit('updateSettings', { turnTimeLimitSec: sec });
+}
+
+/**
+ * 「允许被公开房间列表发现」（#108）：默认关闭。
+ *
+ * 默认关闭是刻意的——房间码本来就是准入凭据，把房间摆进全网列表属于**房主替所有人**做的
+ * 曝光决定，不能由升级默认打开。打开后别人能在首页的「公开房间」区块看到这间房并一键进来
+ * （对局中则是一键旁观）。
+ */
+const discoverable = computed(() => props.roomSettings?.isPublic === true);
+
+function chooseDiscoverable(enabled: boolean): void {
+  if (rulesReadOnly.value) return;
+  if (discoverable.value === enabled) return;
+  emit('updateSettings', { isPublic: enabled });
+}
+
+/**
+ * 现金目标房规（#23 ③）：先攒到这么多现金者直接获胜；默认**不设目标**。
+ *
+ * 档位直接取自当前地图的 `cashGoalPresets`，并滤掉「不大于生效初始资金」的那些——
+ * 引擎硬性要求 `cashGoal > config.initialCash`，把明知会被服务端驳回的档位摆在界面上，
+ * 只会让房主点一下、等一次往返、再收到一条错误。滤掉是更省事的做法。
+ */
+const cashGoal = computed(() => props.roomSettings?.cashGoal ?? null);
+const cashGoalPresets = computed<number[]>(() => {
+  try {
+    const floor = effectiveRule.value?.initialCash ?? 0;
+    const presets = getActiveMapPack(props.room.map.ref.id).game.config.cashGoalPresets;
+    const valid = presets.filter((goal) => goal > floor);
+    // 当前已选中的值一定要留在选项里：房主把初始资金调到接近目标之后，
+    // 那个目标可能不再「合法」，但它此刻确实是生效值，从界面上抹掉只会让人以为设置丢了。
+    const current = cashGoal.value;
+    if (current !== null && !valid.includes(current)) valid.push(current);
+    return valid.sort((a, b) => a - b);
+  } catch {
+    return [];
+  }
+});
+const cashGoalOptions = computed(() => [
+  { value: null as number | null, label: '不设目标' },
+  ...cashGoalPresets.value.map((value) => ({ value: value as number | null, label: formatCash(value as number) })),
+]);
+
+function chooseCashGoal(value: number | null): void {
+  if (rulesReadOnly.value) return;
+  if (cashGoal.value === value) return;
+  emit('updateSettings', { cashGoal: value });
+}
+
+/**
+ * 房间密码（#23 ③）：默认不设。
+ *
+ * 界面上**只拿得到布尔事实**（服务端从不广播凭据），所以这里是一个「输入 → 设置」的
+ * 单向控件，而不是双向绑定的表单：没有「把当前密码回显出来」这回事。
+ * 提交后立刻清空草稿，明文不在组件里多留一帧。
+ */
+const passwordProtected = computed(() => props.roomSettings?.passwordProtected === true);
+const passwordDraft = ref('');
+const passwordError = ref<string | null>(null);
+
+function submitPassword(): void {
+  if (rulesReadOnly.value) return;
+  const value = passwordDraft.value.trim();
+  const codePoints = [...value].length;
+  if (codePoints < ROOM_PASSWORD_MIN_LENGTH || codePoints > ROOM_PASSWORD_MAX_LENGTH) {
+    passwordError.value = `密码需为 ${ROOM_PASSWORD_MIN_LENGTH}-${ROOM_PASSWORD_MAX_LENGTH} 个字符`;
+    return;
+  }
+  passwordError.value = null;
+  passwordDraft.value = '';
+  emit('updateSettings', { password: value });
+}
+
+function clearPassword(): void {
+  if (rulesReadOnly.value) return;
+  passwordError.value = null;
+  passwordDraft.value = '';
+  emit('updateSettings', { password: null });
+}
+
+/**
+ * 观战开关（#23 ③）：默认**允许**（= 引入本开关之前的既有行为）。
+ *
+ * 关掉只影响之后想进来旁观的人，不会把已经在看的人踢出去——这也是它和
+ * 「踢人」这类破坏性操作的分界线。对局中同样可以改（服务端允许），
+ * 但这里沿用 `rulesReadOnly`（仅大厅可编辑），与其它房间设置保持同一套交互节奏。
+ */
+const allowSpectators = computed(() => props.roomSettings?.allowSpectators !== false);
+
+function chooseAllowSpectators(enabled: boolean): void {
+  if (rulesReadOnly.value) return;
+  if (allowSpectators.value === enabled) return;
+  emit('updateSettings', { allowSpectators: enabled });
+}
+
+const botDifficultyHint = computed(
+  () => BOT_DIFFICULTY_OPTIONS.find((option) => option.value === props.roomSettings?.botDifficulty)?.hint ?? '',
+);
+
+/** 规则摘要：非房主（或已开局）也能一眼看到这局用的是哪套规则。 */
+const ruleSummary = computed(() => {
+  const rule = effectiveRule.value;
+  if (rule === null) return '';
+  const percent = Math.round(rule.mortgageInterestRate * 1000) / 10;
+  // 悔棋也写进摘要（#101）：它不是「规则三项」之一，但同样决定了这局的手感，
+  // 非房主只能从摘要里知道这件事（开关本身只渲染在房主区）。
+  const undo = undoEnabled.value ? ' · 可悔棋（需对手同意）' : '';
+  // 回合限时也进摘要（#107）：非房主只能从摘要里知道这局有没有倒计时，
+  // 不然他会以为是自己的网络或界面出了问题。
+  const limit = turnTimeLimitSec.value > 0 ? ` · 每步限时 ${turnTimeLimitSec.value} 秒` : '';
+  // 可被发现也进摘要（#108）：它决定「外面的人能不能搜到我们这间房」，是房间的公开性事实，
+  // 不只在房主的开关里可见。
+  const listed = discoverable.value ? ' · 已公开到房间列表' : '';
+  // 现金目标（#23 ③）进摘要：它是最容易改变这局时长的一项房规，
+  // 非房主必须能一眼看到「这局是打到只剩一人，还是攒到某个数就结束」。
+  const goal = cashGoal.value !== null ? ` · 现金目标 ${formatCash(cashGoal.value)}` : '';
+  // 密码与观战开关（#23 ③）也进摘要：前者解释「为什么别人进不来」，后者解释
+  // 「为什么点观战被拒」，都是非房主会遇到、却看不到开关本身的两件事。
+  const locked = passwordProtected.value ? ' · 已设房间密码' : '';
+  const spectate = allowSpectators.value ? '' : ' · 禁止观战';
+  return `初始资金 ${formatCash(rule.initialCash)} · 最高房级 ${rule.maxHouseLevel} 级 · 抵押利率 ${percent}%${undo}${limit}${listed}${goal}${locked}${spectate}`;
+});
+
+// Copy feedback is transient and self-describing so a clipboard rejection is never silent.
+const copyFeedback = ref<{ ok: boolean; message: string } | null>(null);
+
+async function handleCopy() {
+  emit('copy');
+  try {
+    await navigator.clipboard.writeText(props.inviteUrl);
+    copyFeedback.value = { ok: true, message: '已复制邀请链接' };
+  } catch {
+    copyFeedback.value = { ok: false, message: '复制失败，请手动复制下方链接' };
+  }
+}
+
+// ---- QR modal ----
+const qrOpen = ref(false);
+const qrDataUrl = ref<string | null>(null);
+const qrError = ref<string | null>(null);
+const qrButton = ref<HTMLButtonElement | null>(null);
+const qrClose = ref<HTMLButtonElement | null>(null);
+
+async function handleShowQR() {
+  emit('showQR');
+  qrOpen.value = true;
+  qrError.value = null;
+  if (qrDataUrl.value !== null) return;
+  try {
+    // Load the QR generator only on demand: it never runs until the host opens the dialog.
+    const { default: QRCode } = await import('qrcode');
+    qrDataUrl.value = await QRCode.toDataURL(props.inviteUrl, { margin: 1, width: 320 });
+  } catch {
+    qrError.value = '二维码生成失败，请改用复制链接分享';
+  }
+}
+
+function closeQR() {
+  qrOpen.value = false;
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && qrOpen.value) closeQR();
+}
+
+// Move focus into the dialog on open and return it to the trigger on close — the minimum
+// keyboard contract for an accessible modal without trapping the whole page.
+watch(qrOpen, (open) => {
+  if (open) {
+    window.addEventListener('keydown', handleKeydown);
+    void nextTick(() => qrClose.value?.focus());
+  } else {
+    window.removeEventListener('keydown', handleKeydown);
+    void nextTick(() => qrButton.value?.focus());
+  }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
+</script>
+
+<template>
+  <ViewShell
+    :title="`房间 ${room.roomCode}`"
+    :aside="showMapTitle ? room.map.title : ''"
+    :back-label="pendingCommand === 'leave' ? '正在离开…' : '离开房间'"
+    :back-disabled="!canMutate"
+    @back="emit('leave')"
+  >
+    <view class="entry-body">
+      <view class="lobby-status" role="status">等待开始 · {{ connectionLabel }}</view>
+
+      <view class="lobby-invite" aria-label="邀请好友">
+        <text class="lobby-invite-label">把这个链接发给好友，同一个房间开局：</text>
+        <text class="lobby-invite-url">{{ inviteUrl }}</text>
+        <view class="entry-row">
+          <button type="button" class="entry-primary" @click="handleCopy">复制邀请链接</button>
+          <button ref="qrButton" type="button" class="entry-secondary" @click="handleShowQR">显示二维码</button>
+        </view>
+        <view v-if="copyFeedback" class="lobby-invite-feedback" :class="{ failed: !copyFeedback.ok }" role="status">
+          {{ copyFeedback.message }}
+        </view>
+      </view>
+
+      <view v-if="error" class="lobby-error" role="alert">{{ error }}</view>
+
+      <view class="lobby-roster-block" aria-label="参赛名单">
+        <view class="lobby-roster-head">
+          <view>参赛名单</view>
+          <text class="lobby-count">{{ playerCountLabel }}</text>
+        </view>
+        <view class="lobby-roster">
+          <view v-for="player in room.players" :key="player.id" class="lobby-player">
+            <text class="lobby-dot" :class="{ offline: !player.online }" aria-hidden="true"></text>
+            <input
+              v-if="isHost && player.isBot && room.status === 'lobby'"
+              class="lobby-bot-name-input"
+              type="text"
+              :value="botDraftFor(player.id, player.nickname)"
+              :disabled="!canMutate"
+              :aria-label="`重命名 ${player.nickname}`"
+              maxlength="20"
+              @input="updateBotDraft(player.id, ($event.target as HTMLInputElement).value)"
+              @focus="focusedBotId = player.id"
+              @blur="focusedBotId = null; commitBotNickname(player.id)"
+              @keydown="handleBotNicknameKeydown($event)"
+            />
+            <text v-else class="lobby-name">
+              {{ player.nickname }}<template v-if="player.id === localPlayerId">（你）</template>
+            </text>
+            <text v-if="!player.online" class="lobby-flag lobby-flag--offline">离线</text>
+            <text v-if="player.id === room.hostId" class="lobby-flag lobby-flag--host">房主</text>
+            <text v-else-if="player.isBot" class="lobby-flag lobby-flag--bot">电脑</text>
+            <button
+              v-if="isHost && !player.isBot && player.id !== localPlayerId"
+              type="button"
+              class="lobby-remove lobby-remove--kick"
+              :disabled="!canMutate"
+              :aria-label="`移出 ${player.nickname}`"
+              @click="emit('kick', player.id)"
+            >
+              移出
+            </button>
+            <button
+              v-if="isHost && player.isBot"
+              type="button"
+              class="lobby-remove"
+              :disabled="!canMutate"
+              :aria-label="`移除 ${player.nickname}`"
+              @click="emit('removeBot', player.id)"
+            >
+              移除
+            </button>
+          </view>
+        </view>
+      </view>
+
+      <view class="lobby-roster-block" aria-label="观众名单">
+        <view class="lobby-roster-head">
+          <view>观众名单</view>
+          <text class="lobby-count">{{ spectatorCountLabel }}</text>
+        </view>
+        <view v-if="room.spectators.length > 0" class="lobby-roster lobby-roster--spectators">
+          <view v-for="member in room.spectators" :key="member.id" class="lobby-player">
+            <text class="lobby-dot" :class="{ offline: !member.online }" aria-hidden="true"></text>
+            <text class="lobby-name">
+              {{ member.nickname }}<template v-if="member.id === localPlayerId">（你 · 观战中）</template>
+            </text>
+            <text v-if="!member.online" class="lobby-flag lobby-flag--offline">离线</text>
+            <text v-else-if="member.id === localPlayerId" class="lobby-flag lobby-flag--spectator">观战</text>
+          </view>
+        </view>
+        <view v-else class="lobby-spectators-empty">还没有观众。好友可在首页选择「观战」加入。</view>
+      </view>
+
+      <!-- 房间规则（#4 初始资金等 / #6 电脑难度）：房主可改，其他成员只读。
+           规则由服务端 `room:settings` 广播同步，房主改完立刻对全房间生效。 -->
+      <view v-if="rulesVisible" class="lobby-rules" aria-label="房间规则">
+        <view class="lobby-roster-head">
+          <view>房间规则</view>
+          <text class="lobby-count">{{ isCustomized ? '已自定义' : '地图默认' }}</text>
+        </view>
+
+        <view class="lobby-rules__summary">{{ ruleSummary }}</view>
+
+        <template v-if="isHost">
+          <view class="lobby-rules__grid">
+            <view class="lobby-rules__field">
+              <text>初始资金</text>
+              <input
+                type="number"
+                inputmode="numeric"
+                min="1"
+                step="1000"
+                :value="cashDraft"
+                :disabled="rulesReadOnly"
+                @change="handleCashChange"
+              />
+            </view>
+            <view class="lobby-rules__field">
+              <text>最高房级</text>
+              <input
+                type="number"
+                inputmode="numeric"
+                min="1"
+                :max="maxHouseLevelLimit"
+                :value="roomSettings?.ruleConfig?.maxHouseLevel ?? ruleDefaults?.maxHouseLevel"
+                :disabled="rulesReadOnly"
+                @change="handleHouseLevelChange"
+              />
+            </view>
+            <view class="lobby-rules__field">
+              <text>抵押利率 %</text>
+              <input
+                type="number"
+                inputmode="decimal"
+                min="0"
+                max="100"
+                step="1"
+                :value="interestPercentDraft"
+                :disabled="rulesReadOnly"
+                @change="handleInterestChange"
+              />
+            </view>
+          </view>
+
+          <view class="lobby-rules__hint">
+            最高房级不得超过 {{ maxHouseLevelLimit }} 级（按地图档位；超出会让顶层房屋收 0 元租金）。
+            <button
+              type="button"
+              class="lobby-rules__reset"
+              :disabled="rulesReadOnly || !isCustomized"
+              @click="resetRoomRules"
+            >恢复地图默认</button>
+          </view>
+
+          <!-- 难度只在房间里确实存在电脑玩家时出现（#6）：没有电脑时它没有任何作用。 -->
+          <view v-if="hasBot" class="lobby-rules__difficulty">
+            <text class="lobby-rules__difficulty-label">电脑难度</text>
+            <view class="lobby-rules__difficulty-options" role="radiogroup" aria-label="电脑难度">
+              <button
+                v-for="option in BOT_DIFFICULTY_OPTIONS"
+                :key="option.value"
+                type="button"
+                class="lobby-rules__difficulty-option"
+                :class="{ active: roomSettings?.botDifficulty === option.value }"
+                :aria-pressed="roomSettings?.botDifficulty === option.value"
+                :disabled="rulesReadOnly"
+                @click="chooseBotDifficulty(option.value)"
+              >{{ option.label }}</button>
+            </view>
+            <view class="lobby-rules__hint">{{ botDifficultyHint }}仅影响电脑决策，不影响真人玩家。</view>
+          </view>
+
+          <!-- 悔棋开关（#101）：默认关闭。开启后也不是单方面回退——发起方仍需在场对手
+               逐一同意，因此它改变的是「历史能不能退一步」，而不改变任何一步的规则。 -->
+          <view class="lobby-rules__difficulty">
+            <text class="lobby-rules__difficulty-label">悔棋</text>
+            <view class="lobby-rules__difficulty-options" role="radiogroup" aria-label="悔棋">
+              <button
+                type="button"
+                class="lobby-rules__difficulty-option"
+                :class="{ active: !undoEnabled }"
+                :aria-pressed="!undoEnabled"
+                :disabled="rulesReadOnly"
+                @click="chooseMinimalUndo(false)"
+              >关闭</button>
+              <button
+                type="button"
+                class="lobby-rules__difficulty-option"
+                :class="{ active: undoEnabled }"
+                :aria-pressed="undoEnabled"
+                :disabled="rulesReadOnly"
+                @click="chooseMinimalUndo(true)"
+              >允许悔棋</button>
+            </view>
+            <view class="lobby-rules__hint">
+              开启后，走错一步的玩家可发起悔棋，但需在场对手逐一同意才会退回上一步；20 秒内没集齐即作废。
+            </view>
+          </view>
+
+          <view v-if="ruleError" class="lobby-rules__error" role="alert">{{ ruleError }}</view>
+        </template>
+
+        <!-- 回合限时（#107）：所有人可见（只读给非房主），因为它直接决定每个人有没有倒计时。
+             默认不限时；开了之后，到点由服务端按电脑策略替该玩家走一步。 -->
+        <view class="lobby-rules__difficulty">
+          <text class="lobby-rules__difficulty-label">每步限时</text>
+          <view class="lobby-rules__difficulty-options" role="radiogroup" aria-label="每步限时">
+            <button
+              v-for="choice in TURN_LIMIT_CHOICES"
+              :key="choice.value"
+              type="button"
+              class="lobby-rules__difficulty-option"
+              :class="{ active: turnTimeLimitSec === choice.value }"
+              :aria-pressed="turnTimeLimitSec === choice.value"
+              :disabled="rulesReadOnly"
+              @click="chooseTurnTimeLimit(choice.value)"
+            >{{ choice.label }}</button>
+          </view>
+          <view class="lobby-rules__hint">
+            {{ turnTimeLimitSec > 0
+              ? '轮到你的每一步都有倒计时，到点由服务端替你走一步（与离线托管同一套决策），不会直接跳过整回合。'
+              : '不限时：不催任何人的操作节奏。适合熟人局与边聊边玩。' }}
+          </view>
+        </view>
+
+        <!-- 公开房间列表（#108）：同样所有人可见（只读给非房主）。默认关闭——
+             房间码本就是准入凭据，把房间摆到全网列表上是房主替所有人做的曝光决定。 -->
+        <view class="lobby-rules__difficulty">
+          <text class="lobby-rules__difficulty-label">公开房间</text>
+          <view class="lobby-rules__difficulty-options" role="radiogroup" aria-label="是否允许被公开房间列表发现">
+            <button
+              type="button"
+              class="lobby-rules__difficulty-option"
+              :class="{ active: !discoverable }"
+              :aria-pressed="!discoverable"
+              :disabled="rulesReadOnly"
+              @click="chooseDiscoverable(false)"
+            >仅凭房间码</button>
+            <button
+              type="button"
+              class="lobby-rules__difficulty-option"
+              :class="{ active: discoverable }"
+              :aria-pressed="discoverable"
+              :disabled="rulesReadOnly"
+              @click="chooseDiscoverable(true)"
+            >公开到列表</button>
+          </view>
+          <view class="lobby-rules__hint">
+            {{ discoverable
+              ? '别人能在首页的「公开房间」里看到这间房并一键进来；对局中则是一键旁观。'
+              : '只有拿到房间码或邀请链接的人才能进来。' }}
+          </view>
+        </view>
+
+        <!-- 现金目标（#23 ③）：所有人可见（只读给非房主）。档位来自地图的 cashGoalPresets，
+             默认「不设目标」= 打到只剩最后一人。 -->
+        <view class="lobby-rules__difficulty">
+          <text class="lobby-rules__difficulty-label">现金目标</text>
+          <view class="lobby-rules__difficulty-options" role="radiogroup" aria-label="现金目标">
+            <button
+              v-for="option in cashGoalOptions"
+              :key="String(option.value)"
+              type="button"
+              class="lobby-rules__difficulty-option"
+              :class="{ active: cashGoal === option.value }"
+              :aria-pressed="cashGoal === option.value"
+              :disabled="rulesReadOnly"
+              @click="chooseCashGoal(option.value)"
+            >{{ option.label }}</button>
+          </view>
+          <view class="lobby-rules__hint">
+            {{ cashGoal === null
+              ? '不设目标：打到只剩最后一人为止。'
+              : `先攒到 ${formatCash(cashGoal)} 现金者立刻获胜（必须高于本局初始资金）。` }}
+          </view>
+        </view>
+
+        <!-- 房间密码（#23 ③）：房主可设置 / 更换 / 清除，其他人只知道「有没有设」。
+             服务端只广播布尔事实，因此这里永远不会回显当前密码。 -->
+        <view class="lobby-rules__difficulty">
+          <text class="lobby-rules__difficulty-label">房间密码</text>
+          <template v-if="isHost">
+            <view class="lobby-rules__difficulty-options">
+              <input
+                v-model="passwordDraft"
+                type="text"
+                class="lobby-rules__password-input"
+                :placeholder="`${ROOM_PASSWORD_MIN_LENGTH}-${ROOM_PASSWORD_MAX_LENGTH} 位`"
+                :maxlength="ROOM_PASSWORD_MAX_LENGTH"
+                :disabled="rulesReadOnly"
+                @keydown.enter.prevent="submitPassword"
+              />
+              <button
+                type="button"
+                class="lobby-rules__difficulty-option"
+                :disabled="rulesReadOnly || passwordDraft.trim().length === 0"
+                @click="submitPassword"
+              >{{ passwordProtected ? '更换密码' : '设置密码' }}</button>
+              <button
+                v-if="passwordProtected"
+                type="button"
+                class="lobby-rules__difficulty-option"
+                :disabled="rulesReadOnly"
+                @click="clearPassword"
+              >清除密码</button>
+            </view>
+            <view class="lobby-rules__hint">
+              {{ passwordProtected
+                ? '已设密码：之后加入的人（含观战）都要先输对密码。服务端只保存哈希，此处无法回显已设的密码。'
+                : '不设密码：拿到房间码或邀请链接的人都能直接进来。' }}
+            </view>
+          </template>
+          <view v-else class="lobby-rules__hint">
+            {{ passwordProtected ? '房主已为这间房设置了进入密码。' : '这间房没有设置进入密码。' }}
+          </view>
+          <view v-if="passwordError" class="lobby-rules__error" role="alert">{{ passwordError }}</view>
+        </view>
+
+        <!-- 观战（#23 ③）：所有人可见（只读给非房主）。默认允许；关掉只拦之后想进来的人，
+             不会把已经在看的人踢出去。 -->
+        <view class="lobby-rules__difficulty">
+          <text class="lobby-rules__difficulty-label">观战</text>
+          <view class="lobby-rules__difficulty-options" role="radiogroup" aria-label="是否允许观战">
+            <button
+              type="button"
+              class="lobby-rules__difficulty-option"
+              :class="{ active: allowSpectators }"
+              :aria-pressed="allowSpectators"
+              :disabled="rulesReadOnly"
+              @click="chooseAllowSpectators(true)"
+            >允许观战</button>
+            <button
+              type="button"
+              class="lobby-rules__difficulty-option"
+              :class="{ active: !allowSpectators }"
+              :aria-pressed="!allowSpectators"
+              :disabled="rulesReadOnly"
+              @click="chooseAllowSpectators(false)"
+            >禁止观战</button>
+          </view>
+          <view class="lobby-rules__hint">
+            {{ allowSpectators
+              ? '别人可以用房间码以「观战」身份进来旁观，不占参赛席位。'
+              : '新加入的观战会被拒；已经在场观战的人不受影响。' }}
+          </view>
+        </view>
+      </view>
+
+      <view v-if="isHost" class="entry-actions" aria-label="房主操作">
+        <button type="button" class="entry-secondary" :disabled="!canAddBot" @click="emit('addBot')">
+          {{ isFull ? '房间已满' : '添加电脑玩家' }}
+        </button>
+        <button type="button" class="entry-primary" :disabled="!canStart" @click="emit('start')">
+          {{ pendingCommand === 'start' ? '开始中…' : '开始游戏' }}
+        </button>
+        <view v-if="startBlockedReason" class="lobby-hint" role="status">{{ startBlockedReason }}</view>
+      </view>
+      <view v-else class="lobby-wait" aria-label="等待房主">
+        <text class="lobby-wait-spinner" aria-hidden="true"></text>
+        <view>{{ waitCopy }}</view>
+      </view>
+
+      <!-- 房间聊天（#50）：内联在大厅卡片内、可折叠，不再悬浮遮挡操作按钮。 -->
+      <view class="lobby-chat" aria-label="房间聊天">
+        <button
+          type="button"
+          class="lobby-chat__toggle"
+          :aria-expanded="isChatOpen"
+          @click="isChatOpen = !isChatOpen"
+        >
+          房间聊天
+          <text v-if="chatMessages.length > 0" class="lobby-chat__badge">{{ chatMessages.length }}</text>
+        </button>
+        <ChatPanel
+          v-if="isChatOpen"
+          class="lobby-chat__panel"
+          :messages="chatMessages"
+          :local-player-id="localPlayerId"
+          @send="handleSendChat"
+        />
+      </view>
+
+      <!-- 设置：统一设置入口（#13）。原先这里只内联「安装应用」一行，现在整块设置
+           （外观 / 声音 / 规则说明 / 安装应用）都收进同一个弹窗，与对局内保持一份实现。 -->
+      <view class="lobby-settings" aria-label="设置">
+        <SettingsDialog
+          :open="settingsOpen"
+          :map-id="room.map.ref.id"
+          @update:open="settingsOpen = $event"
+        />
+        <button
+          type="button"
+          class="entry-secondary lobby-settings__trigger"
+          aria-haspopup="dialog"
+          :aria-expanded="settingsOpen"
+          @click="settingsOpen = true"
+        >设置</button>
+      </view>
+
+      <!-- 二维码弹层。放在 .entry-body 内部只是为了让它的按钮也能拿到 .entry-secondary
+           的尺寸 —— 它本身是 position: fixed，不参与文档流，位置不受父级影响。 -->
+      <view v-if="qrOpen" class="lobby-qr-backdrop" role="presentation" @click.self="closeQR">
+        <view class="lobby-qr-dialog" role="dialog" aria-modal="true" aria-labelledby="lobby-qr-title">
+          <view id="lobby-qr-title">扫码加入房间 {{ room.roomCode }}</view>
+          <image v-if="qrDataUrl" class="lobby-qr-image" :src="qrDataUrl" :alt="`房间 ${room.roomCode} 邀请二维码`" />
+          <view v-else-if="qrError" class="lobby-qr-error" role="alert">{{ qrError }}</view>
+          <view v-else class="lobby-qr-loading" role="status">正在生成二维码…</view>
+          <button ref="qrClose" type="button" class="entry-secondary" @click="closeQR">关闭</button>
+        </view>
+      </view>
+    </view>
+  </ViewShell>
+</template>
+
+<style scoped>
+/* 壳（.view-shell / .view-card / 返回条）全部由 ViewShell.vue 提供 —— 本页**不再写**
+   卡片宽高、内边距、圆角、底色、阴影，也不再画自己的返回按钮。
+   房间码从 46px 的大标题改成返回条上的标题（与「在线联网对战」「单机模式」同字号）。 */
+.lobby-status {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--text-meta-size);
+  font-weight: 800;
+}
+
+.lobby-invite {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px dashed var(--color-accent);
+  border-radius: 16px;
+  background: var(--event-bg);
+}
+
+.lobby-invite-label {
+  color: var(--event-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.lobby-invite-url {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--color-text);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.lobby-invite-feedback {
+  margin: 0;
+  color: var(--color-gain);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.lobby-invite-feedback.failed {
+  color: var(--color-primary);
+}
+
+.lobby-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--color-error-bg);
+  color: var(--color-primary);
+  font-weight: 900;
+}
+
+.lobby-roster-block {
+  display: grid;
+  gap: 8px;
+}
+
+.lobby-roster-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lobby-roster-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.lobby-count {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.lobby-spectators-empty {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lobby-roster {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lobby-player {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--surface-quiet);
+}
+
+.lobby-dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-gain);
+}
+
+.lobby-dot.offline {
+  background: var(--color-border);
+}
+
+
+.lobby-bot-name-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* entryPage.css 会给 .entry-body 下所有输入框 width:100%。放在 flex 行里会把它撑满整行、
+     把「移出 / 移除」按钮挤出去，这里显式收回自适应宽度。 */
+  width: auto;
+  min-height: 44px;
+  margin-right: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--surface-input);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 800;
+}
+
+.lobby-bot-name-input:disabled {
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
+  cursor: not-allowed;
+}
+
+
+.lobby-name {
+  font-weight: 800;
+  color: var(--color-text);
+  margin-right: auto;
+}
+
+.lobby-flag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.lobby-flag--host {
+  background: var(--color-accent);
+  color: var(--color-text);
+}
+
+.lobby-flag--bot {
+  background: var(--band-utility);
+  color: #fff;
+}
+
+.lobby-flag--offline {
+  background: var(--button-disabled-bg);
+  color: var(--color-muted);
+}
+
+.lobby-flag--spectator {
+  background: var(--color-accent);
+  color: var(--color-text);
+}
+
+.lobby-remove {
+  min-height: 44px;
+  padding-inline: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-primary);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lobby-remove:disabled {
+  color: var(--button-disabled-text);
+  cursor: not-allowed;
+}
+
+.lobby-remove--kick {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.lobby-remove--kick:disabled {
+  color: var(--button-disabled-text);
+  border-color: var(--color-border);
+  cursor: not-allowed;
+}
+
+.lobby-wait {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--color-border);
+  background: var(--surface-quiet);
+}
+
+.lobby-wait p {
+  margin: 0;
+  color: var(--color-muted);
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.lobby-wait-spinner {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  animation: lobby-spin 0.9s linear infinite;
+}
+
+.lobby-hint {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* 按钮不再自带一套 .lobby-btn —— 全部走 ui/entryPage.css 的 .entry-primary /
+   .entry-secondary，与「在线联网对战」「单机模式」是同一颗按钮（高 48 / 圆角 16）。 */
+
+.lobby-qr-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--overlay-scrim);
+}
+
+.lobby-qr-dialog {
+  width: min(360px, 100%);
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  padding: 24px;
+  border: 2px solid var(--color-accent);
+  border-radius: 24px;
+  background: var(--board-surface);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 28%);
+  text-align: center;
+}
+
+.lobby-qr-dialog h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 20px;
+}
+
+.lobby-qr-image {
+  /* Fill the dialog on a narrow phone, cap at 240px on wider screens — never overflow at 320px. */
+  width: min(240px, 100%);
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.lobby-qr-loading,
+.lobby-qr-error {
+  margin: 0;
+  color: var(--color-muted);
+  font-weight: 800;
+}
+
+.lobby-qr-error {
+  color: var(--color-primary);
+}
+
+@keyframes lobby-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---- 聊天 + 设置（#50 / #52）----
+   两者都在大厅文档流内，不再使用 position:fixed，因此不会遮挡任何操作按钮。
+   （「离开房间」已移到 ViewShell 的返回条上，不再在页面底部单占一行。） */
+.lobby-chat,
+.lobby-settings {
+  display: grid;
+  gap: 8px;
+}
+
+.lobby-settings__trigger {
+  justify-self: start;
+}
+
+.lobby-chat__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--surface-soft);
+  color: var(--color-text);
+  font-size: 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.lobby-chat__badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  /* 与 GameView 的聊天未读徽标同语义：「需要注意」而非主题色，
+     故取跨主题稳定的 --color-pay，不写死 #c0392b。 */
+  background: var(--color-pay);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* 面板宽度铺满卡片，高度受控在卡片内滚动。 */
+.lobby-chat__panel {
+  width: 100%;
+  max-height: min(320px, 46vh);
+}
+
+/* ---- 房间规则（#4 / #6）---- */
+.lobby-rules {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.lobby-rules__summary {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* 三个数值字段：窄屏一列、宽屏三列，避免把大厅卡片撑得很高。 */
+.lobby-rules__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.lobby-rules__field {
+  display: grid;
+  gap: 4px;
+}
+
+.lobby-rules__field span {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.lobby-rules__field input {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--surface-input);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 800;
+}
+
+.lobby-rules__field input:disabled {
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
+  cursor: not-allowed;
+}
+
+.lobby-rules__hint {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.lobby-rules__reset {
+  margin-left: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lobby-rules__reset:disabled {
+  color: var(--button-disabled-text);
+  border-color: var(--color-border);
+  cursor: not-allowed;
+}
+
+.lobby-rules__difficulty {
+  display: grid;
+  gap: 6px;
+}
+
+.lobby-rules__difficulty-label {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.lobby-rules__difficulty-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 6px;
+}
+
+.lobby-rules__difficulty-option {
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--surface-input);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lobby-rules__difficulty-option.active {
+  border-color: var(--color-primary);
+  background: var(--button-enabled-bg);
+  color: var(--button-enabled-text);
+}
+
+.lobby-rules__difficulty-option:disabled {
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
+  cursor: not-allowed;
+}
+
+/* 房间密码输入框（#23 ③）：与同排的按钮保持同一高度与圆角，视觉上属于同一组控件。
+   `min-width: 0` 是必需的——flex 子项默认 min-width:auto，输入框会被它的
+   placeholder 撑到把同排按钮挤出容器。 */
+.lobby-rules__password-input {
+  flex: 1 1 120px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--surface-input);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.lobby-rules__difficulty-option:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.lobby-rules__error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--color-error-bg);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 900;
+}
+</style>

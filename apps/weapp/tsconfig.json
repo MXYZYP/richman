@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ESNext", "DOM"],
+    "strict": true,
+    "jsx": "preserve",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "types": ["@dcloudio/types"],
+    "paths": {
+      "@richman/engine": ["../../packages/engine/src/index.ts"],
+      "@richman/protocol": ["../../packages/protocol/src/index.ts"],
+      "@richman/board-data": ["../../packages/board-data/src/index.ts"],
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.vue",
+    "vite.config.ts",
+    "../../packages/engine/src/**/*.ts",
+    "../../packages/protocol/src/**/*.ts",
+    "../../packages/board-data/src/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

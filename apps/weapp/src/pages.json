@@ -1,0 +1,19 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationStyle": "custom",
+        "backgroundColor": "#F6F1E4",
+        "disableScroll": true
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationStyle": "custom",
+    "navigationBarTitleText": "大富翁·中国之旅",
+    "navigationBarTextStyle": "black",
+    "navigationBarBackgroundColor": "#F6F1E4",
+    "backgroundColor": "#F6F1E4"
+  }
+}
