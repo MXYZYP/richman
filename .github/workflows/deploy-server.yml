@@ -1,4 +1,4 @@
-# 推送到 main 后，自动 SSH 到服务器执行部署（git pull -> 构建前端 -> pm2 重启）。
+# 推送到 main 后，自动 SSH 到服务器执行部署（对齐远端 -> 构建前端 -> 服务端类型检查 -> pm2 重启）。
 #
 # 使用前需在 仓库 Settings → Secrets and variables → Actions 添加三个 Secret：
 #   SERVER_HOST     服务器 IP 或域名（不含用户名），例如 101.200.189.252
@@ -30,7 +30,16 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
           script_stop: true
-          command_timeout: 10m
+          # 2026-10-26：前端构建（vue-tsc + vite build）在这台服务器上耗时波动极大
+          # （实测 50s ~ 8min+），10m 曾在构建步骤被掐断（Run Command Timeout），
+          # 整次部署中止、pm2 未重启。提到 20m 留足余量。
+          command_timeout: 20m
           script: |
             cd /root/richman-main
+            # 必须先在本步内把仓库对齐到 origin/main，再跑 deploy.sh：
+            # deploy.sh 自身也会 fetch+reset —— 若不对齐，脚本执行中会把自己的文件
+            # 换成新版，bash 按字节偏移继续读、新旧内容混跑（曾在日志里看到
+            # [1/4] 与 [3/4] 混着新版 5 步结构）。先对齐后，reset 变成 no-op，不再自改写。
+            git fetch origin main
+            git reset --hard origin/main
             bash deploy.sh
