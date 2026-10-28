@@ -29,6 +29,15 @@ export const ROOM_SNAPSHOT_SCHEMA_VERSION = 1;
 /** 默认保留期：超过这个时长没被更新过的快照视为陈旧，启动时清理（12 小时）。 */
 export const DEFAULT_ROOM_SNAPSHOT_RETENTION_MS = 12 * 60 * 60 * 1000;
 
+/**
+ * D6 阶段 3：单条快照的体积硬上限（600 KB）。
+ *
+ * 工坊包本身 ≤512KB（customMapGate 门禁），叠加正常房间状态后离这个数很远；
+ * 设它不是为了拦「合法的大房间」，而是给磁盘一个明确的上界——真有包塞进
+ * 「比门禁上限还大」的畸形内容时，宁可让那一间房失去断线恢复能力，也不写爆磁盘。
+ */
+export const MAX_SNAPSHOT_BYTES = 600 * 1024;
+
 export interface RoomSnapshotPlayerRecord {
   id: string;
   nickname: string;
@@ -130,6 +139,15 @@ export interface RoomSnapshotRecord {
    * board/cards/config/ruleModules），避免两处各写一套校验而互相漂移。
    */
   gameState: unknown;
+  /**
+   * D6 阶段 3：工坊自定义图房间随快照落盘的完整地图包；缺省 = 内置图房间。
+   *
+   * 与 ruleConfig 等字段同一条**可选**纪律（`schemaVersion` 继续停在 1）：老快照没有
+   * 本字段，语义明确（内置图），不需要抬版本。结构校验这里只保证「是对象」——
+   * 磁盘文件可被外部改动，完整重验（哈希重算比对 + 结构 + 白名单）在
+   * `RoomManager.#restoreRoom` 里做，过不了的包整间丢弃，绝不带病进内存。
+   */
+  customMapPack?: unknown;
 }
 
 export interface RoomSnapshotStore {
@@ -222,10 +240,16 @@ export function createRoomSnapshotStore(options: CreateRoomSnapshotStoreOptions)
   return {
     save(record) {
       ensureDirectory();
+      const payload = JSON.stringify(record);
+      if (payload.length > MAX_SNAPSHOT_BYTES) {
+        // 抛错由调用方（#persistRoom）记录并继续运行：房间照常可玩，
+        // 只是这一间放弃「进程重启后恢复」。绝不静默写一个超限文件出去。
+        throw new Error(`Snapshot for ${record.code} is ${Math.round(payload.length / 1024)} KB, over the ${Math.round(MAX_SNAPSHOT_BYTES / 1024)} KB cap.`);
+      }
       const target = fileFor(record.code);
       const temp = `${target}${TEMP_FILE_SUFFIX}`;
       // 先落临时文件，再原子 rename 顶替正式文件。
-      writeFileSync(temp, JSON.stringify(record), 'utf8');
+      writeFileSync(temp, payload, 'utf8');
       renameSync(temp, target);
     },
 
@@ -372,5 +396,7 @@ export function isRoomSnapshotRecord(value: unknown): value is RoomSnapshotRecor
   if (!isNullableString(value.createRequestPlayerId)) return false;
   if (!isNullableString(value.createRequestToken)) return false;
   if (value.gameState !== null && !isRecord(value.gameState)) return false;
+  // D6 阶段 3：工坊包只查形状（是对象）；内容重验在 #restoreRoom 的门禁里。
+  if (value.customMapPack !== undefined && !isRecord(value.customMapPack)) return false;
   return true;
 }

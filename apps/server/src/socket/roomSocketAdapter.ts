@@ -119,6 +119,14 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
   // 内联了两遍，第三个调用方（排行榜接口 #116）出现时就该合并，否则阈值与窗口的语义
   // 只能靠「抄得对不对」保持一致。
   const createLimiter = rateLimit === false ? null : createSlidingWindowRateLimiter(rateLimit, now);
+  // D6 阶段 3：带包建房的专用频控——比普通建房严一格。自定义图房间的成本
+  // （内存常驻包 + 落盘 + 逐个入房 ack 分发）远高于内置图房间，不能让同一个
+  // IP 用普通建房的速度把全服 20 间的存活配额瞬间刷满。
+  const CUSTOM_CREATE_WINDOW_MS = 60_000;
+  const CUSTOM_CREATE_MAX_PER_WINDOW = 2;
+  const customCreateLimiter = rateLimit === false
+    ? null
+    : createSlidingWindowRateLimiter({ windowMs: CUSTOM_CREATE_WINDOW_MS, maxPerWindow: CUSTOM_CREATE_MAX_PER_WINDOW }, now);
   const listLimiter = rateLimit === false
     ? null
     : createSlidingWindowRateLimiter({ windowMs: LIST_WINDOW_MS, maxPerWindow: LIST_MAX_PER_WINDOW }, now);
@@ -436,6 +444,15 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
     // 创建房间滑动窗口限流（按客户端 IP）。超阈值直接拒绝，不给刷房机会。
     // `rateLimit: false` 时 `createLimiter` 为 null（测试环境禁用，避免快速连续建房被误拦）。
     if (createLimiter !== null && !createLimiter.allow(socket.handshake.address ?? socket.id)) {
+      ack(CREATE_RATE_LIMITED_ACK);
+      return;
+    }
+    // D6 阶段 3：带包建房走专用更严窗口（60s / 每 IP 2 次）。
+    if (
+      payload.customMapPack !== undefined
+      && customCreateLimiter !== null
+      && !customCreateLimiter.allow(socket.handshake.address ?? socket.id)
+    ) {
       ack(CREATE_RATE_LIMITED_ACK);
       return;
     }

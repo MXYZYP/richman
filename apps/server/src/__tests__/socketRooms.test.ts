@@ -2316,3 +2316,35 @@ describe('D6 阶段 2：工坊自定义图包随入房 ack 分发', () => {
     expect(Object.hasOwn(join, 'customMapPack')).toBe(false);
   });
 });
+
+describe('D6 阶段 3：带包建房专用频控', () => {
+  test('同一 IP 60s 内第 3 次带包建房被限流；不带包的普通建房不受专用窗口影响', async () => {
+    const { url, server } = await startTestServer({
+      // 普通建房阈值放宽到 100/60s：这样被限流的只可能是带包专用窗口（2/60s）触发。
+      rateLimit: { windowMs: 60_000, maxPerWindow: 100 },
+      customMapRoomsEnabled: true,
+      now: () => 1_000_000,
+      roomNumbers: [7, 8, 9],
+      playerIds: ['player-host', 'player-host-2', 'player-host-3'],
+      tokens: ['token-host', 'token-host-2', 'token-host-3'],
+    });
+    const host = await connectClient(url);
+    const pack = buildWorkshopPack();
+
+    expectCreateRoomSuccess(await emitAck(host, 'room:create', { mapId: WORKSHOP_MAP_ID, nickname: '房主', customMapPack: pack }));
+    expectCreateRoomSuccess(await emitAck(host, 'room:create', { mapId: WORKSHOP_MAP_ID, nickname: '房主', customMapPack: pack }));
+
+    const limited = await emitAck(host, 'room:create', { mapId: WORKSHOP_MAP_ID, nickname: '房主', customMapPack: pack });
+    expect(limited).toEqual({
+      ok: false,
+      code: 'CREATE_RATE_LIMITED',
+      message: '创建房间过于频繁，请稍后再试。',
+    });
+
+    // 普通建房（不带包）走的是普通窗口，不占也不受专用窗口约束。
+    expectCreateRoomSuccess(await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' }));
+    // 被拒的请求在进入 roomManager 之前掉头：不消耗房间号（第 3 个号码 9 给了普通建房）。
+    expect(server.roomManager.getPublicRoom('000009')).not.toBeNull();
+    expect(server.roomManager.getPublicRoom('000010')).toBeNull();
+  });
+});

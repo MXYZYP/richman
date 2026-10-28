@@ -48,6 +48,13 @@ const DEFAULT_MAP_RESOLVER: RoomMapResolver = { getActiveMapPack, getMapPack };
 const BUILTIN_MAP_IDS: readonly string[] = listActiveMaps().map((entry) => entry.ref.id);
 
 /**
+ * D6 阶段 3：全服同时存活的工坊自定义图房间上限。
+ * 每间房要在内存里常驻一份 ≤512KB 的包、随快照落盘、随每次入房 ack 分发——
+ * 不设上界的话，刷房可以低成本把这三条通道同时打满。内置图房间不受影响。
+ */
+const MAX_CUSTOM_MAP_ROOMS = 20;
+
+/**
  * 一步「可悔的棋」（#101）：悔棋就是把 `state` 装回去。
  *
  * 持的是**旧状态对象的引用**而非深拷贝——引擎的状态是不可变的（`applyIntent` 返回新对象），
@@ -179,6 +186,15 @@ export class RoomManager<TTimerHandle = unknown> {
       // 服务端五重校验见 customMapGate.ts（体积/结构/哈希比对/id 冲突/模块白名单）。
       if (!this.#customMapRoomsEnabled) {
         return roomFailure('INVALID_ROOM_ACTION', 'Custom map rooms are not enabled.');
+      }
+      // 防滥用（阶段 3）：存活上限放在门禁**之前**——限流判断是 O(房间数)，
+      // 而门禁要做哈希重算与完整结构校验，别让被拒的请求白白烧一遍 CPU。
+      let customMapRoomCount = 0;
+      for (const existing of this.#rooms.values()) {
+        if (existing.customMapPack !== undefined) customMapRoomCount += 1;
+      }
+      if (customMapRoomCount >= MAX_CUSTOM_MAP_ROOMS) {
+        return roomFailure('INVALID_ROOM_ACTION', `Custom map room limit reached (${MAX_CUSTOM_MAP_ROOMS}).`);
       }
       const gate = acceptCustomMapPack(customMapPack, BUILTIN_MAP_IDS);
       if (!gate.ok) {
@@ -1581,12 +1597,43 @@ export class RoomManager<TTimerHandle = unknown> {
   /** 恢复单个房间；成功返回 true，快照不可用时删除并返回 false。 */
   #restoreRoom(record: RoomSnapshotRecord): boolean {
     let pack;
-    try {
-      pack = this.#mapResolver.getMapPack(record.mapRef);
-    } catch {
-      // 地图已下线/未注册：该房间无法重建，直接丢弃快照。
-      this.#forgetRoom(record.code);
-      return false;
+    if (record.customMapPack !== undefined) {
+      // D6 阶段 3：工坊包随快照回来。磁盘文件可被外部改动，必须**重过服务端门禁**
+      //（哈希重算比对 + 结构 + 白名单）——过不了的包整间丢弃，绝不带病进内存。
+      // 注意这里不查 customMapRoomsEnabled：Kill Switch 的语义是「不再开**新**的
+      // 自定义图房间」，重启后恢复既有对局不属于「新开」。
+      const gate = acceptCustomMapPack(record.customMapPack, BUILTIN_MAP_IDS);
+      if (!gate.ok) {
+        this.#dependencies.onServerError?.(
+          `room snapshot custom map pack is invalid for ${record.code}`,
+          new Error(gate.detail),
+        );
+        this.#forgetRoom(record.code);
+        return false;
+      }
+      pack = gate.pack;
+      // 快照里的 mapRef 必须与包的 ref 三元组全等：防「换包不改 ref」的拼装快照
+      // 把对局解到一张对不上的棋盘上（与精确 ref 语义同一条标准）。
+      if (
+        record.mapRef.id !== pack.ref.id ||
+        record.mapRef.version !== pack.ref.version ||
+        record.mapRef.contentHash !== pack.ref.contentHash
+      ) {
+        this.#dependencies.onServerError?.(
+          `room snapshot map ref does not match its custom pack for ${record.code}`,
+          new Error('Snapshot mapRef does not match the custom map pack.'),
+        );
+        this.#forgetRoom(record.code);
+        return false;
+      }
+    } else {
+      try {
+        pack = this.#mapResolver.getMapPack(record.mapRef);
+      } catch {
+        // 地图已下线/未注册：该房间无法重建，直接丢弃快照。
+        this.#forgetRoom(record.code);
+        return false;
+      }
     }
 
     // 自定义规则（#4）也要跟着快照一起回来：磁盘文件可能被外部改动，所以先重新清洗一遍，
@@ -1653,6 +1700,9 @@ export class RoomManager<TTimerHandle = unknown> {
       // 观战开关（#23 ③）：缺省按「允许」处理（= 引入本开关之前的既有行为）。
       // `isRoomSnapshotRecord` 已把非布尔值挡在门外，所以这里只需区分「显式 false」与「其余」。
       allowSpectators: record.allowSpectators !== false,
+      // D6 阶段 3：工坊包跟着房间回内存——不写它，恢复后的房间会「有包之实、无包之名」，
+      // 入房 ack 分发不出去、开局也解不到这张图。
+      ...(record.customMapPack !== undefined ? { customMapPack: pack } : {}),
       players,
       spectators,
       gameState: gameState === null
@@ -1805,6 +1855,10 @@ export class RoomManager<TTimerHandle = unknown> {
       createRequestNickname: room.createRequestNickname,
       createRequestPlayerId: room.createRequestPlayerId,
       createRequestToken: room.createRequestToken,
+      // D6 阶段 3：工坊包随快照落盘。JSON 往返的理由同 gameState——磁盘字节与内存一致。
+      ...(room.customMapPack === undefined
+        ? {}
+        : { customMapPack: JSON.parse(JSON.stringify(room.customMapPack)) as unknown }),
       // JSON 往返一次：既确认状态确实可序列化（不可序列化会在此抛错并被 #persistRoom 记下），
       // 也让内存里的快照与真正落到磁盘的字节完全一致（顺带丢掉值为 undefined 的键）。
       gameState: room.gameState === null ? null : (JSON.parse(JSON.stringify(room.gameState)) as unknown),
