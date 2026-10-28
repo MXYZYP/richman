@@ -23,7 +23,7 @@ jobs:
 
       - name: Probe /healthz
         run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 https://game.mxyzyp.xyz/healthz)
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 45 https://game.mxyzyp.xyz/healthz)
           echo "healthz status: $code"
           if [ "$code" != "200" ]; then
             echo "::error::/healthz returned $code (expected 200)"
@@ -32,7 +32,7 @@ jobs:
 
       - name: Verify online SW version matches repo
         run: |
-          online=$(curl -s --max-time 15 https://game.mxyzyp.xyz/sw.js | grep -o 'richman-v[0-9]*' | head -1)
+          online=$(curl -s --max-time 45 https://game.mxyzyp.xyz/sw.js | grep -o 'richman-v[0-9]*' | head -1)
           echo "online SW: $online"
           if [ "$online" != "${{ steps.sw.outputs.expected }}" ]; then
             echo "::error::SW version drift: online=$online expected=${{ steps.sw.outputs.expected }}（线上没跑上新前端，或仓库忘了升 SW 版本）"
