@@ -96,6 +96,10 @@ const selectedMapId = ref(
 );
 // 建房时不再问电脑难度与皮肤：皮肤收进设置（#5），难度与规则自定义收进大厅的房主设置（#4 / #6）。
 const showMapSelector = computed(() => props.activeMaps.length > 1);
+// D6 阶段 2：选中了工坊自定义图（不在内置列表里）→ 显示版本兼容提示。
+const selectedMapIsWorkshop = computed(
+  () => !listActiveMaps().some((entry) => entry.ref.id === selectedMapId.value),
+);
 watch(
   () => props.activeMaps,
   (activeMaps) => {
@@ -344,6 +348,9 @@ function jumpToForm(): void {
           <button type="button" class="entry-primary" :disabled="!canCreate" @click="submitCreate">
             创建房间
           </button>
+          <p v-if="selectedMapIsWorkshop" class="entry-hint">
+            已选工坊自定义图：联机可玩。加入者需使用最新版本客户端，旧版客户端会提示无法进入。
+          </p>
           <p class="entry-hint">
             建房后进入房间大厅：房主可添加电脑玩家并设定其难度、自定义初始资金等规则；
             皮肤与深色模式在设置里随时切换。

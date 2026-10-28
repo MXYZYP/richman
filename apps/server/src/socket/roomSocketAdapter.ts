@@ -18,6 +18,7 @@ import type {
   UndoRequestInfo,
 } from '@richman/protocol';
 import { CHAT_HISTORY_LIMIT, CHAT_TEXT_MAX_LENGTH } from '@richman/protocol';
+import type { MapPack } from '@richman/board-data';
 import { toPublicGameSnapshot } from '../publicGameSnapshot';
 import { isValidIntent } from '../game/gameRuntime';
 import {
@@ -303,6 +304,16 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
     };
   }
 
+  /**
+   * D6 阶段 2：入房 ack 的自定义图包字段。工坊自定义图房间返回 `{ customMapPack: pack }`，
+   * 内置图房间返回空对象（不往 payload 里塞 undefined 字段——与房间密码同一条省略纪律）。
+   * 只在适配器闭包内可用：roomManager 是工厂参数，不是模块级符号。
+   */
+  function customMapPackField(roomCode: string): Record<string, never> | { customMapPack: MapPack } {
+    const pack = roomManager.getRoomCustomMapPack(roomCode);
+    return pack === undefined ? {} : { customMapPack: pack };
+  }
+
   function toActionAck(result: RoomResult<unknown> | GameActionResult<unknown>): Ack<Record<string, never>> {
     if (!result.ok) {
       return result;
@@ -460,6 +471,7 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
         ok: true,
         ...result.value,
         room: roomManager.getPublicRoom(binding.roomCode) ?? result.value.room,
+        ...customMapPackField(binding.roomCode),
       }));
     } catch (error) {
       logger?.error?.('room:create failed unexpectedly', error);
@@ -500,6 +512,7 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
           ...result.value,
           room,
           ...(snapshot === null ? {} : { snapshot: toPublicGameSnapshot(snapshot) }),
+          ...customMapPackField(binding.roomCode),
         };
       });
     } catch (error) {
@@ -537,8 +550,8 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
         const room = roomManager.getPublicRoom(payload.roomCode) ?? result.value;
         const snapshot = roomManager.getGameSnapshot(payload.roomCode);
         return snapshot === null
-          ? { ok: true, room }
-          : { ok: true, room, snapshot: toPublicGameSnapshot(snapshot) };
+          ? { ok: true, room, ...customMapPackField(payload.roomCode) }
+          : { ok: true, room, snapshot: toPublicGameSnapshot(snapshot), ...customMapPackField(payload.roomCode) };
       });
     } catch (error) {
       logger?.error?.('session:resume failed unexpectedly', error);

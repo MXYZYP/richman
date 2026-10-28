@@ -1462,6 +1462,14 @@ export class RoomManager<TTimerHandle = unknown> {
     };
   }
 
+  /**
+   * D6 阶段 2：读取房间自带的工坊自定义图包（无则 undefined）。
+   * 只给 socket 适配器的入房 ack 用——把它单播给刚进房/重连的那一个连接。
+   */
+  getRoomCustomMapPack(roomCode: string): MapPack | undefined {
+    return this.#rooms.get(roomCode)?.customMapPack;
+  }
+
   #projectPublicRoom(room: Room): PublicRoomState {
     const record = this.#automation.get(room.code);
     return {

@@ -2,20 +2,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ACTIVE_ONLINE_SESSION_KEY, PENDING_ROOM_REQUEST_KEY } from './sessionStorage';
 import { createOnlineSession, type OnlineGameSession } from './onlineSession';
 import { createGame } from '@richman/engine';
-import { getActiveMapPack } from '@richman/board-data';
+import { computeContentHash, getActiveMapPack } from '@richman/board-data';
+import type { MapPack } from '@richman/board-data';
 import type { ChatMessage, PublicGameSnapshot, PublicRoomSummary } from '@richman/protocol';
 
 const chinaMapPack = getActiveMapPack('china-tour');
 const CHINA_ROOM_MAP = { ref: chinaMapPack.ref, title: chinaMapPack.metadata.title };
 const MAP_COMPATIBILITY_ERROR = '当前客户端缺少房间所需地图，请刷新或更新后重试。';
 
-function createPublicSnapshot(overrides: Partial<PublicGameSnapshot> = {}): PublicGameSnapshot {
+function createPublicSnapshot(overrides: Partial<PublicGameSnapshot> = {}, pack: MapPack = chinaMapPack): PublicGameSnapshot {
   const state = createGame({
-    mapRef: chinaMapPack.ref,
-    ruleModules: chinaMapPack.game.requiredRuleModules,
-    board: chinaMapPack.game.board,
-    cards: chinaMapPack.game.cards,
-    config: chinaMapPack.game.config,
+    mapRef: pack.ref,
+    ruleModules: pack.game.requiredRuleModules,
+    board: pack.game.board,
+    cards: pack.game.cards,
+    config: pack.game.config,
     players: [
       { id: 'player-1', nickname: '玩家一' },
       { id: 'player-2', nickname: '玩家二' },
@@ -3146,5 +3147,99 @@ describe('online session public room list', () => {
 
     await expect(session.listRooms()).resolves.toEqual({ ok: false, code: 'DISCONNECTED', message: '' });
     expect(emissions).toEqual([]);
+  });
+});
+
+describe('D6 阶段 2：工坊自定义图分发（客户端）', () => {
+  const workshopPack: MapPack = (() => {
+    const pack = structuredClone(chinaMapPack) as MapPack & {
+      ref: { id: string; version: number; contentHash: string };
+    };
+    pack.ref = { id: 'my-workshop-map', version: 1, contentHash: '' };
+    pack.ref.contentHash = computeContentHash(pack);
+    return pack;
+  })();
+  const WORKSHOP_ROOM_MAP = { ref: workshopPack.ref, title: workshopPack.metadata.title };
+
+  function makeSession(
+    storage: Storage = new MemoryStorage(),
+    extraOptions: Record<string, unknown> = {},
+  ) {
+    const listeners = new Map<string, (...args: unknown[]) => void>();
+    const emissions: unknown[][] = [];
+    const session = createOnlineSession({
+      storage,
+      crypto: { getRandomValues: (bytes) => bytes.fill(0xab) },
+      ...extraOptions,
+      socketFactory: () => ({
+        connected: true,
+        on(event: string, listener: (...args: unknown[]) => void) { listeners.set(event, listener); return this; },
+        off() { return this; },
+        emit(...args: unknown[]) { emissions.push(args); return this; },
+        disconnect() { return this; },
+      }) as never,
+    });
+    return { session, listeners, emissions };
+  }
+
+  it('create 请求携带工坊包；ack 送达的包登记后能解析工坊图快照', async () => {
+    const { session, listeners, emissions } = makeSession();
+    const room = {
+      roomCode: '123456', status: 'playing' as const, hostId: 'player-1', players: [],
+      spectators: [], takeoverPlayerId: null, map: WORKSHOP_ROOM_MAP,
+    };
+    const entering = session.create('房主', workshopPack.ref.id, 'normal', workshopPack);
+    expect((emissions[0]?.[1] as { customMapPack?: unknown }).customMapPack).toEqual(workshopPack);
+    (emissions[0]?.at(-1) as (ack: unknown) => void)({
+      ok: true, roomCode: '123456', playerId: 'player-1', token: 'secret-token', room,
+      customMapPack: JSON.parse(JSON.stringify(workshopPack)),
+    });
+    await entering;
+
+    listeners.get('game:snapshot')?.({ state: createPublicSnapshot({}, workshopPack) });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(session.state.value).not.toBeNull();
+    expect(session.state.value?.mapRef.id).toBe('my-workshop-map');
+    expect(session.compatibilityError.value).toBeNull();
+    session.dispose();
+  });
+
+  it('未收到包时，工坊图快照按不兼容拒绝并给出文案', async () => {
+    const { session, listeners, emissions } = makeSession();
+    const room = {
+      roomCode: '123456', status: 'playing' as const, hostId: 'player-1', players: [],
+      spectators: [], takeoverPlayerId: null, map: WORKSHOP_ROOM_MAP,
+    };
+    const entering = session.create('房主', workshopPack.ref.id);
+    (emissions[0]?.at(-1) as (ack: unknown) => void)({
+      ok: true, roomCode: '123456', playerId: 'player-1', token: 'secret-token', room,
+    });
+    await entering;
+
+    listeners.get('game:snapshot')?.({ state: createPublicSnapshot({}, workshopPack) });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(session.state.value).toBeNull();
+    expect(session.compatibilityError.value).toBe(MAP_COMPATIBILITY_ERROR);
+    session.dispose();
+  });
+
+  it('建房待恢复请求携带工坊包，断线重试原样重发同一份', async () => {
+    const storage = new MemoryStorage();
+    // ackTimeoutMs: 1 让首次建房等不到 ack 而失败，留下待恢复请求；重试必须原样带包（否则服务端只见到陌生 mapId）。
+    const { session, emissions } = makeSession(storage, { ackTimeoutMs: 1 });
+    await session.create('房主', workshopPack.ref.id, 'normal', workshopPack);
+    await session.retryPending();
+
+    const payloads = emissions.map((emission) => emission[1]);
+    expect(payloads).toHaveLength(2);
+    for (const payload of payloads) {
+      expect((payload as { customMapPack?: unknown }).customMapPack).toEqual(workshopPack);
+      expect((payload as { mapId?: unknown }).mapId).toBe('my-workshop-map');
+    }
+    session.dispose();
   });
 });

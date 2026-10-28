@@ -56,13 +56,16 @@ function expectRejected(captured: CapturedResult<unknown>, needle: string): void
   expect(captured.result.message ?? '').toContain(needle);
 }
 
+let createRoomRequestSeq = 0;
+
 function createRoom(
   manager: RoomManager<NodeJS.Timeout>,
   mapId: string,
   customMapPack: MapPack | undefined,
 ): CapturedResult<{ roomCode: string; playerId: string; token: string; room: { map: { ref: unknown; title: string } } }> {
   const events: RoomDomainEvent[] = [];
-  const result = manager.createRoom('房主', mapId, `req-${events.length}-x`, 'normal', customMapPack);
+  // requestId 必须全局唯一：同一 manager 上连开两间房时，重复 id 会被当成重放请求拒绝。
+  const result = manager.createRoom('房主', mapId, `req-${++createRoomRequestSeq}-x`, 'normal', customMapPack);
   return { result, events };
 }
 
@@ -137,5 +140,14 @@ describe('D6 阶段 1：工坊自定义图房间', () => {
     const { manager } = createManager(true);
     const created = expectOk(createRoom(manager, 'china-tour', undefined));
     expect(created.room.map.ref).toEqual(chinaTourMap.ref);
+  });
+
+  test('getRoomCustomMapPack：自定义图房间返回包，内置图房间返回 undefined', () => {
+    const { manager } = createManager(true);
+    const pack = buildCustomPack();
+    const created = expectOk(createRoom(manager, CUSTOM_MAP_ID, pack));
+    expect(manager.getRoomCustomMapPack(created.roomCode)).toEqual(pack);
+    const builtin = expectOk(createRoom(manager, 'china-tour', undefined));
+    expect(manager.getRoomCustomMapPack(builtin.roomCode)).toBeUndefined();
   });
 });

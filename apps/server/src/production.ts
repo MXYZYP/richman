@@ -67,6 +67,9 @@ function createProductionRoomManager(
     // C-③：房间状态变更即落盘，进程重启后（pm2 restart / 部署）进行中的对局可恢复。
     snapshotStore: createRoomSnapshotStore({ directory: snapshotDirectory }),
     onServerError: (message, error) => console.error(message, error),
+    // D6 阶段 2：工坊自定义图联机建房正式开放。默认开，留环境变量「RICHMAN_CUSTOM_MAP_ROOMS=0」
+    // 作为一键回退（出问题不用回滚代码，pm2 环境里设一个变量重启即可）。
+    customMapRoomsEnabled: process.env.RICHMAN_CUSTOM_MAP_ROOMS !== '0',
   });
 }
 

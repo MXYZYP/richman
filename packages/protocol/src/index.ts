@@ -64,6 +64,11 @@ export interface PublicRoomState {
 export interface ResumeAck {
   room: PublicRoomState;
   snapshot?: PublicGameSnapshot;
+  /**
+   * D6 阶段 2：工坊自定义图房间的完整地图包。只随入房类 ack（create/join/resume）
+   * 单播给本连接，广播 room:state 刻意不带——几百 KB 的包不能跟着每次大厅变更重发。
+   */
+  customMapPack?: unknown;
 }
 
 export type RoomClosedReason = 'empty_lobby' | 'lobby_idle_timeout';
@@ -306,6 +311,8 @@ export interface CreateRoomAck {
   playerId: string;
   token: string;
   room: PublicRoomState;
+  /** D6 阶段 2：同 ResumeAck.customMapPack —— 工坊自定义图房间才带。 */
+  customMapPack?: unknown;
 }
 
 export interface JoinRoomAck {
@@ -313,6 +320,8 @@ export interface JoinRoomAck {
   token: string;
   room: PublicRoomState;
   snapshot?: PublicGameSnapshot;
+  /** D6 阶段 2：同 ResumeAck.customMapPack —— 工坊自定义图房间才带。 */
+  customMapPack?: unknown;
 }
 
 export interface ClientToServerEvents {

@@ -8,7 +8,8 @@ import { CHAT_HISTORY_LIMIT } from '@richman/protocol';
 import { RoomManager } from '../rooms/roomManager';
 import type { CreateRoomRateLimit } from '../socket/roomSocketAdapter';
 import type { RoomDomainEvent, RoomManagerDependencies } from '../rooms/roomTypes';
-import { getActiveMapPack } from '@richman/board-data';
+import { computeContentHash, getActiveMapPack } from '@richman/board-data';
+import type { MapPack } from '@richman/board-data';
 import type { BotDifficulty } from '@richman/engine';
 
 type TimerHandle = {
@@ -17,7 +18,7 @@ type TimerHandle = {
   active: boolean;
 };
 
-type CreateRoomPayload = { nickname: string; mapId: string; requestId?: string; botDifficulty?: BotDifficulty };
+type CreateRoomPayload = { nickname: string; mapId: string; requestId?: string; botDifficulty?: BotDifficulty; customMapPack?: unknown };
 type JoinRoomPayload = { roomCode: string; nickname: string; requestId?: string; role?: "player" | "spectator" };
 type RemoveBotPayload = { playerId: string };
 type RenameBotPayload = { playerId: string; nickname: string };
@@ -51,6 +52,8 @@ type DeterministicManagerOptions = {
   rateLimit?: CreateRoomRateLimit | false;
   /** 注入限流窗口用的时钟，避免为了跨过 60s 窗口去 mock 全局 Date.now。 */
   now?: () => number;
+  /** D6：工坊自定义图房间开关（默认不传 = 关闭，与 RoomManager 依赖缺省一致）。 */
+  customMapRoomsEnabled?: boolean;
 };
 
 const clients: RoomClient[] = [];
@@ -60,6 +63,15 @@ const EVENT_TIMEOUT_MS = 200;
 let generatedRequestId = 0;
 const chinaMapPack = getActiveMapPack('china-tour');
 const CHINA_MAP_SUMMARY = { ref: chinaMapPack.ref, title: chinaMapPack.metadata.title };
+
+// D6 阶段 2：可过服务端门禁的工坊包（china-tour 换 id + 重算哈希）。
+const WORKSHOP_MAP_ID = 'my-workshop-map';
+function buildWorkshopPack(): MapPack {
+  const pack = structuredClone(chinaMapPack) as MapPack;
+  pack.ref = { id: WORKSHOP_MAP_ID, version: 1, contentHash: '' };
+  pack.ref.contentHash = computeContentHash(pack);
+  return pack;
+}
 
 afterEach(async () => {
   const clientsToClose = clients.splice(0).reverse();
@@ -1736,6 +1748,7 @@ function createDeterministicRoomManagerFactory(options: DeterministicManagerOpti
       nextAutomationDelayMs() {
         return 1000;
       },
+      customMapRoomsEnabled: options.customMapRoomsEnabled,
     };
 
     return new RoomManager(dependencies);
@@ -2265,3 +2278,41 @@ function expectNoTokenField(value: unknown): void {
     expectNoTokenField(child);
   }
 }
+
+describe('D6 阶段 2：工坊自定义图包随入房 ack 分发', () => {
+  test('create/join/resume 三个 ack 都单播房间自定义包', async () => {
+    const { url } = await startTestServer({ customMapRoomsEnabled: true });
+    const pack = buildWorkshopPack();
+    const host = await connectClient(url);
+
+    const create = await emitAck(host, 'room:create', { mapId: WORKSHOP_MAP_ID, nickname: '房主', customMapPack: pack });
+    expect(create.ok).toBe(true);
+    if (!create.ok) return;
+    expect(create.customMapPack).toEqual(pack);
+
+    const guest = await connectClient(url);
+    const join = await emitAck(guest, 'room:join', { roomCode: create.roomCode, nickname: '玩家二' });
+    expect(join.ok).toBe(true);
+    expect(join.customMapPack).toEqual(pack);
+
+    // 重连同一条 ack 通道：断线刷新后也能拿到包，快照才能解出来。
+    const reconnected = await connectClient(url);
+    const resume = await emitResume(reconnected, { roomCode: create.roomCode, playerId: 'player-host', token: create.token });
+    expect(resume.ok).toBe(true);
+    const resumePack = (resume as { customMapPack?: unknown }).customMapPack;
+    expect(resumePack).toEqual(pack);
+  });
+
+  test('内置图房间的入房 ack 不携带 customMapPack 字段', async () => {
+    const { url } = await startTestServer({ customMapRoomsEnabled: true });
+    const host = await connectClient(url);
+    const create = await emitAck(host, 'room:create', { mapId: 'china-tour', nickname: '房主' });
+    expectCreateRoomSuccess(create);
+    expect(Object.hasOwn(create, 'customMapPack')).toBe(false);
+
+    const guest = await connectClient(url);
+    const join = await emitAck(guest, 'room:join', { roomCode: create.roomCode, nickname: '玩家二' });
+    expect(join.ok).toBe(true);
+    expect(Object.hasOwn(join, 'customMapPack')).toBe(false);
+  });
+});
