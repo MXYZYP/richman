@@ -13,10 +13,13 @@ on:
     - cron: '0 * * * *'
   workflow_dispatch:
 
+concurrency:/n  group: health-check
+  cancel-in-progress: false
+
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
 
