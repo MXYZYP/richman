@@ -27,12 +27,15 @@ const props = withDefaults(defineProps<{
   storageAvailable?: boolean;
   /** 取某张地图的导出文本；返回 null 表示导不出来。 */
   bundleFor?: (mapId: string) => string | null;
+  /** 取某张地图的分享码；返回 null 表示生成不了（如浏览器不支持压缩流）。 */
+  shareCodeFor?: (mapId: string) => Promise<string | null>;
 }>(), {
   maps: () => [],
   notice: null,
   busy: false,
   storageAvailable: true,
   bundleFor: () => () => null,
+  shareCodeFor: () => async () => null,
 });
 
 const emit = defineEmits<{
@@ -71,6 +74,22 @@ function flashCopy(message: string): void {
   copyNotice.value = message;
   if (copyNoticeTimer !== null) window.clearTimeout(copyNoticeTimer);
   copyNoticeTimer = window.setTimeout(() => { copyNotice.value = null; }, 2400);
+}
+
+async function copyShareCode(mapId: string): Promise<void> {
+  flashCopy('正在生成分享码…');
+  try {
+    const code = await props.shareCodeFor(mapId);
+    if (code === null) {
+      flashCopy('这张地图暂时分享不了，可改用「复制 JSON」');
+      return;
+    }
+    await navigator.clipboard.writeText(code);
+    flashCopy('分享码已复制，发给朋友粘贴进工坊即可导入');
+  } catch {
+    // 剪贴板权限被拒 / 非安全上下文：明确说失败原因，不静默。
+    flashCopy('复制失败，可改用「复制 JSON」');
+  }
 }
 
 async function copyBundle(mapId: string): Promise<void> {
@@ -126,27 +145,28 @@ const title = '地图工坊';
   >
     <section class="workshop-panel" aria-label="地图工坊">
       <p class="workshop-scope" role="note">
-        <strong>工坊里的地图只能单机游玩。</strong>
-        联机房间仍只用内置的那十一张图——服务端不认识你自己装的图，建房会被拒。
-        想和朋友玩自定义地图，只能由主机先按仓库里的说明把它正式接入。
+        <strong>工坊地图现在联机也能玩。</strong>
+        建房时选中工坊图，完整地图包会随建房请求上送服务端校验，再分发给房间里的每个人；
+        加入者需使用最新版本客户端。单机游玩也一切照旧。
       </p>
       <p class="workshop-hint">
         用 <code>tools/map-editor.html</code> 做好地图后点「导出 bundle.json」，
-        把整份 JSON 粘到下面。自定义地图只能用内置图标（不能引用包内图片）。
+        把整份 JSON 或好友发来的<strong>分享码</strong>（RICHMAP1- 开头）粘到下面。
+        自定义地图只能用内置图标（不能引用包内图片）。
         导入前会先过一遍和正式地图完全相同的校验，不合格会指出具体字段。
         <template v-if="storageAvailable">地图只存在这台设备的浏览器里，不上传、不同步。</template>
         <template v-else>当前浏览器无法保存本地数据，导入后刷新就会丢。</template>
       </p>
 
       <label class="workshop-field">
-        <span>粘贴地图 JSON</span>
+        <span>粘贴地图 JSON 或分享码</span>
         <textarea
           v-model="draft"
           class="workshop-input"
           rows="5"
-          :placeholder="'{ &quot;manifest.json&quot;: { … }, &quot;board.json&quot;: { … }, … }'"
+          :placeholder="'{ &quot;manifest.json&quot;: { … }, … } 或 RICHMAP1- 开头的分享码'"
           :disabled="busy"
-          aria-label="粘贴地图 JSON"
+          aria-label="粘贴地图 JSON 或分享码"
         />
       </label>
       <div class="workshop-actions">
@@ -184,6 +204,7 @@ const title = '地图工坊';
             <button type="button" class="workshop-button primary" :disabled="busy" @click="emit('play', map.ref.id)">
               单机试玩
             </button>
+            <button type="button" class="workshop-button" @click="copyShareCode(map.ref.id)">复制分享码</button>
             <button type="button" class="workshop-button" @click="copyBundle(map.ref.id)">复制 JSON</button>
             <button type="button" class="workshop-button" @click="downloadBundle(map.ref.id)">下载</button>
             <button type="button" class="workshop-button danger" :disabled="busy" @click="emit('remove', map.ref.id)">

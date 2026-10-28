@@ -9,7 +9,9 @@ import {
   createCustomMapRegistry,
   createCustomMapResolver,
   customMapSummaries,
+  decodeCustomMapShareCode,
   describeCustomMapImportFailure,
+  encodeCustomMapShareCode,
   exportCustomMapBundle,
   loadCustomMaps,
   mergeMapCatalog,
@@ -315,5 +317,38 @@ describe('地图工坊：注册表与目录（#117）', () => {
     const reparsed = parseOk(bundleText);
     expect(reparsed.pack.ref).toEqual(pack.ref);
     expect(reparsed.declaredHashMatched).toBe(true);
+  });
+});
+
+describe('工坊分享码（deflate-raw + base64url）', () => {
+  it('编码→解码往返后与原包完全一致', async () => {
+    const code = await encodeCustomMapShareCode(chinaTourMap);
+    expect(code.startsWith('RICHMAP1-')).toBe(true);
+    const decoded = await decodeCustomMapShareCode(code);
+    expect(decoded).not.toBeNull();
+    expect(decoded?.ok).toBe(true);
+    if (decoded?.ok) {
+      expect(JSON.parse(decoded.json)).toEqual(chinaTourMap);
+    }
+  });
+
+  it('压缩确实发生了：分享码明显短于原始 JSON', async () => {
+    const code = await encodeCustomMapShareCode(chinaTourMap);
+    const raw = JSON.stringify(chinaTourMap);
+    expect(code.length).toBeLessThan(raw.length);
+  });
+
+  it('非分享码文本返回 null，调用方按原始 JSON 兜底', async () => {
+    expect(await decodeCustomMapShareCode('{"manifest.json":{}}')).toBeNull();
+    expect(await decodeCustomMapShareCode('  RICHMAP2-not-mine  ')).toBeNull();
+  });
+
+  it('被截断/篡改的分享码返回 ok:false 且带原因', async () => {
+    const code = await encodeCustomMapShareCode(chinaTourMap);
+    const truncated = code.slice(0, code.length - 40);
+    const decoded = await decodeCustomMapShareCode(truncated);
+    expect(decoded).not.toBeNull();
+    expect(decoded?.ok).toBe(false);
+    if (!decoded?.ok) expect(decoded.detail.length).toBeGreaterThan(0);
   });
 });

@@ -30,12 +30,15 @@ function summary(id: string, title = `${id} 测试图`): CustomMapSummary {
 }
 
 describe('MapWorkshopDialog', () => {
-  it('一进门就说清范围：工坊的地图只能单机，联机房间仍只用内置图', async () => {
+  it('一进门就说清范围：工坊地图联机可玩，加入者需最新版客户端', async () => {
     const html = await render({});
 
     expect(html).toContain('地图工坊');
-    expect(html).toContain('工坊里的地图只能单机游玩');
-    expect(html).toContain('联机房间仍只用内置的那十一张图');
+    expect(html).toContain('工坊地图现在联机也能玩');
+    expect(html).toContain('加入者需使用最新版本客户端');
+    // 分享闭环（D6 之后）：粘贴框直接吃 RICHMAP1- 分享码；「复制分享码」按钮在地图行里，
+    // 由「五个操作」用例钉住。
+    expect(html).toContain('RICHMAP1-');
     // 必须给出「怎么造图」的入口，否则这一页只是个收件箱，玩家不知道该往里放什么。
     expect(html).toContain('tools/map-editor.html');
     expect(html).toContain('导出 bundle.json');
@@ -57,13 +60,14 @@ describe('MapWorkshopDialog', () => {
     expect(html).not.toContain('单机试玩');
   });
 
-  it('已装地图逐行列出标题、id@version、导入时间与四个操作', async () => {
+  it('已装地图逐行列出标题、id@version、导入时间与五个操作', async () => {
     const html = await render({ maps: [summary('workshop-a', '丝路小环线')] });
 
     expect(html).toContain('丝路小环线');
     expect(html).toContain('workshop-a@1');
     expect(html).toContain('导入于');
     expect(html).toContain('单机试玩');
+    expect(html).toContain('复制分享码');
     expect(html).toContain('复制 JSON');
     expect(html).toContain('下载');
     expect(html).toContain('删除');

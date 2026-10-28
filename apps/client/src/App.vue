@@ -65,6 +65,8 @@ import {
   exportCustomMapBundle,
   loadCustomMaps,
   mergeMapCatalog,
+  decodeCustomMapShareCode,
+  encodeCustomMapShareCode,
   parseCustomMapImport,
   persistCustomMaps,
   removeCustomMap,
@@ -166,14 +168,22 @@ function openWorkshop(): void {
  * 落盘在前、改内存在后：写不进去就什么都不改，宁可让玩家看到「没保存成功」，
  * 也不要造出「界面上有了、刷新就没了」的假象。
  */
-function importCustomMap(text: string): void {
+async function importCustomMap(text: string): Promise<void> {
   const target = browserStorage();
   if (target === undefined) {
     workshopNotice.value = { kind: 'error', message: describeCustomMapImportFailure('storage'), detail: null };
     return;
   }
+  // 分享码先行：RICHMAP1- 前缀的文本先解压成 JSON，再走同一条导入管线。
+  // 不是分享码（null）按原始 JSON 兜底——两条输入通道互不干扰。
+  const decoded = await decodeCustomMapShareCode(text);
+  if (decoded !== null && !decoded.ok) {
+    workshopNotice.value = { kind: 'error', message: '分享码无效：请确认整段复制、没有漏字。', detail: decoded.detail };
+    return;
+  }
+  const payload = decoded === null ? text : decoded.json;
   // 只把**内置地图**的 id 列为保留：同一张图改完重导应当是「升级」，不该被判重名。
-  const parsed = parseCustomMapImport(text, { reservedIds: activeMaps.map((entry) => entry.ref.id) });
+  const parsed = parseCustomMapImport(payload, { reservedIds: activeMaps.map((entry) => entry.ref.id) });
   if (!parsed.ok) {
     workshopNotice.value = {
       kind: 'error',
@@ -216,6 +226,17 @@ function deleteCustomMap(mapId: string): void {
   const title = before.find((record) => record.pack.ref.id === mapId)?.pack.metadata.title ?? mapId;
   customMapRecords.value = next;
   workshopNotice.value = { kind: 'ok', message: `已删掉「${title}」。`, detail: null };
+}
+
+/** 工坊里点「复制分享码」：把包压成一串文本给剪贴板；生成不了返回 null，由弹窗提示降级。 */
+async function customMapShareCode(mapId: string): Promise<string | null> {
+  const record = customMapRecords.value.find((entry) => entry.pack.ref.id === mapId);
+  if (record === undefined) return null;
+  try {
+    return await encodeCustomMapShareCode(record.pack);
+  } catch {
+    return null;
+  }
 }
 
 /** 工坊里点「单机试玩」：关掉弹层，直接进单机设置页并把这张图选好。 */
@@ -1063,6 +1084,7 @@ onBeforeUnmount(() => {
     :notice="workshopNotice"
     :storage-available="workshopStorageAvailable"
     :bundle-for="customMapBundle"
+    :share-code-for="customMapShareCode"
     @update:open="workshopOpen = $event"
     @import="importCustomMap"
     @remove="deleteCustomMap"
