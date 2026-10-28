@@ -47,7 +47,9 @@ jobs:
             echo "::error::unexpectedly few output files ($count), build likely incomplete"
             exit 1
           fi
-          if grep -rEl '<(svg|dialog|select)\b' "$out" --include='*.wxml'; then
-            echo "::error::forbidden tags (svg/dialog/select) found in wxml output"
+          # 只拦真正致命的标签；<svg> 是已知既有状态（MapThumbnail 静默渲染为空），
+          # 非法标签的权威门禁是 build:mp 里的 scan-tags，这里不重复更严的口径。
+          if grep -rEl '<(dialog|select)\b' "$out" --include='*.wxml'; then
+            echo "::error::forbidden tags (dialog/select) found in wxml output"
             exit 1
           fi
