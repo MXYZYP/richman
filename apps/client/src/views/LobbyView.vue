@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { ChatMessage, PublicRoomState, RoomRuleConfig, RoomSettings, RoomSettingsPatch } from '@richman/protocol';
 import { ROOM_PASSWORD_MAX_LENGTH, ROOM_PASSWORD_MIN_LENGTH, TURN_TIME_LIMIT_OPTIONS } from '@richman/protocol';
-import { getActiveMapPack } from '@richman/board-data';
+import { getActiveMapPack, listActiveMaps } from '@richman/board-data';
 import { formatCash, setCashUnitForMap } from '../ui/format';
 import type { BotDifficulty } from '@richman/engine';
 import { BOT_DIFFICULTY_OPTIONS } from '../game/gameSetup';
@@ -57,6 +57,13 @@ const props = withDefaults(defineProps<{
 // 大厅里的金额（初始资金 / 现金目标 / 规则摘要）也要按本房间的地图选单位。
 // 必须写在 props 之后 —— 写在前面会踩「使用了未初始化的 props」。
 watch(() => props.room.map.ref.id, (mapId) => setCashUnitForMap(mapId), { immediate: true });
+
+// 工坊图角标（P2）：大厅顶栏一眼分清「这局是自定义图」。内置图不加任何标记。
+const mapAside = computed(() => {
+  if (!props.showMapTitle) return '';
+  const isBuiltin = listActiveMaps().some((entry) => entry.ref.id === props.room.map.ref.id);
+  return isBuiltin ? props.room.map.title : `工坊图 · ${props.room.map.title}`;
+});
 
 const emit = defineEmits<{
   addBot: [];
@@ -469,7 +476,7 @@ onBeforeUnmount(() => {
 <template>
   <ViewShell
     :title="`房间 ${room.roomCode}`"
-    :aside="showMapTitle ? room.map.title : ''"
+    :aside="mapAside"
     :back-label="pendingCommand === 'leave' ? '正在离开…' : '离开房间'"
     :back-disabled="!canMutate"
     @back="emit('leave')"

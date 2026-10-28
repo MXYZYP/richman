@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import type { Cell as BoardCellData, DeepReadonly } from '@richman/board-data';
 import type { PropertyState, PlayerColor } from '@richman/engine';
-import type { CellPresentationModel } from '../ui/boardLayout';
+import type { CellPresentationModel } from '../../game/ui/boardLayout';
 
 /**
  * 小程序端棋格（源站 components/BoardCell.vue 的移植版）。

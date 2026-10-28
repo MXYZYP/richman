@@ -1,5 +1,14 @@
 /// <reference types="@dcloudio/types" />
 
+/** 与 vite/client 的默认 ImportMetaEnv 合并；weapp 沿用源站 ServerOriginEnv 约定（session/serverOrigin.ts）。 */
+interface ImportMetaEnv {
+  readonly VITE_SERVER_ORIGIN?: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+
 declare module '*.vue' {
   import type { DefineComponent } from 'vue';
   const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>;

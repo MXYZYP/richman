@@ -383,6 +383,74 @@ export function mergeMapCatalog(
 }
 
 /** 把一张地图导回编辑器 bundle（方便分享给别人或再导入），键名与地图编辑器的导出物一致。 */
+// ---- 分享码（工坊图的分享闭环）----
+// 一串可整段复制的文本（deflate-raw 压缩 + base64url），收到的人粘进工坊即导入。
+// 走前缀识别：没带前缀的文本按原始 JSON 走老路，两条输入通道互不干扰。
+
+const SHARE_CODE_PREFIX = 'RICHMAP1-';
+
+function toBase64Url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  // 512KB 级输入必须分块：一次性 ...spread 会在大数组上炸调用栈。
+  let binary = '';
+  const CHUNK = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + CHUNK));
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromBase64Url(text: string): ArrayBuffer {
+  const normalized = text.replace(/-/g, '+').replace(/_/g, '/');
+  const padding = normalized.length % 4 === 0 ? '' : '='.repeat(4 - (normalized.length % 4));
+  const binary = atob(normalized + padding);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer;
+}
+
+async function deflateText(text: string): Promise<ArrayBuffer> {
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+  return new Response(stream).arrayBuffer();
+}
+
+async function inflateRaw(buffer: ArrayBuffer): Promise<string> {
+  const stream = new Blob([buffer]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Response(stream).text();
+}
+
+/** 把一张自定义地图压成可分享的一串文本。浏览器不支持压缩流时抛错，由调用方提示降级。 */
+export async function encodeCustomMapShareCode(pack: MapPack): Promise<string> {
+  const json = JSON.stringify(pack);
+  return SHARE_CODE_PREFIX + toBase64Url(await deflateText(json));
+}
+
+export type CustomMapShareCodeDecode =
+  | { ok: true; json: string }
+  | { ok: false; detail: string };
+
+/**
+ * 解分享码。返回：
+ *  - `null`：不是分享码（没带前缀），调用方按原始 JSON 走老路；
+ *  - `ok: true`：`json` 是解压出的地图包 JSON 文本，交给 parseCustomMapImport 继续走
+ *    同一条校验管线（结构 + 哈希 + 512KB 上限都在那边，这里不做二次判断）；
+ *  - `ok: false`：是分享码但解不开（被截断 / 篡改），detail 给可展示的原因。
+ */
+export async function decodeCustomMapShareCode(text: string): Promise<CustomMapShareCodeDecode | null> {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith(SHARE_CODE_PREFIX)) return null;
+  try {
+    const buffer = fromBase64Url(trimmed.slice(SHARE_CODE_PREFIX.length));
+    return { ok: true, json: await inflateRaw(buffer) };
+  } catch (error) {
+    // 截断的 deflate 流可能抛出空 message 的错误——detail 是要给玩家看的，不能是空串。
+    const detail = error instanceof Error ? error.message : String(error);
+    return { ok: false, detail: detail === '' ? '分享码内容不完整或已损坏。' : detail };
+  }
+}
+
 export function exportCustomMapBundle(pack: MapPack): string {
   return JSON.stringify({
     'manifest.json': {

@@ -11,7 +11,7 @@
 //   绕过办法（临时救急）：DevTools → Application → Service Workers → Unregister，
 //   或勾选 Network 面板的 "Disable cache"。
 //   ★ 本地预览也算：`_preview` 那份也是同一个道理，改了产物没升号，预览里就一直看旧 chunk。
-const CACHE = 'richman-v27';
+const CACHE = 'richman-v28';
 const SHELL = [
   '/index.html',
   '/manifest.webmanifest',

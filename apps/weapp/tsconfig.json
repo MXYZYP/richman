@@ -3,7 +3,7 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ESNext", "DOM"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "strict": true,
     "jsx": "preserve",
     "esModuleInterop": true,
@@ -13,7 +13,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "baseUrl": ".",
-    "types": ["@dcloudio/types"],
+    "types": ["@dcloudio/types", "vite/client"],
     "paths": {
       "@richman/engine": ["../../packages/engine/src/index.ts"],
       "@richman/protocol": ["../../packages/protocol/src/index.ts"],

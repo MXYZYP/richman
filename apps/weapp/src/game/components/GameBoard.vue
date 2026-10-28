@@ -89,7 +89,9 @@ const units = (value: number) => `calc(var(--board-size, 375px) * ${(value / 100
  */
 function routeStyle(route: (typeof routeModels.value)[number]) {
   if (route.type !== 'line' || route.line === null) return null;
-  const size = state.presentation.canvas.size;
+  // script 上下文里没有裸 state（那是模板对 props 的自动解包），必须显式 props.state——
+  // 否则渲染支线路线（13×10 宫格图全有）时 ReferenceError。typecheck 债清理时实测抓到。
+  const size = props.state.presentation.canvas.size;
   const { x1, y1, x2, y2 } = route.line;
   const dx = x2 - x1;
   const dy = y2 - y1;

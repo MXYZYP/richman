@@ -1,0 +1,51 @@
+# 小程序端构建冒烟（P2）：同步源站 → 非法标签门禁 → mp-weixin 构建 → 产物结构核验。
+# 之前 weapp 只在本地手工跑，src/game 同步失败 / patches.mjs 失配 / 类型债都不会被 CI 拦。
+name: weapp-smoke
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'apps/client/src/**'
+      - 'apps/weapp/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/weapp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build mp-weixin
+        run: npm run build:mp
+
+      - name: Verify build output structure
+        run: |
+          out=dist/build/mp-weixin
+          if [ ! -f "$out/app.json" ]; then
+            echo "::error::$out/app.json missing"
+            exit 1
+          fi
+          count=$(find "$out" -type f | wc -l)
+          echo "output files: $count"
+          if [ "$count" -lt 100 ]; then
+            echo "::error::unexpectedly few output files ($count), build likely incomplete"
+            exit 1
+          fi
+          if grep -rEl '<(svg|dialog|select)\b' "$out" --include='*.wxml'; then
+            echo "::error::forbidden tags (svg/dialog/select) found in wxml output"
+            exit 1
+          fi
