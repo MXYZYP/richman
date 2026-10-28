@@ -1,9 +1,11 @@
 # 线上探活（P1）：每小时核验服务器侧 /healthz 200、pm2 richman 在线、
-# 线上 sw.js 版本与仓库一致。
+# 线上 sw.js 版本与仓库一致。探针本体在 .github/scripts/server-health-probe.sh。
 #
-# ★ 为什么走 SSH 而不是 runner 直接 curl 公网域名：GitHub 海外 runner 到这台
-#   国内服务器（101.200.189.252）整体不通（15s/45s 双双 curl exit 28 超时，
-#   2026-10-28 实测），公网直连探活必然假警报。复用 deploy-server 的三个 Secret。
+# ★ 为什么走 SSH：GitHub 海外 runner 到这台国内服务器（101.200.189.252）的
+#   公网 HTTP 整体不通（15s/45s 双双 curl exit 28，2026-10-28 实测）。
+# ★ 为什么普通 ssh + 3 次重试而不是 appleboy/ssh-action 单发：服务器 sshd
+#   存在「banner exchange 超时」的间歇抖动（本机与 runner 侧都实测过），单发
+#   连接会话挂死直到 job 超时；重试能跨过抖动窗口。
 # ★ 期望版本从 runner 侧 checkout 提取（源头是 GitHub 仓库），不从服务器仓库取
 #   —— 否则「部署没对齐仓库」时两边一起旧、比对永远通过。
 name: health-check
@@ -31,33 +33,31 @@ jobs:
           echo "expected=$expected" >> "$GITHUB_OUTPUT"
           echo "expected SW: $expected"
 
-      - name: Probe server over SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Probe server over SSH (3 attempts)
         env:
+          SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SSH_HOST: ${{ secrets.SERVER_HOST }}
+          SSH_USER: ${{ secrets.SERVER_USER }}
           EXPECTED_SW: ${{ steps.sw.outputs.expected }}
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: 22
-          envs: EXPECTED_SW
-          script_stop: true
-          script: |
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://127.0.0.1:3000/healthz)
-            echo "healthz=$code"
-            if [ "$code" != "200" ]; then
-              echo "::error::/healthz returned $code (expected 200)"
-              exit 1
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/probe_key
+          chmod 600 ~/.ssh/probe_key
+          ok=0
+          for i in 1 2 3; do
+            echo "--- attempt $i ---"
+            if ssh -i ~/.ssh/probe_key \
+                 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                 -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 \
+                 "$SSH_USER@$SSH_HOST" "EXPECT='$EXPECTED_SW' bash -s" \
+                 < .github/scripts/server-health-probe.sh; then
+              ok=1
+              break
             fi
-            pm2_line=$(pm2 describe richman 2>/dev/null | grep -c '| status .*online' || true)
-            echo "pm2 richman online lines: $pm2_line"
-            if [ "$pm2_line" -lt 1 ]; then
-              echo "::error::pm2 richman is not online（注意：/healthz 可能被占 3000 端口的孤儿进程作答）"
-              exit 1
-            fi
-            online=$(grep -o 'richman-v[0-9]*' /root/richman-main/apps/client/dist/sw.js | head -1)
-            echo "dist SW: $online (expected $EXPECTED_SW)"
-            if [ "$online" != "$EXPECTED_SW" ]; then
-              echo "::error::SW version drift: dist=$online expected=$EXPECTED_SW（部署没跑新前端，或仓库忘了升 SW 版本）"
-              exit 1
-            fi
+            echo "attempt $i failed, retrying in 30s"
+            sleep 30
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::health probe failed after 3 attempts（SSH 连接或探针失败）"
+            exit 1
+          fi
