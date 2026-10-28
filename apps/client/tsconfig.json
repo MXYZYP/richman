@@ -3,7 +3,11 @@
   "compilerOptions": {
     "jsx": "preserve",
     "types": ["vite/client"],
-    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // 增量缓存写到 .runtime/（已 gitignore）：部署机上 .tsbuildinfo 跨部署持久，
+    // vue-tsc 只重查变更文件——服务器上从 ~10 分钟降到分钟级。本地同样受益且不入库。
+    "incremental": true,
+    "tsBuildInfoFile": "../../.runtime/vue-tsc-client.tsbuildinfo"
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "src/**/*.d.ts"]
 }

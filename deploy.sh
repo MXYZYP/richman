@@ -56,18 +56,28 @@ else
   printf '%s\n' "$CURRENT_LOCK_STAMP" > "$LOCKFILE_STAMP"
 fi
 
-echo "[3/5] 构建前端 ..."
-pnpm --filter @richman/client build
+echo "[3/5] 构建前端 ∥ 类型检查服务端（两者并行）..."
+# 前端构建（vue-tsc + vite）与服务端 tsc 门禁互不依赖，并行跑完再统一判成败：
+# 两者取 max 而不是 sum，部署墙钟时间直接省掉较短的那一支。
+# client 的 vue-tsc 已开 incremental（tsconfig → .runtime/vue-tsc-client.tsbuildinfo，
+# 跨部署持久），服务器上不再每次全量重查，从 ~10 分钟降到分钟级。
+CLIENT_FAIL=0
+SERVER_FAIL=0
+pnpm --filter @richman/client build & CLIENT_PID=$!
+pnpm --filter @richman/server build & SERVER_PID=$!
+wait "$CLIENT_PID" || CLIENT_FAIL=1
+wait "$SERVER_PID" || SERVER_FAIL=1
+if [ "$CLIENT_FAIL" -ne 0 ]; then
+  echo "[ERROR] 前端构建失败，部署中止。" >&2
+  exit 1
+fi
+if [ "$SERVER_FAIL" -ne 0 ]; then
+  echo "[ERROR] 服务端类型检查未通过，部署中止（绝不重启旧进程）。" >&2
+  exit 1
+fi
+echo "  前端构建与服务端类型检查均通过。"
 
-echo "[4/5] 类型检查服务端（tsc --noEmit 门禁）..."
-# 服务端用 tsx 直跑 TS 源码，tsx 不做类型检查，
-# 所以在 pm2 restart 之前必须先过 tsc --noEmit，
-# 否则「用了未 import 的名字」这类 ReferenceError 会直接让线上进程崩溃冻屏，
-# 且本地/构建期完全静默。门禁失败则整次部署中止，绝不重启旧进程。
-pnpm --filter @richman/server build
-echo "  服务端类型检查通过。"
-
-echo "[5/5] 重启进程 ..."
+echo "[4/5] 重启进程 ..."
 if pm2 describe "$PM2_NAME" >/dev/null 2>&1; then
   pm2 restart "$PM2_NAME" --update-env
 else
