@@ -349,6 +349,6 @@ describe('工坊分享码（deflate-raw + base64url）', () => {
     const decoded = await decodeCustomMapShareCode(truncated);
     expect(decoded).not.toBeNull();
     expect(decoded?.ok).toBe(false);
-    if (!decoded?.ok) expect(decoded.detail.length).toBeGreaterThan(0);
+    if (decoded !== null && !decoded.ok) expect(decoded.detail.length).toBeGreaterThan(0);
   });
 });

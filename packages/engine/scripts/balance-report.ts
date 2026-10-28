@@ -2,7 +2,7 @@
 // 复用 src/simulate 的 runGame（含合法性/现金守恒/异常三类硬不变量校验）。
 // 用法：node_modules/tsx/dist/cli.mjs packages/engine/scripts/balance-report.ts [每图局数，默认 120]
 // 输出：每图 终局率 / 局长 / 终局原因分布 / 座次胜率 / 不变量违例。
-import { runGame, randomConfigs } from '../src/simulate';
+import { runGame, randomConfigs, MAX_TURNS } from '../src/simulate';
 import { listActiveMaps, getActiveMapPack } from '@richman/board-data';
 import type { GameResult } from '../src/simulate';
 
@@ -69,7 +69,9 @@ async function main() {
   for (let m = 0; m < entries.length; m++) {
     const pack = getActiveMapPack(entries[m].ref.id);
     const configs = randomConfigs(games, m * 10000 + 7);
-    const results = configs.map((config) => runGame(config, 10000, pack));
+    // 用引擎语义跑满：goal=null 局由 D1 stalemate（10000 轮）收敛，
+    // 别再让旧的意图数上限把长局拦腰截断成 non_terminated 假警报。
+    const results = configs.map((config) => runGame(config, MAX_TURNS, pack));
     const stats = aggregate(pack.ref.id, results);
     all.push(stats);
     process.stdout.write(`[${m + 1}/${entries.length}] ${stats.mapId} 完成\n`);

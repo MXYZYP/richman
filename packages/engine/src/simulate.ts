@@ -4,7 +4,8 @@
 //   1. 合法性——bot 的每个 intent 必须被 applyIntent 接受（ok===true）；
 //   2. 现金守恒——sum(玩家现金) + bankBalance === initialCash × 人数，每步成立；
 //      bankBalance 仅由事件求和得到（事件已补全金额，无需反推状态/卡牌）；
-//   3. 终局——每局在 MAX_TURNS 内达到 game_over（cashGoal=null 局可能撞上限，如实记录）。
+//   3. 终局——每局在引擎僵局上限（10000 轮）内必然 game_over（cashGoal=null 局由
+//      D1 的 stalemate 收敛；MAX_TURNS 只是高于该线的异常死循环保险）。
 import { createGame, applyIntent } from './engine';
 import { chooseBotIntent } from './bot';
 import { getActiveMapPack } from '@richman/board-data';
@@ -14,8 +15,16 @@ import { pathToFileURL } from 'node:url';
 
 const simulationMap = getActiveMapPack('china-tour');
 
-/** 单局最多执行的意图数；兼容世界之旅的合法长局，同时保留有限的防死循环上限。 */
-export const MAX_TURNS = 10_000;
+/**
+ * 单局安全上限（意图数）。
+ *
+ * 引擎自身的收敛保证（D1）是 10000 **轮**：回合达到上限即按净资产排名 stalemate 终局。
+ * 「轮」与「意图」不是一个量纲——6 人局 10000 轮 ≈ 60000 意图，所以旧的 10000 意图上限
+ * 远在引擎僵局线之前就把 goal=null 的长局拦腰截断，报成 non_terminated（假警报）。
+ * 这里取 100000：高于任何可从引擎上限自然到达的意图数，只防「引擎僵局失效」的异常死循环；
+ * 正常对局必然先由引擎判 stalemate 终局，报告里的终局率因此是引擎的真实语义。
+ */
+export const MAX_TURNS = 100_000;
 
 export interface GameConfig {
   seed: string;
