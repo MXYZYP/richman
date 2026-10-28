@@ -23,6 +23,15 @@ export interface CreateRoomRequest {
   mapId: string;
   /** 电脑玩家难度（P1-6）；不传时服务器按 normal 处理。 */
   botDifficulty?: BotDifficulty;
+  /**
+   * D6 阶段 2：工坊自定义图包（仅工坊图建房时携带）。
+   * 随待恢复请求一起落盘是**刻意**的：断线后重试建房必须原样重发同一份包，
+   * 否则服务端只见到一个它不认识的 mapId，重试必败。导入时已过全套校验，
+   * 读取时这里只做「是对象」的轻校验，重校验交给服务端门禁兜底。
+   * 类型刻意用 `object` 而非 `MapPack`：PendingRoomRequest 会进 AppFlowSnapshot 的
+   * 泛型实例化，完整 MapPack 嵌进去会触发 TS2589；协议层对本字段同样只承诺 unknown。
+   */
+  customMapPack?: object;
 }
 
 export interface JoinRoomRequest {
@@ -85,13 +94,19 @@ function isPendingRoomRequest(value: unknown): value is PendingRoomRequest {
   if (!isRecord(value) || !isRequestId(value.requestId) || !isNonEmptyString(value.nickname)) return false;
 
   if (value.operation === 'create') {
-    // botDifficulty 为可选扩展字段：旧版/未传时仅 4 键即合法；携带时须恰好 5 键且难度值合法。
-    if (hasExactKeys(value, ['operation', 'requestId', 'nickname', 'mapId']) && isNonEmptyString(value.mapId)) {
-      return true;
-    }
-    return hasExactKeys(value, ['operation', 'requestId', 'nickname', 'mapId', 'botDifficulty'])
-      && isNonEmptyString(value.mapId)
-      && isBotDifficulty(value.botDifficulty);
+    // 基础键必须齐、未知键一律不认；可选扩展字段各自校验——
+    // botDifficulty（P1-6）与 customMapPack（D6 阶段 2 工坊包）可任意组合出现或缺失，
+    // 所以不能用「恰好 N 键」的枚举法（4~7 键的组合会随字段增加而爆炸）。
+    const keys = Object.keys(value);
+    const baseKeys = ['operation', 'requestId', 'nickname', 'mapId'];
+    const optionalKeys = ['botDifficulty', 'customMapPack'];
+    if (!baseKeys.every((key) => keys.includes(key))) return false;
+    if (!keys.every((key) => baseKeys.includes(key) || optionalKeys.includes(key))) return false;
+    if (!isNonEmptyString(value.mapId)) return false;
+    if (value.botDifficulty !== undefined && !isBotDifficulty(value.botDifficulty)) return false;
+    // 工坊包本身的重校验交给服务端门禁；这里只挡「存储损坏成非对象」的中间态。
+    if (value.customMapPack !== undefined && !isRecord(value.customMapPack)) return false;
+    return true;
   }
   if (value.operation !== 'join') return false;
   if (!isRoomCode(value.roomCode)) return false;

@@ -28,6 +28,8 @@ import { CHAT_TEXT_MAX_LENGTH } from '@richman/protocol';
 import { normalizeTurnDeadline, normalizeTurnTimeLimitSec } from './turnTimer';
 import type { ClientAction, DisplayCard } from '../game/clientGame';
 import { resolvePublicGameSnapshot } from '../game/mapResolver';
+import { getMapPack } from '@richman/board-data';
+import type { MapPack, MapRef } from '@richman/board-data';
 import type { CashNotice, ConnectionStatus, GameSession, RenderableGameState, TransientNotice } from './gameSession';
 import {
   ACTIVE_ONLINE_SESSION_KEY,
@@ -115,7 +117,11 @@ export interface OnlineGameSession extends GameSession {
    * means a same-id retry is futile and the user should abandon; `transient` retries.
    */
   readonly entryFailure: Ref<EntryFailureKind | null>;
-  create(nickname: string, mapId: string, botDifficulty?: BotDifficulty): Promise<void>;
+  /**
+   * 建房。`customMapPack`（D6 阶段 2）：工坊自定义图建房时随请求携带完整包；
+   * 缺省 = 内置图，服务端行为与旧版一致。
+   */
+  create(nickname: string, mapId: string, botDifficulty?: BotDifficulty, customMapPack?: MapPack): Promise<void>;
   retryPending(): Promise<void>;
   retryResume(): Promise<void>;
   /** Keep the stored session intact, but suppress automatic recovery until explicitly retried. */
@@ -527,6 +533,7 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     turnDeadline.value = null;
     pendingUndoReset = false;
     chatLog.value = [];
+    roomCustomMapPack = null;
     clearTransientFeedback();
   };
   const withCurrentPresence = (snapshot: RenderableGameState): RenderableGameState => {
@@ -576,9 +583,26 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
     if (state.value !== null) state.value = withCurrentPresence(state.value);
     refreshTakeoverStatus();
   };
+  // D6 阶段 2：本房间自带的工坊自定义图包。入房/重连 ack 携带时登记，房间关闭即清。
+  let roomCustomMapPack: MapPack | null = null;
+  const resolveOnlineMapPack = (mapRef: MapRef): MapPack => {
+    try {
+      return getMapPack(mapRef);
+    } catch {
+      // 不是内置地图 —— 往下看本房间分发的工坊包。
+    }
+    const pack = roomCustomMapPack;
+    if (pack !== null
+      && pack.ref.id === mapRef.id
+      && pack.ref.version === mapRef.version
+      && pack.ref.contentHash === mapRef.contentHash) {
+      return pack;
+    }
+    throw new Error('Exact map pack is unavailable.');
+  };
   const resolveSnapshot = (snapshot: PublicGameSnapshot): RenderableGameState | null => {
     try {
-      const renderable = resolvePublicGameSnapshot(snapshot);
+      const renderable = resolvePublicGameSnapshot(snapshot, resolveOnlineMapPack);
       compatibilityError.value = null;
       return renderable;
     } catch {
@@ -1017,6 +1041,10 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
       activeSession = active;
       hasActiveSession = true;
       localPlayerId.value = active.playerId;
+      // D6 阶段 2：重连 ack 同样携带工坊包（房间还在的话），先登记再解快照。
+      if ('customMapPack' in ack && typeof ack.customMapPack === 'object' && ack.customMapPack !== null) {
+        roomCustomMapPack = ack.customMapPack as MapPack;
+      }
       applyRoom(ack.room);
       const snapshotCompatible = ack.snapshot === undefined || applySnapshot(ack.snapshot, true);
       if (snapshotCompatible) {
@@ -1185,6 +1213,8 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
           requestId: request.requestId,
           mapId: request.mapId,
           ...(request.botDifficulty !== undefined && request.botDifficulty !== 'normal' ? { botDifficulty: request.botDifficulty } : {}),
+          // D6 阶段 2：工坊自定义图建房随请求携带完整包（首次与断线重试同一通道）。
+          ...(request.customMapPack === undefined ? {} : { customMapPack: request.customMapPack }),
         })
         : await emitAck<JoinRoomAck>('join', 'room:join', {
           roomCode: request.roomCode,
@@ -1207,6 +1237,10 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
           }
         }
         return;
+      }
+      // D6 阶段 2：工坊自定义图房间在入房 ack 里随发完整包，先登记再解快照。
+      if ('customMapPack' in ack && typeof ack.customMapPack === 'object' && ack.customMapPack !== null) {
+        roomCustomMapPack = ack.customMapPack as MapPack;
       }
       if (!owner.roomFromBroadcast) owner.room = ack.room;
       const active: OnlineSession = { roomCode: ack.room.roomCode, playerId: ack.playerId, token: ack.token };
@@ -1248,12 +1282,19 @@ export function createOnlineSession(options: CreateOnlineSessionOptions = {}): O
       if (entryAttempt === owner) entryAttempt = null;
     }
   };
-  const create = async (nickname: string, mapId: string, botDifficulty: BotDifficulty = 'normal'): Promise<void> => submit({
+  const create = async (
+    nickname: string,
+    mapId: string,
+    botDifficulty: BotDifficulty = 'normal',
+    // D6 阶段 2：工坊自定义图建房时随请求携带完整包；不传 = 内置图，行为不变。
+    customMapPack?: MapPack,
+  ): Promise<void> => submit({
     operation: 'create',
     nickname,
     requestId: requestId(crypto),
     mapId,
     botDifficulty,
+    ...(customMapPack === undefined ? {} : { customMapPack }),
   });
   const join = async (
     roomCode: string,

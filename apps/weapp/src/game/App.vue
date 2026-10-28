@@ -28,7 +28,7 @@ const PrivacyPolicyDialog = defineAsyncComponent(() => import('./components/Priv
 // 不该逼玩家先随便开一局才能粘进去。
 const ReplayDialogShell = defineAsyncComponent(() => import('./components/ReplayDialog.vue'));
 // 地图工坊（#117）同理：它同样只靠 MobileSheet 撑着。工坊的地图**只能单机玩**，
-// 所以它不进首页「创建房间」的地图表（那张表仍是生产注册表的十一张图），只服务单机设置页。
+// 所以它不进首页「创建房间」的地图表（那张表仍是生产注册表的十三张图），只服务单机设置页。
 const MapWorkshopDialogShell = defineAsyncComponent(() => import('./components/MapWorkshopDialog.vue'));
 import {
   createInitialLocalGameState,
@@ -109,9 +109,10 @@ let storage: StorageLike | undefined = browserStorage();
 let localSaveMutationLock = createBrowserLocalSaveMutationLock();
 
 // ---- 地图工坊（#117）：本机自定义地图 ----
-// 自定义地图**只服务单机**：联机建房走服务端，而服务端只认内置的那十一张图，本机装的图会被直接拒。
-// 所以首页「创建房间」的地图表仍是 `activeMaps`（生产注册表的十一张），只有单机设置页吃下面这份
-// 「生产 + 本机」的合并目录。读回一律容错（坏条目丢弃、坏 JSON 回退空表），此处不需要 try/catch。
+// D6 阶段 2 起自定义地图**联机也可玩**：建房时把完整包随 room:create 发给服务端，
+// 服务端过门禁（哈希/结构/白名单）后建房并随入房 ack 分发给加入者。
+// 所以单机设置页与在线建房页吃同一份「生产 + 本机」合并目录；读回一律容错
+// （坏条目丢弃、坏 JSON 回退空表），此处不需要 try/catch。
 const customMapRecords = shallowRef<CustomMapRecord[]>(
   storage === undefined ? [] : loadCustomMaps(storage),
 );
@@ -410,6 +411,8 @@ function closePrivacy(): void {
 const replayImportOpen = ref(false);
 
 const onlineRoom = computed(() => onlineSession.room.value);
+// 在线建房页的地图表：生产 + 本机工坊合并目录（D6 阶段 2）。生产在前，同名时生产优先。
+const onlineMapCatalog = computed(() => mergeMapCatalog(activeMaps, customMapEntries.value));
 const onlineError = computed(() => onlineSession.lastError.value);
 const connectionLabel = computed(() => {
   switch (onlineSession.connectionStatus.value) {
@@ -446,8 +449,11 @@ async function handleCreate(nickname: string, mapId: string) {
   submitting.value = true;
   try {
     // 电脑难度不再随建房一次性传走：房间是「先建房、后加电脑」，难度由房主在大厅里设
-    // （room:update_settings），所以建房只发昵称与地图。
-    await onlineSession.create(nickname, mapId);
+    // （room:update_settings）。工坊自定义图（D6 阶段 2）随建房请求携带完整包；
+    // 内置图不带包，服务端行为与旧版完全一致。
+    const isBuiltin = activeMaps.some((entry) => entry.ref.id === mapId);
+    const pack = isBuiltin ? undefined : (customMapResolver.value(mapId) ?? undefined);
+    await onlineSession.create(nickname, mapId, 'normal', pack);
   } finally {
     submitting.value = false;
     syncStorage();
@@ -962,7 +968,7 @@ onBeforeUnmount(() => {
     :can-resume-active="canResumeActive"
     :initial-room-code="inviteRoomCode"
     :error="onlineError"
-    :active-maps="activeMaps"
+    :active-maps="onlineMapCatalog"
     :initial-map-id="homeMapId"
     :public-rooms="publicRooms"
     :room-list-loading="roomListLoading"
