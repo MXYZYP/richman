@@ -11,9 +11,11 @@ code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://127.0.0.1:300
 echo "healthz=$code"
 [ "$code" = "200" ] || fail "/healthz returned $code (expected 200)"
 
-pm2_online=$(pm2 describe richman 2>/dev/null | grep -c '| status .*online' || true)
-echo "pm2 richman online: $pm2_online"
-[ "$pm2_online" -ge 1 ] || fail "pm2 richman is not online（/healthz 可能被孤儿进程代答）"
+# pm2 状态用 jlist + node 解析：describe 的表格用制表符 │（U+2502），
+# ASCII 竖线的 grep 永远匹配不上（health-check 曾因此每小时假警报，2026-10-29 实锤）。
+pm2_status=$(pm2 jlist 2>/dev/null | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const l=JSON.parse(d);const p=l.find(x=>x.name==='richman');console.log(p&&p.pm2_env?p.pm2_env.status:'absent')}catch(e){console.log('parse-error')}})")
+echo "pm2 richman status: $pm2_status"
+[ "$pm2_status" = "online" ] || fail "pm2 richman is not online（status=$pm2_status；/healthz 可能被孤儿进程代答）"
 
 [ -n "${EXPECT:-}" ] || fail "EXPECT env is empty"
 online=$(grep -o 'richman-v[0-9]*' /root/richman-main/apps/client/dist/sw.js | head -1)
