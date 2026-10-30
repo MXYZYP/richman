@@ -21,6 +21,12 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # 2026-10-28：服务器 sshd 出现过「banner exchange 超时」的长窗口（本机与 runner 侧
+    # 双双连不上，持续 1h+）。appleboy/ssh-action 的 command_timeout 只管「命令执行」，
+    # 管不到「连接期」——连接挂死时 job 会一直挂到默认 6h，还占着 concurrency 把后续
+    # 部署全挡住。这里给 job 层兜底：挂到 25m 直接判失败并告警（command_timeout 20m
+    # 是正常构建的上限，多给 5m 余量）。
+    timeout-minutes: 25
     steps:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.3

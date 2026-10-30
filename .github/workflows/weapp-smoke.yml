@@ -10,6 +10,11 @@ on:
     paths:
       - 'apps/client/src/**'
       - 'apps/weapp/**'
+      # weapp 的 tsconfig include 了这三个包的 src（类型检查会读它们），
+      # 改协议/引擎/地图数据同样能让小程序端构建炸，必须一并触发。
+      - 'packages/protocol/src/**'
+      - 'packages/engine/src/**'
+      - 'packages/board-data/src/**'
 
 jobs:
   build:
