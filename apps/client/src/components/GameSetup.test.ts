@@ -50,14 +50,21 @@ describe('GameSetup 的电脑玩家难度（#6：只在选了电脑玩家后才�
     for (const label of ['轻松', '普通', '困难']) {
       expect(html).toContain(label);
     }
+    // 难度区块单独取出来统计：本页还有「玩法档位」那组按钮（同样是 aria-pressed），
+    // 按整页计数会让「难度恰好三档、只有一档选中」这条判据失效。
+    const end = html.indexOf('aria-label="玩法档位"');
+    const difficultySection = html.slice(
+      html.indexOf('aria-label="电脑玩家难度"'),
+      end === -1 ? html.length : end,
+    );
     // 外层容器叫 setup-difficulty-options（复数），是按钮类名的前缀，所以必须用 `[">]` 收尾：
     // 按钮后面只会跟 `"`（未选中）或空格（选中时还有个 active），容器后面跟的是 `s`。
-    expect(html.match(/setup-difficulty-option[">]/g)).toHaveLength(3);
-    expect(html).toContain('class="setup-difficulty-options"');
+    expect(difficultySection.match(/setup-difficulty-option[">]/g)).toHaveLength(3);
+    expect(difficultySection).toContain('class="setup-difficulty-options"');
     // role="radiogroup" + 每个按钮自己的 aria-pressed：无障碍上是一组单选，而不是三个普通按钮。
-    expect(html).toContain('role="radiogroup"');
-    expect(html.match(/aria-pressed="/g)).toHaveLength(3);
-    expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(difficultySection).toContain('role="radiogroup"');
+    expect(difficultySection.match(/aria-pressed="/g)).toHaveLength(3);
+    expect(difficultySection.match(/aria-pressed="true"/g)).toHaveLength(1);
     expect(html).toContain('仅影响电脑决策，不影响真人玩家');
   });
 

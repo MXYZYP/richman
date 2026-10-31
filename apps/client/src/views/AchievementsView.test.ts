@@ -18,6 +18,17 @@ function withStats(raw: string): Promise<string> {
 }
 
 describe('AchievementsView 成就明细（#116）', () => {
+  it('本周挑战区块渲染出来：三条 + 周次 + 进度', async () => {
+    const html = await withStats(statsJson());
+
+    expect(html).toContain('aria-label="本周挑战"');
+    expect(html).toContain('本周打完');
+    expect(html).toContain('本周赢下');
+    expect(html).toContain('本周刷新个人资产纪录');
+    // 周次形如 2026-W44：它同时是「进度按周重置」这件事在界面上唯一的证据。
+    expect(html).toMatch(/\d{4}-W\d{2}/);
+  });
+
   it('成就按分组铺开，一项都没达成时全是「未解锁」并给出下一个目标', async () => {
     const html = await withStats(statsJson());
 

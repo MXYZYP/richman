@@ -16,7 +16,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { RenderableGameState } from '../session/gameSession';
 import { getSettlementSummary } from '../game/settlement';
+import { buildBattleReport } from '../game/battleReport';
 import { formatCash } from '../ui/format';
+import { getActiveMapPack } from '@richman/board-data';
 
 const props = withDefaults(defineProps<{
   state: RenderableGameState;
@@ -52,7 +54,58 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeydown);
   void nextTick(() => primaryAction.value?.focus());
 });
-onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
+/**
+ * 一局战报：结算表是给自己看的，战报是给聊天窗口看的。
+ * 复盘码（ReplayDialog 里那段）动辄几千字符、一粘就截断，所以这里只给结论：
+ * 谁赢了、打到第几回合、各家终局资产。要复盘再去设置里导出复盘码。
+ */
+const mapTitle = computed(() => {
+  try {
+    return getActiveMapPack(props.state.mapRef.id).metadata.title;
+  } catch {
+    // 工坊自定义图不在「已发布地图」里：拿不到标题就用一句中性的话，不要猜。
+    return '自定义地图';
+  }
+});
+
+const battleReport = computed(() => buildBattleReport({
+  mapTitle: mapTitle.value,
+  players: summary.value.rows.map((row) => ({
+    name: row.name,
+    cash: row.cash,
+    isWinner: row.isWinner,
+    isBankrupt: row.isBankrupt,
+    isBot: row.isBot,
+    survivedTurns: row.survivedTurns,
+    propertyCount: row.propertyCount,
+  })),
+  reason: summary.value.reason,
+  formatAsset: formatCash,
+}));
+
+const reportNotice = ref<string | null>(null);
+let reportTimer: number | null = null;
+
+function flashReport(message: string): void {
+  reportNotice.value = message;
+  if (reportTimer !== null) window.clearTimeout(reportTimer);
+  reportTimer = window.setTimeout(() => { reportNotice.value = null; }, 2400);
+}
+
+async function copyBattleReport(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(battleReport.value);
+    flashReport('战报已复制，可直接粘贴到聊天窗口');
+  } catch {
+    // 剪贴板权限被拒 / 非安全上下文：退化成提示手动复制，而不是静默失败。
+    flashReport('复制失败，请长按选中战报文本手动复制');
+  }
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown);
+  if (reportTimer !== null) window.clearTimeout(reportTimer);
+});
 </script>
 
 <template>
@@ -102,8 +155,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
         </ol>
 
         <div class="settlement-actions">
+          <button type="button" @click="copyBattleReport">复制战报</button>
           <button ref="primaryAction" type="button" class="primary" @click="emit('restart')">{{ props.primaryLabel }}</button>
         </div>
+        <p v-if="reportNotice" class="settlement-report-notice" role="status">{{ reportNotice }}</p>
       </div>
     </section>
   </div>
@@ -337,6 +392,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
   font-size: var(--text-badge-size);
   font-style: normal;
   font-weight: 900;
+}
+
+.settlement-report-notice {
+  margin: 8px 0 0;
+  color: var(--color-muted);
+  font-size: var(--text-meta-size);
+  text-align: right;
 }
 
 .settlement-actions {

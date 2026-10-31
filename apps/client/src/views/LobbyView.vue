@@ -6,6 +6,12 @@ import { getActiveMapPack, listActiveMaps } from '@richman/board-data';
 import { formatCash, setCashUnitForMap } from '../ui/format';
 import type { BotDifficulty } from '@richman/engine';
 import { BOT_DIFFICULTY_OPTIONS } from '../game/gameSetup';
+import {
+  RULE_PRESETS,
+  matchRulePreset,
+  rulePresetTarget,
+  type RulePresetId,
+} from '../game/roomRulePresets';
 import type { LobbyCommand } from '../session/onlineSession';
 import ChatPanel from '../components/ChatPanel.vue';
 import SettingsDialog from '../components/SettingsDialog.vue';
@@ -259,6 +265,55 @@ function resetRoomRules(): void {
   if (rulesReadOnly.value || !isCustomized.value) return;
   ruleError.value = null;
   emit('updateSettings', { ruleConfig: null });
+}
+
+/**
+ * 房规三档预设：一次提交多个字段。
+ *
+ * 房规本来就能一项项调，但默认值全是「地图默认 + 关闭」，绝大多数玩家根本不知道
+ * 这局还能换玩法；连「放弃购买即拍卖」（#106）这种已实现的规则在大厅里都没有开关。
+ * 预设只是把已有能力打包成人能一眼看懂的三档，点完仍可继续逐项微调。
+ */
+const activePreset = computed<RulePresetId | null>(() => {
+  const settings = props.roomSettings;
+  const defaults = ruleDefaults.value;
+  if (settings === null || defaults === null) return null;
+  return matchRulePreset(
+    {
+      ruleConfig: settings.ruleConfig,
+      cashGoal: settings.cashGoal,
+      auctionOnDecline: settings.auctionOnDecline,
+      minimalUndoEnabled: settings.minimalUndoEnabled,
+      turnTimeLimitSec: settings.turnTimeLimitSec,
+    },
+    defaults,
+  );
+});
+
+function chooseRulePreset(id: RulePresetId): void {
+  if (rulesReadOnly.value) return;
+  const defaults = ruleDefaults.value;
+  if (defaults === null) return;
+  const target = rulePresetTarget(id, defaults);
+  ruleError.value = null;
+  // 一次提交全部相关字段：分开提交会让服务端在中途看到「现金目标低于初始资金」
+  // 这类临时非法组合（预设内部已保证终态合法，但中间态不一定）。
+  emit('updateSettings', {
+    ruleConfig: target.ruleConfig,
+    cashGoal: target.cashGoal,
+    auctionOnDecline: target.auctionOnDecline,
+    minimalUndoEnabled: target.minimalUndoEnabled,
+    turnTimeLimitSec: target.turnTimeLimitSec,
+  });
+}
+
+/** 放弃购买即拍卖（#106）：引擎与服务端早就支持，但以前大厅里没有开关，房主打不开。 */
+const auctionEnabled = computed(() => props.roomSettings?.auctionOnDecline === true);
+
+function chooseAuctionOnDecline(enabled: boolean): void {
+  if (rulesReadOnly.value) return;
+  if (auctionEnabled.value === enabled) return;
+  emit('updateSettings', { auctionOnDecline: enabled });
 }
 
 /**
@@ -578,6 +633,28 @@ onBeforeUnmount(() => {
         <p class="lobby-rules__summary">{{ ruleSummary }}</p>
 
         <template v-if="isHost">
+          <!-- 玩法档位：把已有的房规打包成三档，点完下面仍可逐项微调。 -->
+          <div class="lobby-rules__difficulty">
+            <span class="lobby-rules__difficulty-label">玩法档位</span>
+            <div class="lobby-rules__difficulty-options" role="radiogroup" aria-label="玩法档位">
+              <button
+                v-for="preset in RULE_PRESETS"
+                :key="preset.id"
+                type="button"
+                class="lobby-rules__difficulty-option"
+                :class="{ active: activePreset === preset.id }"
+                :aria-pressed="activePreset === preset.id"
+                :disabled="rulesReadOnly"
+                @click="chooseRulePreset(preset.id)"
+              >{{ preset.title }}</button>
+            </div>
+            <p class="lobby-rules__hint">
+              {{ activePreset === null
+                ? '自定义：下面各项被单独调过，已不属于任何一档。'
+                : RULE_PRESETS.find((preset) => preset.id === activePreset)?.description }}
+            </p>
+          </div>
+
           <div class="lobby-rules__grid">
             <label class="lobby-rules__field">
               <span>初始资金</span>
@@ -670,6 +747,34 @@ onBeforeUnmount(() => {
             </div>
             <p class="lobby-rules__hint">
               开启后，走错一步的玩家可发起悔棋，但需在场对手逐一同意才会退回上一步；20 秒内没集齐即作废。
+            </p>
+          </div>
+
+          <!-- 放弃购买即拍卖（#106）：选择「拍卖局」档位会自动打开它，这里给一个可单独关掉的入口。 -->
+          <div class="lobby-rules__difficulty">
+            <span class="lobby-rules__difficulty-label">放弃购买即拍卖</span>
+            <div class="lobby-rules__difficulty-options" role="radiogroup" aria-label="放弃购买即拍卖">
+              <button
+                type="button"
+                class="lobby-rules__difficulty-option"
+                :class="{ active: !auctionEnabled }"
+                :aria-pressed="!auctionEnabled"
+                :disabled="rulesReadOnly"
+                @click="chooseAuctionOnDecline(false)"
+              >关闭</button>
+              <button
+                type="button"
+                class="lobby-rules__difficulty-option"
+                :class="{ active: auctionEnabled }"
+                :aria-pressed="auctionEnabled"
+                :disabled="rulesReadOnly"
+                @click="chooseAuctionOnDecline(true)"
+              >开启</button>
+            </div>
+            <p class="lobby-rules__hint">
+              {{ auctionEnabled
+                ? '落到无主地选择不买时，该地由其他玩家轮流叫价（放弃者不参与），无人出价即流拍。'
+                : '不买就归银行，直接进入下一回合。' }}
             </p>
           </div>
 

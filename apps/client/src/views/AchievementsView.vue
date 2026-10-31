@@ -4,6 +4,7 @@ import { listActiveMaps, type MapCatalogEntry } from '@richman/board-data';
 import DetailSheet from '../components/DetailSheet.vue';
 import { deriveAchievements, describeNextAchievement, type AchievementGroup } from '../session/achievements';
 import { browserStorage, loadPlayerStats, type PlayerStats } from '../session/playerStats';
+import { deriveWeeklyChallenges } from '../session/weeklyChallenges';
 
 /**
  * 「成就」详情页（《UI 改造方案》§四）—— 首页那排图标里的第二个。
@@ -36,6 +37,18 @@ const achievementSummary = computed(() => {
   return deriveAchievements(current, { mapIds: props.activeMaps.map((entry) => entry.ref.id) });
 });
 
+/**
+ * 本周挑战：成就是一次性的，这里补一个周期性目标（进度按**本周增量**算，
+ * 跨周自动归零）。读不到存储/战绩时为 null —— 与下面「没有战绩就不显示成就」一致，
+ * 宁可整块不出现，也不要摆一排 0/3 让人以为坏了。
+ */
+const weeklyChallenges = computed(() => {
+  const storage = browserStorage();
+  const current = playerStats.value;
+  if (storage === undefined || current === null) return null;
+  return deriveWeeklyChallenges(storage, current, { now: Date.now() });
+});
+
 const ACHIEVEMENT_GROUPS: ReadonlyArray<{ id: AchievementGroup; label: string }> = [
   { id: 'milestone', label: '里程碑' },
   { id: 'wealth', label: '财富' },
@@ -63,9 +76,34 @@ const achievementGroups = computed(() => {
       这台设备上还没有战绩，成就也就无从算起。打完一局（联机或单机都可以）再回来看看。
     </p>
 
+    <!-- 每周挑战：给「这周为什么再来一局」一个答案。放在成就之前——
+         它比成就更当下，且每周一自动刷新。 -->
+    <section v-if="weeklyChallenges" class="weekly" aria-label="本周挑战">
+      <header class="weekly-head">
+        <strong>本周挑战</strong>
+        <span class="weekly-count">{{ weeklyChallenges.doneCount }} / {{ weeklyChallenges.challenges.length }}</span>
+      </header>
+      <ul class="weekly-list">
+        <li
+          v-for="challenge in weeklyChallenges.challenges"
+          :key="challenge.id"
+          class="weekly-item"
+          :class="{ 'weekly-done': challenge.done }"
+        >
+          <span class="achievement-head">
+            <span class="achievement-mark">{{ challenge.done ? '已完成' : '进行中' }}</span>
+            <span class="achievement-title">{{ challenge.title }}</span>
+            <span class="achievement-progress">{{ challenge.progress.current }} / {{ challenge.progress.target }}</span>
+          </span>
+          <span class="achievement-desc">{{ challenge.description }}</span>
+        </li>
+      </ul>
+      <p class="weekly-note">{{ weeklyChallenges.weekKey }} · 每周一刷新，只算本周打的部分。</p>
+    </section>
+
     <!-- 用 <details> 而不是条件渲染：明细始终留在 DOM 里，折叠只是视觉收起，
          展开时不会有「先空一下再填」的跳动，也不需要额外状态。 -->
-    <details v-else id="achievements" class="achievements" open>
+    <details v-if="achievementSummary" id="achievements" class="achievements" open>
       <summary class="achievements-summary">
         <strong>成就 {{ achievementSummary.unlockedCount }} / {{ achievementSummary.total }}</strong>
         <span class="achievements-toggle" aria-hidden="true"></span>
@@ -102,6 +140,46 @@ const achievementGroups = computed(() => {
   color: var(--color-muted);
   font-size: 13px;
   line-height: 1.7;
+}
+
+/* ---- 每周挑战 ---- */
+.weekly {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+}
+
+.weekly-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.weekly-count {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.weekly-list {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weekly-note {
+  margin: 6px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.weekly-done .achievement-mark {
+  color: var(--color-primary);
 }
 
 /* 原来在首页里，这句说明靠外层区块的间距撑着；独立成页后它需要自己的呼吸。 */

@@ -16,6 +16,7 @@ import {
   type GameSetupDependencies,
   type GameSetupForm,
 } from '../game/gameSetup';
+import { sprintCashGoal } from '../game/roomRulePresets';
 import type {
   LocalSaveCard,
   LocalSaveIdentity,
@@ -138,6 +139,50 @@ function updateCashGoal(event: Event) {
 function updateRuleConfig(field: 'initialCash' | 'maxHouseLevel', event: Event) {
   const value = Number((event.target as HTMLInputElement).value);
   setup.value = { ...setup.value, config: { ...setup.value.config, [field]: value } };
+}
+
+/**
+ * 单机侧玩法档位：只有「标准 / 竞速」两档。
+ * 拍卖与每步限时是**联机房规**（挂在房间上、开局时透传），单机表单没有这两个字段，
+ * 因此这里不摆出点了也没用的按钮。
+ */
+const activeRulePreset = computed<'standard' | 'sprint' | null>(() => {
+  if (!setup.value.cashGoalEnabled) return 'standard';
+  if (setup.value.cashGoal === sprintCashGoal(setup.value.config.initialCash)) return 'sprint';
+  return null;
+});
+
+function chooseRulePreset(id: 'standard' | 'sprint'): void {
+  const mapDefaults = readMapRuleDefaults();
+  if (id === 'standard') {
+    setup.value = {
+      ...setup.value,
+      cashGoalEnabled: false,
+      config: mapDefaults ?? setup.value.config,
+    };
+    return;
+  }
+  const base = mapDefaults ?? setup.value.config;
+  setup.value = {
+    ...setup.value,
+    cashGoalEnabled: true,
+    cashGoal: sprintCashGoal(base.initialCash),
+    config: base,
+  };
+}
+
+/** 地图自带的三项默认房规；取不到就返回 null（调用方保持原值，不硬改）。 */
+function readMapRuleDefaults(): { initialCash: number; maxHouseLevel: number; mortgageInterestRate: number } | null {
+  try {
+    const config = setupDependencies.resolveActive(setup.value.mapId).game.config;
+    return {
+      initialCash: config.initialCash,
+      maxHouseLevel: config.maxHouseLevel,
+      mortgageInterestRate: config.mortgageInterestRate,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function updateMortgageRate(event: Event) {
@@ -306,6 +351,31 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
             <p class="setup-difficulty-hint">{{ botDifficultyHint }}仅影响电脑决策，不影响真人玩家。</p>
           </section>
 
+          <section class="setup-rule-card" aria-label="玩法档位">
+            <span class="setup-difficulty-label">玩法档位</span>
+            <div class="setup-preset-options">
+              <button
+                type="button"
+                class="setup-preset-option"
+                :class="{ active: activeRulePreset === 'standard' }"
+                :aria-pressed="activeRulePreset === 'standard'"
+                @click="chooseRulePreset('standard')"
+              >标准局</button>
+              <button
+                type="button"
+                class="setup-preset-option"
+                :class="{ active: activeRulePreset === 'sprint' }"
+                :aria-pressed="activeRulePreset === 'sprint'"
+                @click="chooseRulePreset('sprint')"
+              >竞速局</button>
+            </div>
+            <p class="setup-difficulty-hint">
+              {{ activeRulePreset === 'sprint'
+                ? '先攒到初始资金 3 倍现金即获胜，比标准局收得快。'
+                : '地图原样：打到只剩最后一人为止。' }}
+            </p>
+          </section>
+
           <section class="setup-rule-card" aria-label="房规">
             <label class="setup-checkbox">
               <input v-model="setup.cashGoalEnabled" type="checkbox" />
@@ -446,6 +516,34 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
 }
 
 .setup-difficulty-option.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff4ec;
+}
+
+/* ---- 玩法档位（标准 / 竞速）：外观沿用难度按钮，只是两列 ----
+   刻意不用 setup-difficulty-* 类名：那组类名被「难度按钮恰好三档」的测试守卫按子串断言，
+   复用会让「没选电脑时不该出现难度按钮」的判据失效。 */
+.setup-preset-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.setup-preset-option {
+  min-height: 44px;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--board-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--text-body-size);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.setup-preset-option.active {
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: #fff4ec;
