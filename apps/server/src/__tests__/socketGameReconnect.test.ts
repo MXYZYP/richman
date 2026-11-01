@@ -9,6 +9,7 @@ import { createRoomServer, type RunningRoomServer } from '../server';
 import type { Ack, ClientToServerEvents, CreateRoomAck, JoinRoomAck, PublicGameSnapshot, PublicRoomState, ResumeAck, ServerToClientEvents } from '@richman/protocol';
 import { RoomManager } from '../rooms/roomManager';
 import type { RoomDomainEvent, RoomManagerDependencies } from '../rooms/roomTypes';
+import { listenForTest } from './listenForTest';
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -448,17 +449,7 @@ function deterministicFactory(options: Options, capture: (manager: RoomManager<T
 }
 
 async function listen(server: HttpServer): Promise<void> {
-  const deferred = createDeferred<void>();
-  const onError = (error: Error) => {
-    server.off('error', onError);
-    deferred.reject(error);
-  };
-  server.once('error', onError);
-  server.listen(0, '127.0.0.1', () => {
-    server.off('error', onError);
-    deferred.resolve();
-  });
-  await deferred.promise;
+  await listenForTest(server);
 }
 
 async function connectClient(url: string): Promise<RoomClient> {

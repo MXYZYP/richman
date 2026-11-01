@@ -7,6 +7,7 @@ import { createRoomServer, type RunningRoomServer } from '../server';
 import { RoomManager } from '../rooms/roomManager';
 import type { RoomManagerDependencies } from '../rooms/roomTypes';
 import type { PublicRoomState } from '@richman/protocol';
+import { listenForTest } from './listenForTest';
 
 class MemoryStorage {
   private readonly values = new Map<string, string>();
@@ -65,9 +66,7 @@ describe('client online session over Socket.IO', () => {
       } satisfies RoomManagerDependencies<TimerHandle>),
     });
     servers.push(server);
-    const listening = deferred<void>();
-    server.httpServer.listen(0, '127.0.0.1', () => listening.resolve());
-    await listening.promise;
+    await listenForTest(server.httpServer);
     const address = server.httpServer.address() as AddressInfo;
     const url = `http://127.0.0.1:${address.port}`;
     const host = createOnlineSession({ url, storage: new MemoryStorage(), socketFactory: (target) => io(target) as never });
@@ -107,9 +106,7 @@ describe('client online session over Socket.IO', () => {
       } satisfies RoomManagerDependencies<TimerHandle>),
     });
     servers.push(server);
-    const listening = deferred<void>();
-    server.httpServer.listen(0, '127.0.0.1', () => listening.resolve());
-    await listening.promise;
+    await listenForTest(server.httpServer);
     const address = server.httpServer.address() as AddressInfo;
     let swallowNextCreateAck = true;
     let cryptoCalls = 0;
@@ -169,9 +166,7 @@ describe('client online session over Socket.IO', () => {
       } satisfies RoomManagerDependencies<TimerHandle>),
     });
     servers.push(server);
-    const listening = deferred<void>();
-    server.httpServer.listen(0, '127.0.0.1', () => listening.resolve());
-    await listening.promise;
+    await listenForTest(server.httpServer);
     const address = server.httpServer.address() as AddressInfo;
     const url = `http://127.0.0.1:${address.port}`;
     const host = createOnlineSession({ url, storage: new MemoryStorage(), socketFactory: (target) => io(target) as never });
@@ -235,9 +230,7 @@ describe('client online session over Socket.IO', () => {
       } satisfies RoomManagerDependencies<TimerHandle>),
     });
     servers.push(server);
-    const listening = deferred<void>();
-    server.httpServer.listen(0, '127.0.0.1', () => listening.resolve());
-    await listening.promise;
+    await listenForTest(server.httpServer);
     const address = server.httpServer.address() as AddressInfo;
     const url = `http://127.0.0.1:${address.port}`;
     let hostSocket!: Socket;
@@ -307,9 +300,7 @@ describe('client online session over Socket.IO', () => {
       } satisfies RoomManagerDependencies<TimerHandle>),
     });
     servers.push(server);
-    const listening = deferred<void>();
-    server.httpServer.listen(0, '127.0.0.1', () => listening.resolve());
-    await listening.promise;
+    await listenForTest(server.httpServer);
     const address = server.httpServer.address() as AddressInfo;
     const url = `http://127.0.0.1:${address.port}`;
     let hostSocket!: Socket;

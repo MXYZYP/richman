@@ -7,6 +7,7 @@ import { brotliCompressSync, brotliDecompressSync, gunzipSync, gzipSync } from '
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RoomManager as RoomManagerInstance } from '../rooms/roomManager';
 import type { RoomDomainEvent, RoomManagerDependencies } from '../rooms/roomTypes';
+import { listenForTest } from './listenForTest';
 
 type AsyncEventsHandler = (events: RoomDomainEvent[]) => void;
 
@@ -244,17 +245,7 @@ async function startServerWithFixtureDist(): Promise<TestServer> {
 }
 
 async function listenOnEphemeralLocalhost(httpServer: HttpServer): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const onError = (error: Error) => {
-      httpServer.off('error', onError);
-      reject(error);
-    };
-    httpServer.once('error', onError);
-    httpServer.listen(0, '127.0.0.1', () => {
-      httpServer.off('error', onError);
-      resolve();
-    });
-  });
+  await listenForTest(httpServer);
 }
 
 function createDeterministicRoomManager(

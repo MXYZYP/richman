@@ -11,6 +11,7 @@ import type { RoomDomainEvent, RoomManagerDependencies } from '../rooms/roomType
 import { computeContentHash, getActiveMapPack } from '@richman/board-data';
 import type { MapPack } from '@richman/board-data';
 import type { BotDifficulty } from '@richman/engine';
+import { listenForTest } from './listenForTest';
 
 type TimerHandle = {
   callback: () => void;
@@ -1756,17 +1757,7 @@ function createDeterministicRoomManagerFactory(options: DeterministicManagerOpti
 }
 
 async function listenOnEphemeralLocalhost(httpServer: HttpServer): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const onError = (error: Error) => {
-      httpServer.off('error', onError);
-      reject(error);
-    };
-    httpServer.once('error', onError);
-    httpServer.listen(0, '127.0.0.1', () => {
-      httpServer.off('error', onError);
-      resolve();
-    });
-  });
+  await listenForTest(httpServer);
 }
 
 async function connectClient(url: string): Promise<RoomClient> {

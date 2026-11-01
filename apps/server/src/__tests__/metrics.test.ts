@@ -1,8 +1,8 @@
 import { createServer, type Server as HttpServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createMetricsApi, METRICS_PATH } from '../metrics/metricsRoutes';
 import { createServerMetrics, type RoomStats } from '../metrics/serverMetrics';
+import { listenForTest } from './listenForTest';
 
 let active: HttpServer | undefined;
 
@@ -13,7 +13,7 @@ afterEach(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
-function metricsServer(stats: RoomStats, startedAt = 1_700_000_000_000): Promise<string> {
+async function metricsServer(stats: RoomStats, startedAt = 1_700_000_000_000): Promise<string> {
   let clock = startedAt;
   const collector = createServerMetrics({ rooms: () => stats, now: () => clock });
   const api = createMetricsApi({ collector });
@@ -23,12 +23,8 @@ function metricsServer(stats: RoomStats, startedAt = 1_700_000_000_000): Promise
     response.end('not found');
   });
   active = server;
-  return new Promise<string>((resolve) => {
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address() as AddressInfo;
-      resolve(`http://127.0.0.1:${address.port}`);
-    });
-  });
+  const port = await listenForTest(server);
+  return `http://127.0.0.1:${port}`;
 }
 
 describe('createServerMetrics', () => {

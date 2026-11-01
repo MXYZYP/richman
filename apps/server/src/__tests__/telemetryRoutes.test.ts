@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createTelemetryApi, DEFAULT_TELEMETRY_RATE_LIMIT, TELEMETRY_PATH } from '../telemetry/telemetryRoutes';
 import { createTelemetryStore } from '../telemetry/telemetryStore';
+import { listenForTest } from './listenForTest';
 
 let active: { server: HttpServer; directory: string } | undefined;
 
@@ -35,7 +36,7 @@ async function startTelemetryServer(options: { rateLimit?: false | typeof DEFAUL
     response.statusCode = 404;
     response.end('not found');
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+  await listenForTest(server);
   const address = server.address() as AddressInfo;
   active = { server, directory: root };
   return {
@@ -123,7 +124,7 @@ describe('POST /api/telemetry', () => {
       response.statusCode = 404;
       response.end();
     });
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    await listenForTest(server);
     const address = server.address() as AddressInfo;
     active = { server, directory: root };
 

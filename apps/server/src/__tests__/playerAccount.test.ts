@@ -27,6 +27,7 @@ import {
   PLAYER_SYNC_PATH,
 } from '../player/playerAccountRoutes';
 import type { RoomDomainEvent } from '../rooms/roomTypes';
+import { listenForTest } from './listenForTest';
 
 /**
  * 战绩上云（路线图 #123，第五批-3）。
@@ -326,7 +327,7 @@ async function startApi(store: PlayerAccountStore, options: ApiOptions = {}): Pr
     response.end('not-api');
   });
   openServers.push(server);
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+  await listenForTest(server);
   const { port } = server.address() as AddressInfo;
   return `http://127.0.0.1:${port}`;
 }
@@ -466,7 +467,7 @@ describe('/api/player 必须排在静态托管之前', () => {
       }),
     });
     openServers.push(server.httpServer);
-    await new Promise<void>((resolve) => server.httpServer.listen(0, '127.0.0.1', () => resolve()));
+    await listenForTest(server.httpServer);
     const { port } = server.httpServer.address() as AddressInfo;
     const baseUrl = `http://127.0.0.1:${port}`;
 

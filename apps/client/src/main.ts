@@ -17,6 +17,7 @@ import './ui/entryPage.css';
 import { setupPwaInstall } from './pwaInstall';
 import { createErrorBoundary } from './session/errorBoundary';
 import { installTelemetryLifecycle, trackEvent } from './session/telemetryClient';
+import { installPerformanceMode } from './ui/performanceMode';
 
 /** 全局错误兜底（体验 E3）。上报通道接的是 O0 埋点，见各自文件头。 */
 const errorBoundary = createErrorBoundary({ report: trackEvent });
@@ -28,6 +29,10 @@ app.use(createPinia());
 app.config.errorHandler = (error) => {
   errorBoundary.captureVueError(error);
 };
+// 体验 E5：低端机降级。必须在 mount 之前打上 —— 挂完再补属性，首屏那一帧已经按完整动画
+// 渲染过了，低端机上的观感就是「先卡一下再变快」。判定依据见 ui/performanceMode.ts。
+installPerformanceMode();
+
 app.mount('#app');
 
 // 体验 E3 的另一半：组件树之外的异常（脚本加载失败、未处理的 promise）只上报、不打断对局。

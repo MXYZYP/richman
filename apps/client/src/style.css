@@ -227,3 +227,23 @@ body.game-view-active {
   overflow: hidden;
   height: 100%;
 }
+
+/* 体验 E5：低端机降级 —— 只关掉「好看但贵」的合成开销，不动布局与配色。
+   触发条件是根元素上的 data-perf="low"，由 ui/performanceMode.ts 在挂载前打上。
+   ★ 为什么压到 0.01ms 而不是写 none：animation/transition 设成 none 后，依赖
+     animationend / transitionend 收尾的脚本会永远等不到事件（棋子移动就会卡在半路）。
+     压到 0.01ms 既立刻完成，又能照常派发结束事件。 */
+[data-perf='low'] *,
+[data-perf='low'] *::before,
+[data-perf='low'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* 毛玻璃是低端机上最贵的一笔：每一帧都要把背后的内容重新模糊一次。 */
+[data-perf='low'] * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}

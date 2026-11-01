@@ -9,6 +9,7 @@ import type { Ack, ClientToServerEvents, CreateRoomAck, JoinRoomAck, PublicGameS
 import { RoomManager } from '../rooms/roomManager';
 import type { RoomDomainEvent, RoomManagerDependencies } from '../rooms/roomTypes';
 import type { GameRuntimeGateway } from '../game/gameRuntime';
+import { listenForTest } from './listenForTest';
 
 type Deferred<T> = { promise: Promise<T>; resolve(value: T | PromiseLike<T>): void; reject(reason: unknown): void };
 function createDeferred<T>(): Deferred<T> {
@@ -251,11 +252,7 @@ function deterministicFactory(options: Options, capture: (manager: RoomManager<T
 }
 
 async function listen(server: HttpServer): Promise<void> {
-  const { promise, resolve, reject } = createDeferred<void>();
-  const onError = (error: Error) => { server.off('error', onError); reject(error); };
-  server.once('error', onError);
-  server.listen(0, '127.0.0.1', () => { server.off('error', onError); resolve(); });
-  await promise;
+  await listenForTest(server);
 }
 
 async function connectClient(url: string): Promise<RoomClient> {

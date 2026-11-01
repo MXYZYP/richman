@@ -16,6 +16,7 @@ import {
 } from '../leaderboard/leaderboardStore';
 import { createLeaderboardApi, LEADERBOARD_PATH } from '../leaderboard/leaderboardRoutes';
 import type { RoomDomainEvent } from '../rooms/roomTypes';
+import { listenForTest } from './listenForTest';
 
 /**
  * 成就排行榜（路线图 #116）。
@@ -245,7 +246,7 @@ async function startLeaderboardApi(options: {
   });
   openServers.push(server);
 
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+  await listenForTest(server);
   const address = server.address() as AddressInfo;
   return {
     baseUrl: `http://127.0.0.1:${address.port}`,
@@ -395,7 +396,7 @@ describe('挂进真实服务时的路由顺序', () => {
     });
     openServers.push(server.httpServer);
 
-    await new Promise<void>((resolve) => server.httpServer.listen(0, '127.0.0.1', () => resolve()));
+    await listenForTest(server.httpServer);
     const { port } = server.httpServer.address() as AddressInfo;
     return { baseUrl: `http://127.0.0.1:${port}` };
   }

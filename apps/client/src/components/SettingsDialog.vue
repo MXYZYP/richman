@@ -21,7 +21,8 @@ import { THEMES, getStoredAppearance, getStoredTheme, recommendedThemeForMap, re
 import { PLAYBACK_SPEED_OPTIONS, getPlaybackSpeedRef, setPlaybackSpeed } from '../session/playbackPace';
 import { describeMapRulesById } from '../ui/mapRules';
 import { formatCash, setCashUnitForMap } from '../ui/format';
-import { clearTelemetryClientId, isTelemetryEnabled, setTelemetryEnabled } from '../session/telemetryClient';
+import { clearTelemetryClientId, isTelemetryEnabled, setTelemetryEnabled, trackEvent } from '../session/telemetryClient';
+import { installPerformanceMode, writePerformancePreference } from '../ui/performanceMode';
 
 /**
  * 统一设置入口（路线图 #13 扩展）。
@@ -124,6 +125,17 @@ function toggleTelemetry(): void {
   setTelemetryEnabled(telemetryOn.value);
   // 关掉时清掉本机编号：服务端那份数据无法回溯删除，至少本机不再继续认人。
   if (!telemetryOn.value) clearTelemetryClientId();
+}
+
+// 体验 E5：性能模式。默认按设备自动判定（核数 / 内存 / 省流量），玩家手动改过就存成明确
+// 偏好，之后不再拿设备信号推翻他。installPerformanceMode 返回是否降级，正好拿来渲染复选框。
+const perfModeOn = ref(installPerformanceMode());
+function togglePerfMode(): void {
+  perfModeOn.value = !perfModeOn.value;
+  const preference = perfModeOn.value ? 'on' : 'off';
+  writePerformancePreference(preference);
+  installPerformanceMode({ preference });
+  trackEvent('perf_mode_toggle', { enabled: perfModeOn.value ? 1 : 0 });
 }
 
 // 音量用 0~100 的整数百分比驱动滑块，写回模块时再折算成 0~1 的线性音量。
@@ -384,6 +396,25 @@ const rulesSummary = computed(() => (
         开启后只发送「哪张图、几人局、打了几轮、有没有出错」这类事件，配一个随机编号。
         <strong>不含</strong>昵称、位置、聊天内容，服务端也不记录 IP。
         关掉后立刻停止采集，已存的本机编号会一并清除。
+      </p>
+    </section>
+
+    <!-- 体验 E5 的手动出口：自动判定必然有误判（老旗舰核数少但不卡、模拟器报 1 核），
+         玩家自己能一键翻盘，比任何启发式都可靠。 -->
+    <section class="settings-group" aria-labelledby="settings-perf">
+      <h3 id="settings-perf" class="settings-group-title">性能模式</h3>
+      <label class="setting-row" for="perf-mode-toggle">
+        <span>降低动画与特效</span>
+        <input
+          id="perf-mode-toggle"
+          type="checkbox"
+          :checked="perfModeOn"
+          @change="togglePerfMode"
+        />
+      </label>
+      <p class="settings-hint">
+        关掉棋子移动的补间动画、弹窗背景模糊这类吃性能的合成效果，画面朴素一些但更跟手。
+        默认按设备自动判断；你手动改过之后就以你选的为准。
       </p>
     </section>
 

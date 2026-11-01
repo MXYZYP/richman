@@ -23,6 +23,7 @@ import { defaultGameGateway, type GameRuntimeGateway } from '../game/gameRuntime
 import { RoomManager } from '../rooms/roomManager';
 import type { RoomManagerDependencies } from '../rooms/roomTypes';
 import { createRoomServer, type RunningRoomServer } from '../server';
+import { listenForTest } from './listenForTest';
 
 const fixtureManifest = manifest as unknown as Pick<MapPack, 'ref' | 'metadata' | 'presentation'> & {
   readonly requiredRuleModules: MapPack['game']['requiredRuleModules'];
@@ -80,7 +81,7 @@ async function startServer(mapResolver: MapResolver, gameGateway?: GameRuntimeGa
     },
   });
   servers.push(server);
-  await new Promise<void>((resolve) => server.httpServer.listen(0, '127.0.0.1', resolve));
+  await listenForTest(server.httpServer);
   const address = server.httpServer.address() as AddressInfo;
   return `http://127.0.0.1:${address.port}`;
 }
