@@ -616,6 +616,27 @@ export class RoomManager<TTimerHandle = unknown> {
    *
    * 返回的是摘要：不含成员 id 名单、观战者 id、托管状态等只在房间里才该拿到的信息。
    */
+  /**
+   * 实时房间统计（运营 O2），供 `/api/metrics` 与部署核验使用。
+   *
+   * 刻意只给**聚合数字**：房间数、在线玩家数、进行中房间数。没有房间码、没有昵称、
+   * 没有 IP —— 这个端点会被 CI 与运维反复打，它必须是「看一眼就知道服务活着」，
+   * 而不是一份可以枚举房间的目录。
+   *
+   * 只加这一个只读方法是刻意的：房间表本身是私有的，为了统计把它开放出去，
+   * 等于给将来每一个调用方都开了一扇能摸到全量房间对象的门。
+   */
+  stats(): { rooms: number; players: number; playing: number } {
+    let players = 0;
+    let playing = 0;
+    for (const room of this.#rooms.values()) {
+      // 掉线中的玩家不计入「在线人数」：metrics 是要回答「现在有多少人在玩」。
+      players += room.players.filter((player) => player.online).length;
+      if (room.status === 'playing') playing += 1;
+    }
+    return { rooms: this.#rooms.size, players, playing };
+  }
+
   listPublicRooms(): PublicRoomSummary[] {
     const summaries: PublicRoomSummary[] = [];
     for (const room of this.#rooms.values()) {

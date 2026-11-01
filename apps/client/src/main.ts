@@ -15,10 +15,26 @@ import './ui/gameTheme.css';
 // （单机卡片 720px 对在线卡片 560px 就是这么来的）。改动说明见文件头。
 import './ui/entryPage.css';
 import { setupPwaInstall } from './pwaInstall';
+import { createErrorBoundary } from './session/errorBoundary';
+import { installTelemetryLifecycle, trackEvent } from './session/telemetryClient';
+
+/** 全局错误兜底（体验 E3）。上报通道接的是 O0 埋点，见各自文件头。 */
+const errorBoundary = createErrorBoundary({ report: trackEvent });
 
 const app = createApp(App);
 app.use(createPinia());
+// 体验 E3：组件树里抛出的未捕获异常（渲染 / 生命周期）走这里 —— 那正是白屏的成因。
+// 捕获后：① 上报一条 `app_error`（运营 O0）；② 置起恢复卡状态，由 App.vue 渲染出口。
+app.config.errorHandler = (error) => {
+  errorBoundary.captureVueError(error);
+};
 app.mount('#app');
+
+// 体验 E3 的另一半：组件树之外的异常（脚本加载失败、未处理的 promise）只上报、不打断对局。
+errorBoundary.install();
+
+// 运营 O0：页面切后台 / 关闭时把攒下的事件发完（走 sendBeacon）。
+installTelemetryLifecycle();
 
 // P2-11 PWA：仅在生产构建注册 Service Worker + 安装提示；开发态不注册，避免污染 HMR。
 // 另外只在 http/https 下注册：原生壳（鸿蒙 rawfile / file:// 兜底场景）里没有 Service Worker

@@ -28,6 +28,7 @@ import { browserStorage, recordGameResult } from '../session/playerStats';
 import type { Intent } from '@richman/engine';
 import { playSfx } from '../audio/sfx';
 import { isBgmEnabled, startBgm, stopBgm, armBgmAutoStart } from '../audio/bgm';
+import { trackEvent } from '../session/telemetryClient';
 // 对局皮肤改到 src/main.ts 全局引入了——见那里的说明。此处import 曾让
 // @vitejs/plugin-vue 把主题选择器与本组件的 scoped 规则做笛卡尔积，
 // 产出一批永不匹配的规则，连带 .game-shell{display:grid} 也失效、桌面布局塌掉。
@@ -274,12 +275,32 @@ watch(
     else if (phase === 'game_over') {
       stopDurationTimer();
       recordLocalPlayerStats();
+      reportGameEnd();
       const localId = props.session.localPlayerId.value;
       playSfx(state.value?.winnerId === localId ? 'win' : 'lose');
     }
   },
   { immediate: true },
 );
+
+/**
+ * 对局结束上报（运营 O0）：地图、人数、回合数、时长、有没有人赢。
+ *
+ * 为什么放在这里：`phase === 'game_over'` 是「这局真的结束了」的唯一判据，
+ * 与战绩统计、结算音效同源；放别处（比如监听弹窗开关）会在观战、回放、断线重连时误报。
+ * 只报**客观事实**，不报谁赢了多少钱 —— 那是战绩的事，不需要再进埋点。
+ */
+function reportGameEnd(): void {
+  const current = state.value;
+  if (current === null) return;
+  trackEvent('game_end', {
+    map: current.mapRef.id,
+    players: current.players.length,
+    turns: current.turn,
+    seconds: elapsedSeconds.value,
+    outcome: current.winnerId === null ? 'no_winner' : 'winner',
+  });
+}
 
 // 对局结束（game_over）时把本地参赛者的本局结果写入战绩统计。
 // 观战者不在 players 列表中，自然被跳过；任何异常都不影响结算流程。

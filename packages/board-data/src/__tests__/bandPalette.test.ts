@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { chinaTourMap } from '../chinaTourMap';
 import { classicTourMap } from '../classicTourMap';
-import { getActiveMapPack, listActiveMaps } from '../registry';
+import { getActiveMapPack, listActiveMaps } from '../production';
 
 const HEX = /^#[0-9A-Fa-f]{6}$/;
 

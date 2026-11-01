@@ -16,11 +16,11 @@ import { yunchengTourMap } from '../yunchengTourMap';
 import { sanguoTourMap } from '../sanguoTourMap';
 import { yellowRiverMap } from '../yellowRiverMap';
 import {
-  createMapRegistry,
   getActiveMapPack,
   getMapPack,
   listActiveMaps,
-} from '../registry';
+} from '../production';
+import { createMapRegistry } from '../registry';
 
 const CORE_MODULES = [{ id: 'core', version: 1 }] as const;
 

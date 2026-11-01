@@ -29,6 +29,9 @@ const repoRoot = resolve(here, '..');
 const boardDataSrc = join(repoRoot, 'packages', 'board-data', 'src');
 const mapsRoot = join(repoRoot, 'packages', 'board-data', 'maps');
 const registryPath = join(boardDataSrc, 'registry.ts');
+// E2：十三张地图的 import / activeMapRefs / assetAllowlist / registerMapPack 都在 production.ts，
+// registry.ts 只剩工厂与规则模块白名单 —— 客户端懒加载入口要用工厂，不能让它碰到地图数据。
+const productionPath = join(boardDataSrc, 'production.ts');
 const indexPath = join(boardDataSrc, 'index.ts');
 const deployScriptPath = join(repoRoot, 'deploy-manual.ps1');
 
@@ -110,7 +113,15 @@ function patchIndexTs(source: string, camel: string): PatchResult {
   return insertAfterLast(source, /^export \{ \w+Map \} from '\.\/\w+Map';$/m, `export { ${camel}Map } from './${camel}Map';`);
 }
 
-function patchRegistryTs(source: string, camel: string, modules: readonly { id: string; version: number }[]): PatchResult {
+/**
+ * 给**生产注册表**（`production.ts`）补一张地图：import / activeMapRefs / assetAllowlist /
+ * registerMapPack 四处。
+ *
+ * E2 之前这四处与规则模块白名单都在 `registry.ts`；现在注册表搬到了 `production.ts`
+ * （registry.ts 只剩工厂，客户端的懒加载入口要引它，不能让它碰到地图数据），
+ * 于是补丁也拆成了两个文件两步走 —— 见下面的 `patchRuleModules`。
+ */
+function patchRegistryTs(source: string, camel: string): PatchResult {
   let next = source;
   next = insertAfterLast(next, /^import \{ \w+Map \} from '\.\/\w+Map';$/m, `import { ${camel}Map } from './${camel}Map';`).content;
   const activeLine = `    ${camel}Map.ref,`;
@@ -118,7 +129,15 @@ function patchRegistryTs(source: string, camel: string, modules: readonly { id: 
   const allowlistLine = `    { ref: ${camel}Map.ref, paths: [] },`;
   if (!next.includes(allowlistLine)) next = insertBeforeClosingBracket(next, '  assetAllowlist: [', allowlistLine).content;
   next = insertAfterLast(next, /^productionRegistry\.registerMapPack\(\w+Map\);$/m, `productionRegistry.registerMapPack(${camel}Map);`).content;
-  // 白名单现在住在顶层常量 PRODUCTION_RULE_MODULES 里（见 readKnownModules 的说明）；
+  return { content: next, changed: next !== source };
+}
+
+/**
+ * 给规则模块白名单（`registry.ts` 的 `PRODUCTION_RULE_MODULES`）补缺失项，已有的不重复。
+ */
+function patchRuleModules(source: string, modules: readonly { id: string; version: number }[]): PatchResult {
+  let next = source;
+  // 白名单住在顶层常量 PRODUCTION_RULE_MODULES 里（见 readKnownModules 的说明）；
   // 常量在就往常量里补，否则退回旧的 inline 属性写法。
   const moduleAnchor = next.includes('PRODUCTION_RULE_MODULES: readonly RuleModuleRef[] = [')
     ? 'PRODUCTION_RULE_MODULES: readonly RuleModuleRef[] = ['
@@ -244,8 +263,9 @@ function main(): void {
   const presentation = manifest.presentation as MapPack['presentation'];
 
   const mapDir = join(mapsRoot, mapId, `v${version}`);
+  const productionSource = readFileSync(productionPath, 'utf8');
   const registrySource = readFileSync(registryPath, 'utf8');
-  const alreadyRegistered = registrySource.includes(`${camel}Map.ref`);
+  const alreadyRegistered = productionSource.includes(`${camel}Map.ref`);
   if ((existsSync(mapDir) || alreadyRegistered) && !force) {
     fail(`地图 ${mapId} 看起来已经落地（${existsSync(mapDir) ? '目录已存在' : 'registry 已注册'}）；如要覆盖请加 --force`);
   }
@@ -304,9 +324,15 @@ function main(): void {
     changed.push(indexPath);
   }
 
-  const registryPatch = patchRegistryTs(registrySource, camel, knownModules);
-  if (registryPatch.changed) {
-    if (!dryRun) writeFileSync(registryPath, registryPatch.content, 'utf8');
+  const productionPatch = patchRegistryTs(productionSource, camel);
+  if (productionPatch.changed) {
+    if (!dryRun) writeFileSync(productionPath, productionPatch.content, 'utf8');
+    changed.push(productionPath);
+  }
+
+  const modulesPatch = patchRuleModules(registrySource, knownModules);
+  if (modulesPatch.changed) {
+    if (!dryRun) writeFileSync(registryPath, modulesPatch.content, 'utf8');
     changed.push(registryPath);
   }
 
@@ -362,6 +388,7 @@ export {
   patchDeployList,
   patchIndexTs,
   patchRegistryTs,
+  patchRuleModules,
   readKnownModules,
   renderMapTs,
 };

@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "build": "vue-tsc --noEmit && vite build",
-    "build:offline": "vite build --base=./",
+    "build": "vue-tsc --noEmit && vite build && node ../../scripts/compress-dist.mjs",
+    "build:offline": "vite build --base=./ && node ../../scripts/compress-dist.mjs",
     "preview": "vite preview",
     "cap:init": "cap init",
     "cap:add:android": "cap add android",

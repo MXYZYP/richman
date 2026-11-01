@@ -9,6 +9,7 @@ import {
   patchDeployList,
   patchIndexTs,
   patchRegistryTs,
+  patchRuleModules,
   readKnownModules,
   renderMapTs,
 } from '../apply-map-pack';
@@ -23,9 +24,13 @@ const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const boardDataSrc = join(repoRoot, 'packages', 'board-data', 'src');
 const indexPath = join(boardDataSrc, 'index.ts');
 const registryPath = join(boardDataSrc, 'registry.ts');
+// E2：规则模块白名单（PRODUCTION_RULE_MODULES）仍在 registry.ts，
+// 而十三张地图的 import / 注册搬到了 production.ts（客户端懒加载入口只引用前者）。
+const productionPath = join(boardDataSrc, 'production.ts');
 const deployPath = join(repoRoot, 'deploy-manual.ps1');
 
 const registrySource = readFileSync(registryPath, 'utf8');
+const productionSource = readFileSync(productionPath, 'utf8');
 const indexSource = readFileSync(indexPath, 'utf8');
 const deploySource = readFileSync(deployPath, 'utf8');
 
@@ -68,8 +73,8 @@ describe('apply-map-pack: camelCase', () => {
   it('结果真的能对上 registry.ts 里已注册的模块名（id 与命名不能各写一套）', () => {
     for (const mapId of ACTIVE_MAP_IDS) {
       const camel = camelCase(mapId);
-      expect(registrySource).toContain(`import { ${camel}Map } from './${camel}Map';`);
-      expect(registrySource).toContain(`productionRegistry.registerMapPack(${camel}Map);`);
+      expect(productionSource).toContain(`import { ${camel}Map } from './${camel}Map';`);
+      expect(productionSource).toContain(`productionRegistry.registerMapPack(${camel}Map);`);
       expect(indexSource).toContain(`export { ${camel}Map } from './${camel}Map';`);
       expect(existsSync(join(boardDataSrc, `${camel}Map.ts`))).toBe(true);
     }
@@ -109,12 +114,12 @@ describe('apply-map-pack: 已落地地图必须完全幂等', () => {
     }
   });
 
-  it('registry.ts 对十三张已注册地图补注册都是空操作', () => {
+  it('production.ts 对十三张已注册地图补注册都是空操作', () => {
     const modules = readKnownModules(registrySource);
     for (const mapId of ACTIVE_MAP_IDS) {
-      const patch = patchRegistryTs(registrySource, camelCase(mapId), modules);
-      expect(patch.changed, `${mapId} 的 registry.ts 注册行缺失或锚点漂移`).toBe(false);
-      expect(patch.content).toBe(registrySource);
+      const patch = patchRegistryTs(productionSource, camelCase(mapId));
+      expect(patch.changed, `${mapId} 的 production.ts 注册行缺失或锚点漂移`).toBe(false);
+      expect(patch.content).toBe(productionSource);
     }
   });
 
@@ -147,8 +152,8 @@ describe('apply-map-pack: 新地图确实能被补进去', () => {
     }
   });
 
-  it('registry.ts 同时补 import / activeMapRefs / assetAllowlist / registerMapPack', () => {
-    const patch = patchRegistryTs(registrySource, camel, readKnownModules(registrySource));
+  it('production.ts 同时补 import / activeMapRefs / assetAllowlist / registerMapPack', () => {
+    const patch = patchRegistryTs(productionSource, camel);
 
     expect(patch.changed).toBe(true);
     expect(patch.content).toContain(`import { ${camel}Map } from './${camel}Map';`);
@@ -171,7 +176,7 @@ describe('apply-map-pack: 新地图确实能被补进去', () => {
 
   it('registry.ts 只补缺失的规则模块项，已有的不重复', () => {
     const modules = [...readKnownModules(registrySource), { id: 'fixture-module', version: 1 }];
-    const patch = patchRegistryTs(registrySource, camel, modules);
+    const patch = patchRuleModules(registrySource, modules);
 
     // 白名单住在顶层常量里，项缩进是 2 空格（比闭合行 `];` 深一级）。
     expect(patch.content).toContain("  { id: 'fixture-module', version: 1 },");

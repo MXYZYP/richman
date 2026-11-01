@@ -14,7 +14,7 @@ import {
 } from './chinaTourValidation';
 import { chinaTourMap } from './chinaTourMap';
 import { assertValidMapPack } from './mapValidation';
-import { getMapPack } from './registry';
+import { getMapPack } from './production';
 import { worldTourMap } from './worldTourMap';
 import mapBoard from '../maps/china-tour/v1/board.json';
 import mapCards from '../maps/china-tour/v1/cards.json';

@@ -7,7 +7,8 @@ import { chinaTourMap } from '../chinaTourMap';
 import { computeContentHash } from '../hash';
 import type { MapPack } from '../mapTypes';
 import { assertValidMapPack } from '../mapValidation';
-import { createMapRegistry, listActiveMaps } from '../registry';
+import { createMapRegistry } from '../registry';
+import { listActiveMaps } from '../production';
 import type { BoardData, CardsData, GameConfig } from '../types';
 
 const fixtureManifest = manifest as unknown as Pick<MapPack, 'ref' | 'metadata' | 'presentation'> & {

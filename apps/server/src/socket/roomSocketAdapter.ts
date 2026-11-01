@@ -27,6 +27,7 @@ import {
 } from '../http/slidingWindowRateLimiter';
 import { roomFailure, type RoomFailure } from '../rooms/roomErrors';
 import type { RoomManager } from '../rooms/roomManager';
+import type { MetricsCollector } from '../metrics/serverMetrics';
 import type { GameActionResult, Intent, RoomDomainEvent, RoomResult } from '../rooms/roomTypes';
 
 type RoomIo = SocketIoServer<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
@@ -65,6 +66,14 @@ export interface RoomSocketAdapterOptions<TTimerHandle = unknown> {
    * 会连带影响同进程的 Socket.IO 客户端，上一版就是这么把用例挂死在等待 ack 上的。
    */
   now?: () => number;
+  /**
+   * 实时指标收集器（运营 O2）。省略 = 不统计。
+   *
+   * 只在这里记两类**连接层**事件：掉线与重连成功。对局层的统计（地图、人数、时长）
+   * 由客户端埋点走 `/api/telemetry`，服务端不重复造一份 —— 引擎里加钩子会波及
+   * 单机/联机/托管三条路径，收益却只是把一个数字换个地方算。
+   */
+  metrics?: MetricsCollector;
 }
 
 const INVALID_ROOM_ACTION_ACK = {
@@ -104,6 +113,7 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
   logger,
   rateLimit = { windowMs: CREATE_WINDOW_MS, maxPerWindow: CREATE_MAX_PER_WINDOW },
   now = Date.now,
+  metrics,
 }: RoomSocketAdapterOptions<TTimerHandle>): RoomSocketAdapter<TTimerHandle> {
   const socketBindings = new Map<string, SocketBinding>();
   const playerSocketIds = new Map<string, string>();
@@ -561,6 +571,9 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
       };
       cleanupSocketBeforeRebind(socket, binding);
       bindSocket(socket, binding);
+      // `session:resume` 成功即一次重连：它是刷新页面 / 掉线后收回控制权的那条路径。
+      // 建房与加入走的是另外两个入口，那不是重连，不计数。
+      metrics?.recordReconnect();
       dispatchDomainEvents(result.events);
       dispatchLobbyStateAfterConnectionEvent(result);
       ackAfterEventFlushFrom(ackThenRoomEntryState<ResumeAck>(socket, payload.roomCode, ack), () => {
@@ -986,6 +999,9 @@ export function createRoomSocketAdapter<TTimerHandle = unknown>({
     unbindSocket(socket);
     const result = roomManager.markDisconnected(binding.roomCode, binding.playerId);
     if (result.ok) {
+      // 只有「这个 socket 确实绑着房间里的玩家」才计数：普通连接断开（比如建完房
+      // 就关页面的旁观连接）走的是上面的 early return，不算掉线。
+      metrics?.recordDisconnect();
       dispatchDomainEvents(result.events);
       dispatchLobbyStateAfterConnectionEvent(result);
     }

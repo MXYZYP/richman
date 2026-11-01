@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { brotliCompressSync, brotliDecompressSync, gunzipSync, gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RoomManager as RoomManagerInstance } from '../rooms/roomManager';
 import type { RoomDomainEvent, RoomManagerDependencies } from '../rooms/roomTypes';
@@ -30,6 +31,8 @@ type SocketLike = {
 
 const indexHtml = '<!doctype html><div id="app">fixture app</div><script type="module" src="/assets/app.js"></script>';
 const appJs = 'window.__STATIC_FIXTURE__ = "served from temp dist";\n';
+/** 没有预压缩伴生文件的资源：用来证明「脚本没跑过也不会 404 / 不会乱码」。 */
+const plainJs = 'window.__PLAIN_FIXTURE__ = "no precompressed sibling";\n';
 
 let activeServer: TestServer | undefined;
 let tempRoot: string | undefined;
@@ -122,6 +125,75 @@ describe('same-port client static hosting', () => {
   });
 });
 
+describe('E1 static compression and cache headers', () => {
+  it('serves the brotli sibling when the client accepts br', async () => {
+    const { baseUrl } = await startServerWithFixtureDist();
+
+    const response = await fetch(`${baseUrl}/assets/app.js`, { headers: { 'accept-encoding': 'br' } });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-encoding')).toBe('br');
+    // 内容类型必须按**去掉 .br 后缀**的名字判定，否则浏览器会拒绝执行 JS。
+    expect(response.headers.get('content-type')).toMatch(/^text\/javascript\b/);
+    expect(response.headers.get('vary')).toContain('Accept-Encoding');
+    // undici 会按 content-encoding 自动解回原文，所以这里拿到的一定是原文（头仍是 br）。
+    expect(await response.text()).toBe(appJs);
+  });
+
+  it('serves the gzip sibling when the client only accepts gzip', async () => {
+    const { baseUrl } = await startServerWithFixtureDist();
+
+    const response = await fetch(`${baseUrl}/assets/app.js`, { headers: { 'accept-encoding': 'gzip' } });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-encoding')).toBe('gzip');
+    expect(await response.text()).toBe(appJs);
+  });
+
+  it('falls back to the original file when no precompressed sibling exists', async () => {
+    const { baseUrl } = await startServerWithFixtureDist();
+
+    const response = await fetch(`${baseUrl}/assets/plain.js`, { headers: { 'accept-encoding': 'br' } });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-encoding')).toBeNull();
+    expect(await response.text()).toBe(plainJs);
+  });
+
+  it('gives hashed assets an immutable long cache', async () => {
+    const { baseUrl } = await startServerWithFixtureDist();
+
+    const response = await fetch(`${baseUrl}/assets/app.js`, { headers: { 'accept-encoding': 'identity' } });
+
+    expect(response.headers.get('cache-control')).toContain('max-age=31536000');
+    expect(response.headers.get('cache-control')).toContain('immutable');
+  });
+
+  it('never long-caches index.html or the service worker', async () => {
+    const { baseUrl } = await startServerWithFixtureDist();
+
+    // index.html 被长缓存 = 发布新版后玩家仍请求已被清掉的旧 chunk ⇒ 白屏，这条必须硬。
+    const index = await fetch(`${baseUrl}/index.html`, { headers: { 'accept-encoding': 'identity' } });
+    expect(index.headers.get('cache-control')).toBe('no-cache');
+
+    const sw = await fetch(`${baseUrl}/sw.js`, { headers: { 'accept-encoding': 'identity' } });
+    expect(sw.headers.get('cache-control')).toBe('no-cache');
+
+    // SPA 兜底返回的也是 index.html，同样不能长缓存。
+    const fallback = await fetch(`${baseUrl}/rooms/0007`, { headers: { 'accept-encoding': 'identity' } });
+    expect(fallback.status).toBe(200);
+    expect(fallback.headers.get('cache-control')).toBe('no-cache');
+  });
+
+  it('gives non-hashed binaries a short cache instead of immutable', async () => {
+    const { baseUrl } = await startServerWithFixtureDist();
+
+    const response = await fetch(`${baseUrl}/icon.png`, { headers: { 'accept-encoding': 'identity' } });
+
+    expect(response.headers.get('cache-control')).toBe('public, max-age=86400');
+  });
+});
+
 async function startServerWithFixtureDist(): Promise<TestServer> {
   tempRoot = await mkdtemp(join(tmpdir(), 'richman-static-'));
   const distPath = join(tempRoot, 'client-dist');
@@ -129,6 +201,12 @@ async function startServerWithFixtureDist(): Promise<TestServer> {
   await mkdir(join(distPath, 'assets'), { recursive: true });
   await writeFile(join(distPath, 'index.html'), indexHtml, { flag: 'wx' });
   await writeFile(join(distPath, 'assets', 'app.js'), appJs, { flag: 'wx' });
+  await writeFile(join(distPath, 'assets', 'plain.js'), plainJs, { flag: 'wx' });
+  await writeFile(join(distPath, 'sw.js'), 'const CACHE="fixture";\n', { flag: 'wx' });
+  await writeFile(join(distPath, 'icon.png'), 'not-a-real-png', { flag: 'wx' });
+  // E1：构建期预压缩产物（scripts/compress-dist.mjs 生成的就是这个形状）。
+  await writeFile(join(distPath, 'assets', 'app.js.br'), brotliCompressSync(Buffer.from(appJs)), { flag: 'wx' });
+  await writeFile(join(distPath, 'assets', 'app.js.gz'), gzipSync(Buffer.from(appJs)), { flag: 'wx' });
 
   // RED compatibility: these future modules do not exist in the current baseline;
   // importing them inside the helper lets Vitest collect this static-hosting contract first.

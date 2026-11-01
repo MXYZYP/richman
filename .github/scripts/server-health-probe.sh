@@ -6,6 +6,11 @@
 #   3. dist sw.js 版本 == $EXPECT（抓「部署没跑新前端」与「忘升 SW 版本」）
 #   4. 首页（静态托管）返回 200 且是 index.html
 #   5. 首页引用的主 JS 资源返回 200（抓「白屏」）
+#   6. /api/metrics 返回 200 且带 uptimeSeconds（运营 O2）
+#   7. 主 JS 资源带压缩（E1）：带 Accept-Encoding 请求必须拿到 content-encoding
+# 第 6 项是关键：**「部署成功」不等于「新代码在跑」**。/healthz 任何人都能答（包括占住
+# 3000 端口的孤儿进程），而 /api/metrics 是只有这一版代码才有的端点 —— 它答得出来，
+# 才说明跑着的确实是刚部署上去的那份构建。
 set -u
 fail() { echo "::error::$1"; exit 1; }
 
@@ -38,5 +43,19 @@ asset=$(printf '%s' "$html" | grep -o '/assets/[^"]*\.js' | head -1)
 asset_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "http://127.0.0.1:3000$asset")
 echo "asset=$asset code=$asset_code"
 [ "$asset_code" = "200" ] || fail "main asset $asset returned $asset_code (expected 200，玩家会白屏)"
+
+metrics_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://127.0.0.1:3000/api/metrics)
+echo "metrics=$metrics_code"
+[ "$metrics_code" = "200" ] || fail "/api/metrics returned $metrics_code (expected 200；跑着的可能不是刚部署的那份代码)"
+
+metrics_body=$(curl -s --max-time 15 http://127.0.0.1:3000/api/metrics)
+printf '%s' "$metrics_body" | grep -q 'uptimeSeconds' || fail "/api/metrics 缺 uptimeSeconds（端点存在但内容不对：可能命中了旧的静态兜底）"
+echo "metrics body: $(printf '%s' "$metrics_body" | head -c 160)"
+
+# E1：压缩是纯服务端改动，/healthz 与首屏 200 都证明不了它生效。
+# 只有带上 Accept-Encoding 真去要一次、看到 content-encoding，才算确认玩家拿到的是压缩后的包。
+asset_encoding=$(curl -s -o /dev/null -D - -H 'Accept-Encoding: br, gzip' --max-time 15 "http://127.0.0.1:3000$asset" | grep -i '^content-encoding:' | tr -d '\r' | head -1)
+echo "asset encoding: ${asset_encoding:-none}"
+[ -n "$asset_encoding" ] || fail "main asset $asset served without content-encoding（压缩没生效：要么 scripts/compress-dist.mjs 没跑，要么 sirv 没开 brotli/gzip）"
 
 echo "ALL_OK"
