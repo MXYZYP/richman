@@ -92,7 +92,7 @@ export const PRODUCTION_CATALOG: readonly ProductionCatalogEntry[] = [
     "ref": {
       "id": "xinjiang-tour",
       "version": 1,
-      "contentHash": "1805bcccc32b23cb33170c373a40a56e8cf477000d6a95536d1958def59e1b2a"
+      "contentHash": "06129f6519ce4532333c18cc01969bff315351e4b23c2e595d3134db4d29747e"
     },
     "title": "新疆之旅",
     "description": "环形棋路：40 格主环绕行天山南北，阿克苏可转入「独库公路」6 格支线，越深入腹地地价越高。"
@@ -101,7 +101,7 @@ export const PRODUCTION_CATALOG: readonly ProductionCatalogEntry[] = [
     "ref": {
       "id": "shanxi-tour",
       "version": 1,
-      "contentHash": "45e1ca69c36bf319c9c56f6cb0c1527606105a4b64f4811dad64cb1bd25a6659"
+      "contentHash": "7acbb20bc72a78371c8c4ea6b4c91afa1f5a9d57ba4e0dc80a6cc5589bf1eb66"
     },
     "title": "山西之旅",
     "description": "蛇形网格：48 格 6×8 逐层铺开，自雁门关一路南下到蒲津渡，晋南地价最高，走到太行脚下再折回起点。"
@@ -119,7 +119,7 @@ export const PRODUCTION_CATALOG: readonly ProductionCatalogEntry[] = [
     "ref": {
       "id": "yuncheng-tour",
       "version": 1,
-      "contentHash": "8d8ef3ef4821f64ea5bc15ff0da6d4fb93f94a4176f42c7953bf9d8ba8d0356f"
+      "contentHash": "7d978a88a714de3e5be36ce81ba870d7093862189d39ffe23c8d5af3e3812a69"
     },
     "title": "运城之旅",
     "description": "盐湖之畔的黄河金三角：48 格 6×8 蛇形闭环，从运城站出发经解州关帝庙、鹳雀楼一路向东南到运城盐湖，沿途票号通商、河工争水，走到盐池白土再折回起点。"

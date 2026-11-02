@@ -96,6 +96,30 @@
         "type": "receive_bank",
         "amount": 1100
       }
+    },
+    {
+      "id": "sx-c13",
+      "text": "平遥古城摄影节获奖：得 1500 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1500
+      }
+    },
+    {
+      "id": "sx-c14",
+      "text": "云冈石窟限流，绕行一段山路：后退三步",
+      "effect": {
+        "type": "move_steps",
+        "steps": -3
+      }
+    },
+    {
+      "id": "sx-c15",
+      "text": "汾酒厂年份分红：每名玩家支付你 400 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 400
+      }
     }
   ],
   "destiny": [
@@ -212,6 +236,30 @@
       "effect": {
         "type": "receive_bank",
         "amount": 1600
+      }
+    },
+    {
+      "id": "sx-d15",
+      "text": "五台山朝台遇雪封路：暂停一次",
+      "effect": {
+        "type": "skip_turn",
+        "turns": 1
+      }
+    },
+    {
+      "id": "sx-d16",
+      "text": "晋商票号汇兑老账结清：得 2200 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2200
+      }
+    },
+    {
+      "id": "sx-d17",
+      "text": "壶口瀑布观景台被冲毁，全城募捐：向银行支付 800 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 800
       }
     }
   ]

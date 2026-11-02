@@ -21,6 +21,8 @@ export function toPublicGameSnapshot(state: GameState): PublicGameSnapshot {
     pendingTrade: state.pendingTrade ?? null,
     pendingAuction: state.pendingAuction ?? null,
     auctionOnDecline: state.auctionOnDecline === true,
+    // 道具（#1）：缺省归一成空对象，客户端不必为「没有这个键」单独写分支。
+    itemBags: state.itemBags ?? {},
     deckCounts: {
       chance: state.decks.chance.length,
       destiny: state.decks.destiny.length,

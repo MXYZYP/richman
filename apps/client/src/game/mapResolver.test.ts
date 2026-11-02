@@ -67,6 +67,24 @@ describe('resolvePublicGameSnapshot', () => {
     expect(renderable).not.toHaveProperty('decks');
   });
 
+  // #3 守卫（2026-11-02）：拍卖 / 交易的三个字段曾经在这个映射里被丢掉，
+  // 结果引擎侧完整、界面侧永远读不到 —— 拍卖面板一次都没出现过。
+  test('议价字段（pendingTrade / pendingAuction / auctionOnDecline）必须原样带到渲染态', () => {
+    const pack = getActiveMapPack('china-tour');
+    const snapshot: PublicGameSnapshot = {
+      ...publicSnapshot(pack),
+      turnPhase: 'awaiting_auction_bid',
+      pendingAuction: { cellId: 2, bidderId: 'player-b', leaderId: 'player-a', leaderBid: 1600, passedIds: [] },
+      auctionOnDecline: true,
+    };
+
+    const renderable = resolvePublicGameSnapshot(snapshot, () => pack);
+
+    expect(renderable.pendingAuction).toEqual(snapshot.pendingAuction);
+    expect(renderable.auctionOnDecline).toBe(true);
+    expect(renderable.pendingTrade).toBeNull();
+  });
+
   test('hard-fails when the exact version/hash is unavailable or the resolver substitutes a pack', () => {
     const pack = getActiveMapPack('china-tour');
     const unavailableRef = {

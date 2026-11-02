@@ -1,5 +1,6 @@
 import type { GameConfig, JsonValue, MapPack, RuleModuleRef } from '@richman/board-data';
 import type { GameEvent, GameState, PendingModuleAction } from './types';
+import { isItemId } from './items';
 import {
   validateWorldTourPublicModuleState,
   WORLD_TOUR_MODULE_KEY,
@@ -160,6 +161,17 @@ function validateRecentEvent(
   const cell = (field = 'cellId') => Number.isSafeInteger(value[field]) && cellIds.has(value[field] as number);
 
   switch (value.type) {
+    case 'item_bought':
+      return hasExactKeys(value, ['type', 'playerId', 'itemId', 'price'])
+        && player()
+        && isItemId(value.itemId)
+        && amount('price');
+    case 'item_used':
+      return hasExactKeys(value, ['type', 'playerId', 'itemId', 'cellId', 'amount'])
+        && player()
+        && isItemId(value.itemId)
+        && (value.cellId === null || cell())
+        && amount();
     case 'game_started':
     case 'buy_declined':
       return hasExactKeys(value, ['type']);
@@ -649,7 +661,11 @@ export function hydrateGameState(
   //  - cardChoice：单机真人抽卡确认
   //  - pendingTrade / pendingAuction / auctionOnDecline：交易与拍卖（#105 / #106）
   // 判定方式刻意与 hasExactKeys 等价 —— 必填键一个不能少、未知键一个不能多、可选键可有可无。
-  const optionalKeys = ['cardChoice', 'pendingTrade', 'pendingAuction', 'auctionOnDecline', 'maxTurns'];
+  const optionalKeys = [
+    'cardChoice', 'pendingTrade', 'pendingAuction', 'auctionOnDecline', 'maxTurns',
+    // 道具（#1）：旧存档没有背包，缺键按「谁都没有道具」处理。
+    'itemBags',
+  ];
   if (!isRecord(value)
     || stateKeys.some((key) => !Object.hasOwn(value, key))
     || Object.keys(value).some((key) => !stateKeys.includes(key) && !optionalKeys.includes(key))) {
@@ -712,6 +728,24 @@ export function hydrateGameState(
   }
 
   const enabledModules = new Set(pack.game.requiredRuleModules.map(moduleKey));
+  // 道具背包（#1）：键必须是本局玩家，值必须是三种道具的非负整数（缺键 = 全 0 背包）。
+  if (value.itemBags !== undefined) {
+    const bags = value.itemBags;
+    if (!isRecord(bags) || Object.keys(bags).length === 0) return fail('invalid item bags');
+    for (const ownerId of Object.keys(bags)) {
+      if (!playerIds.has(ownerId)) return fail('invalid item bag owner');
+      const bag = bags[ownerId];
+      if (!isRecord(bag) || !hasExactKeys(bag, ['remote_die', 'toll_pass', 'rent_boost'])) {
+        return fail('invalid item bag');
+      }
+      for (const count of [bag.remote_die, bag.toll_pass, bag.rent_boost]) {
+        if (!Number.isSafeInteger(count) || (count as number) < 0 || (count as number) > 99) {
+          return fail('invalid item count');
+        }
+      }
+    }
+  }
+
   if (!validatePublicRuleState(value.publicRuleState, {
     currentPlayerId: value.currentPlayerId as string,
     turnPhase: value.turnPhase as GameState['turnPhase'],

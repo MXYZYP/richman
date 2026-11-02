@@ -47,6 +47,12 @@ export function resolvePublicGameSnapshot(
     players: snapshot.players,
     properties: snapshot.properties,
     publicRuleState: snapshot.publicRuleState ?? { modules: {}, pendingActions: [] },
+    // 议价状态（#3）：这三项以前漏了映射，导致联机拍卖面板与「放弃并拍卖」文案永远不出现。
+    // 快照里它们是必填（PublicGameSnapshot），缺省只可能来自旧服务端，故一律兜成 null/false。
+    pendingTrade: snapshot.pendingTrade ?? null,
+    pendingAuction: snapshot.pendingAuction ?? null,
+    auctionOnDecline: snapshot.auctionOnDecline === true,
+    itemBags: snapshot.itemBags ?? {},
     debt: snapshot.debt,
     lastDice: snapshot.lastDice,
     recentLog: snapshot.recentLog,
@@ -78,6 +84,11 @@ export function resolveLocalGameState(
     publicRuleState: structuredClone(state.publicRuleState),
     debt: structuredClone(state.debt),
     ...(state.cardChoice === undefined ? {} : { cardChoice: structuredClone(state.cardChoice) }),
+    // 议价状态（#3）：单机也要能看到拍卖面板与「放弃并拍卖」文案，同上一条。
+    pendingTrade: state.pendingTrade === undefined ? null : structuredClone(state.pendingTrade),
+    pendingAuction: state.pendingAuction === undefined ? null : structuredClone(state.pendingAuction),
+    auctionOnDecline: state.auctionOnDecline === true,
+    itemBags: state.itemBags === undefined ? {} : structuredClone(state.itemBags),
     lastDice: structuredClone(state.lastDice),
     recentLog: structuredClone(state.recentLog),
     winnerId: state.winnerId,

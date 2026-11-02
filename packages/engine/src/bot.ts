@@ -10,19 +10,75 @@ import {
 } from './selectors';
 import { defaultRuleModuleRegistry, type RuleModuleRegistry } from './moduleRegistry';
 import { AUCTION_MIN_INCREMENT, currentPendingAuction, currentPendingTrade } from './bargain';
+import { ITEM_DEFINITIONS, bagTotal, checkBuyItem, itemCount, readItemBag } from './items';
 
 /** 电脑玩家难度（P1-6）：影响买地/盖房预留现金与是否主动赎回抵押地产。
  *  normal 与既有策略 v1 行为完全一致，保证存量测试与联机默认不回归。 */
 export type BotDifficulty = 'easy' | 'normal' | 'hard';
 
-/** 各难度下买地/盖房须保留的安全垫（>= price/reserve 才出手）。easy 更保守，hard 更激进。 */
+/** 电脑玩家性格（#1 个性电脑玩家）：与难度正交——难度决定「水平高低」，
+ *  性格决定「偏爱什么」。两者相乘得到最终阈值，因此在同一难度下换性格会明显改变打法，
+ *  而 balanced 的乘数全为 1，与引入前逐字节一致（存量测试与联机默认不回归）。 */
+export type BotPersona = 'balanced' | 'aggressive' | 'conservative' | 'tycoon';
+
+export const BOT_PERSONAS: readonly BotPersona[] = ['balanced', 'aggressive', 'conservative', 'tycoon'];
+
+/** 性格对各项阈值的乘数。 */
+interface PersonaProfile {
+  /** 买地安全垫乘数（<1 更敢买）。 */
+  readonly reserveScale: number;
+  /** 盖房安全垫乘数（>1 更愿意留现金、少盖房）。 */
+  readonly buildReserveScale: number;
+  /** 赎回后保留金乘数。 */
+  readonly redeemReserveScale: number;
+  /** 是否主动赎回抵押地产。 */
+  readonly redeems: boolean;
+  /** 拍卖心理价位乘数。 */
+  readonly auctionScale: number;
+  /** 交易接受门槛乘数（<1 更容易同意）。 */
+  readonly tradeMarginScale: number;
+}
+
+const PERSONA_PROFILES: Record<BotPersona, PersonaProfile> = {
+  // balanced：全 1 —— 与引入性格之前完全一致，是默认值，也是回归基线。
+  balanced: { reserveScale: 1, buildReserveScale: 1, redeemReserveScale: 1, redeems: true, auctionScale: 1, tradeMarginScale: 1 },
+  // aggressive：敢买敢拍，宁可现金紧一点也要抢地。
+  aggressive: { reserveScale: 0.4, buildReserveScale: 0.6, redeemReserveScale: 0.7, redeems: true, auctionScale: 1.4, tradeMarginScale: 0.5 },
+  // conservative：安全垫厚、不轻易接盘，宁可错过也不套牢。
+  conservative: { reserveScale: 1.8, buildReserveScale: 1.5, redeemReserveScale: 1.5, redeems: true, auctionScale: 0.6, tradeMarginScale: 2 },
+  // tycoon（囤地王）：钱优先买地而不是盖房，安全垫略薄但盖房门槛极高。
+  tycoon: { reserveScale: 0.7, buildReserveScale: 3, redeemReserveScale: 1, redeems: true, auctionScale: 1.2, tradeMarginScale: 1 },
+};
+
+/** 难度基线（与历史常量完全相同的数值）。 */
 const DIFFICULTY_RESERVE: Record<BotDifficulty, number> = { easy: 4000, normal: 2000, hard: 800 };
-
-/** 各难度下赎回抵押地产后必须保留的最低现金（easy 不赎回）。 */
 const DIFFICULTY_REDEEM_RESERVE: Record<BotDifficulty, number> = { easy: 0, normal: 1000, hard: 600 };
-
-/** 各难度是否主动赎回抵押地产。 */
 const DIFFICULTY_REDEEMS: Record<BotDifficulty, boolean> = { easy: false, normal: true, hard: true };
+
+/** 难度 × 性格 → 最终阈值。取整用 Math.round，保证 pure 整数、可断言。 */
+export interface BotProfile {
+  readonly reserve: number;
+  readonly buildReserve: number;
+  readonly redeemReserve: number;
+  readonly redeems: boolean;
+  readonly auctionMultiplier: number;
+  readonly tradeMargin: number;
+}
+
+export function resolveBotProfile(difficulty: BotDifficulty, persona: BotPersona = 'balanced'): BotProfile {
+  const base = DIFFICULTY_RESERVE[difficulty];
+  const personaProfile = PERSONA_PROFILES[persona] ?? PERSONA_PROFILES.balanced;
+  return {
+    reserve: Math.round(base * personaProfile.reserveScale),
+    buildReserve: Math.round(base * personaProfile.buildReserveScale),
+    redeemReserve: Math.round(DIFFICULTY_REDEEM_RESERVE[difficulty] * personaProfile.redeemReserveScale),
+    redeems: DIFFICULTY_REDEEMS[difficulty] && personaProfile.redeems,
+    auctionMultiplier: AUCTION_VALUE_MULTIPLIER[difficulty] * personaProfile.auctionScale,
+    // 门槛用 floor 而不是 round：normal 的门槛只有 1 元，round 会把 aggressive 的 0.5 元
+    // 又抬回 1 元，性格差异被抹平；floor 才能让「激进派接受等价交换」真正生效。
+    tradeMargin: Math.floor(TRADE_ACCEPT_MARGIN[difficulty] * personaProfile.tradeMarginScale),
+  };
+}
 
 /** 电脑玩家在给定局面下选择的意图。
  *  注意：调用方负责确认"轮到该玩家行动"——驱动器应取 actor = state.debt?.debtorId ?? state.currentPlayerId。 */
@@ -31,21 +87,28 @@ export function chooseBotIntent(
   playerId: string,
   registry: RuleModuleRegistry = defaultRuleModuleRegistry,
   difficulty: BotDifficulty = 'normal',
+  persona: BotPersona = 'balanced',
 ): Intent {
   const decision = registry.runBotStrategyHooks(state.ruleModules, {
     state,
     playerId,
     currentDecision: undefined,
     registry,
-    applyCore: () => chooseCoreBotIntent(state, playerId, difficulty),
+    applyCore: () => chooseCoreBotIntent(state, playerId, difficulty, persona),
   });
   // 防御（修复“电脑玩家不会自主掷骰”）：若所有模块的 bot hook 都未产出决策
   // （极端情况下某模块 hook 返回 undefined），绝不直接抛错让电脑玩家整局卡死，
   // 而是回退到核心策略，保证至少能掷骰 / 结束回合，使对局持续推进。
-  return decision ?? chooseCoreBotIntent(state, playerId, difficulty);
+  return decision ?? chooseCoreBotIntent(state, playerId, difficulty, persona);
 }
 
-function chooseCoreBotIntent(state: GameState, playerId: string, difficulty: BotDifficulty): Intent {
+function chooseCoreBotIntent(
+  state: GameState,
+  playerId: string,
+  difficulty: BotDifficulty,
+  persona: BotPersona = 'balanced',
+): Intent {
+  const profile = resolveBotProfile(difficulty, persona);
   // 模块待选动作闸门（修复「联网电脑 B 行动中、无法掷骰」根治点）：
   // 当 applyIntent 的模块闸门激活（publicRuleState.pendingActions 非空）时，引擎只接受 type:'module'
   // 的意图。若当前行动者在当前阶段存在 module 待选动作（如环球旅行模块在 awaiting_roll 注入的
@@ -73,7 +136,7 @@ function chooseCoreBotIntent(state: GameState, playerId: string, difficulty: Bot
   if (state.turnPhase === 'awaiting_trade_response') {
     const trade = currentPendingTrade(state);
     if (trade !== null && trade.targetId === playerId) {
-      return { type: 'respond_trade', accept: shouldAcceptTrade(state, playerId, difficulty) };
+      return { type: 'respond_trade', accept: shouldAcceptTrade(state, playerId, profile.tradeMargin) };
     }
     // 防御：被驱动到了错误的行动者身上（正常由服务端 #engineActor 保证不会发生）。
     // 发起者本人撤回报价一定能收敛，胜过硬发一个必被拒的意图让驱动层反复重试。
@@ -84,7 +147,7 @@ function chooseCoreBotIntent(state: GameState, playerId: string, difficulty: Bot
   if (state.turnPhase === 'awaiting_auction_bid') {
     const auction = currentPendingAuction(state);
     if (auction !== null && auction.bidderId === playerId) {
-      return chooseAuctionIntent(state, playerId, auction, difficulty);
+      return chooseAuctionIntent(state, playerId, auction, profile);
     }
     return { type: 'pass_bid' };
   }
@@ -119,18 +182,23 @@ function chooseCoreBotIntent(state: GameState, playerId: string, difficulty: Bot
     case 'awaiting_buy_decision': {
       if (!canBuyProperty(state)) return { type: 'skip_buy' };
       const price = cellValue(state, player.position, 'price');
-      return player.cash >= price + DIFFICULTY_RESERVE[difficulty] ? { type: 'buy_property' } : { type: 'skip_buy' };
+      return player.cash >= price + profile.reserve ? { type: 'buy_property' } : { type: 'skip_buy' };
     }
     case 'awaiting_build_decision': {
       if (!canBuild(state)) return { type: 'skip_build' };
       const houseCost = cellValue(state, player.position, 'houseCost');
-      return player.cash >= houseCost + DIFFICULTY_RESERVE[difficulty] ? { type: 'build_house' } : { type: 'skip_build' };
+      return player.cash >= houseCost + profile.buildReserve ? { type: 'build_house' } : { type: 'skip_build' };
     }
     case 'managing': {
       if (state.debt) return { type: 'end_turn' };
-      if (!DIFFICULTY_REDEEMS[difficulty]) return { type: 'end_turn' };
-      const cellId = pickRedemption(state, playerId, player.cash, DIFFICULTY_REDEEM_RESERVE[difficulty]);
-      return cellId === undefined ? { type: 'end_turn' } : { type: 'redeem_property', cellId };
+      if (profile.redeems) {
+        const cellId = pickRedemption(state, playerId, player.cash, profile.redeemReserve);
+        if (cellId !== undefined) return { type: 'redeem_property', cellId };
+      }
+      // 道具（#1）：赎回之后还有闲钱才备道具。刻意**不买遥控骰子**——电脑没有
+      // 「指哪走哪」的规划能力，买来只会闲置，那是纯亏钱。
+      const purchase = pickItemPurchase(state, playerId, profile, difficulty, persona);
+      return purchase ?? { type: 'end_turn' };
     }
     default:
       return { type: 'end_turn' };
@@ -162,6 +230,44 @@ function pickRedemption(state: GameState, playerId: string, cash: number, redeem
   }
 
   return best?.cellId;
+}
+
+/**
+ * 电脑买道具（#1）：只在现金明显宽裕时出手，且只买被动道具。
+ *
+ * 判断顺序刻意写成「先看卡够不够用，再看钱够不够」：
+ *  - 手里已经有 3 张以上道具就别再囤（背包上限 3，囤了也是浪费钱）；
+ *  - 现金不到 6000 不买（电脑的安全垫本来就靠现金，买道具不能把它掏空）；
+ *  - 自持地产 ≥ 2 优先「收租翻倍」（地多才收得到租），否则买「免租卡」（通用保命）。
+ */
+function pickItemPurchase(
+  state: GameState,
+  playerId: string,
+  profile: BotProfile,
+  difficulty: BotDifficulty,
+  persona: BotPersona,
+): Intent | null {
+  // 只有困难档或非均衡性格才备道具：普通+均衡保持既有策略原样（存量测试与联机默认零回归），
+  // 而困难档 / 激进 / 囤地王会明显打道具流——这也让「难度 / 性格」的差别能被玩家看见。
+  if (difficulty !== 'hard' && persona === 'balanced') return null;
+  const bag = readItemBag(state, playerId);
+  if (bagTotal(bag) >= 3) return null;
+
+  const player = state.players.find((p) => p.id === playerId);
+  if (player === undefined) return null;
+  if (player.cash < 6000 + profile.reserve) return null;
+
+  const ownedProps = Object.values(state.properties).filter((prop) => prop.ownerId === playerId).length;
+  const candidates: readonly ('rent_boost' | 'toll_pass')[] = ownedProps >= 2
+    ? ['rent_boost', 'toll_pass']
+    : ['toll_pass', 'rent_boost'];
+
+  for (const itemId of candidates) {
+    if (itemCount(state, playerId, itemId) >= ITEM_DEFINITIONS[itemId].limit) continue;
+    if (checkBuyItem(state, playerId, itemId) !== null) continue;
+    return { type: 'buy_item', itemId };
+  }
+  return null;
 }
 
 /** 按 houseCost / mortgageValue / price 升序选最便宜的格子（03 §4.4：最便宜的先处理） */
@@ -219,21 +325,21 @@ function botCellWorth(state: GameState, cellId: number): number {
 
 /** 交易答复：目标是「收到的东西 − 付出的东西」的净收益高于该难度的门槛就同意。
  *  `offer` 是发起方给目标的，`request` 是发起方从目标手里要的。 */
-function shouldAcceptTrade(state: GameState, playerId: string, difficulty: BotDifficulty): boolean {
+function shouldAcceptTrade(state: GameState, playerId: string, tradeMargin: number): boolean {
   const trade = currentPendingTrade(state);
   if (trade === null || trade.targetId !== playerId) return false;
   const incoming = trade.offer.cash + trade.offer.cellIds.reduce((sum, id) => sum + botCellWorth(state, id), 0);
   const outgoing = trade.request.cash + trade.request.cellIds.reduce((sum, id) => sum + botCellWorth(state, id), 0);
-  return incoming - outgoing >= TRADE_ACCEPT_MARGIN[difficulty];
+  return incoming - outgoing >= tradeMargin;
 }
 
 /** 拍卖心理价位上限：既要留下难度对应的安全垫，也不超过地价 × 难度溢价。 */
-function auctionBudget(state: GameState, playerId: string, cellId: number, difficulty: BotDifficulty): number {
+function auctionBudget(state: GameState, playerId: string, cellId: number, profile: BotProfile): number {
   const player = state.players.find((p) => p.id === playerId);
   if (player === undefined) return 0;
   const worth = botCellWorth(state, cellId);
-  const byWorth = Math.round(worth * AUCTION_VALUE_MULTIPLIER[difficulty]);
-  const byCash = player.cash - DIFFICULTY_RESERVE[difficulty];
+  const byWorth = Math.round(worth * profile.auctionMultiplier);
+  const byCash = player.cash - profile.reserve;
   return Math.max(0, Math.min(byWorth, byCash));
 }
 
@@ -242,9 +348,9 @@ function chooseAuctionIntent(
   state: GameState,
   playerId: string,
   auction: { cellId: number; leaderId: string | null; leaderBid: number },
-  difficulty: BotDifficulty,
+  profile: BotProfile,
 ): Intent {
-  const budget = auctionBudget(state, playerId, auction.cellId, difficulty);
+  const budget = auctionBudget(state, playerId, auction.cellId, profile);
   const minimum = auction.leaderId === null ? AUCTION_MIN_INCREMENT : auction.leaderBid + AUCTION_MIN_INCREMENT;
   if (budget < minimum) return { type: 'pass_bid' };
   if (auction.leaderId === null) {

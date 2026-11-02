@@ -96,6 +96,9 @@ describe('rule-module registry', () => {
       cancel_trade: true,
       place_bid: true,
       pass_bid: true,
+      // #1 道具：买道具 / 遥控骰子（core 意图，所有地图可用）
+      buy_item: true,
+      use_remote_die: true,
     } satisfies Record<CoreIntent['type'], true>;
 
     expect(CORE_CELL_HANDLER_TYPES).toEqual(expectedCells);

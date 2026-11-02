@@ -1,7 +1,7 @@
 import { computed, ref, shallowRef } from 'vue';
 import type { ComputedRef, Ref, ShallowRef } from 'vue';
 import { applyIntent, chooseBotIntent, createGame } from '@richman/engine';
-import type { BotDifficulty, GameEvent, GameState, Intent, PlayerState } from '@richman/engine';
+import type { BotDifficulty, BotPersona, GameEvent, GameState, Intent, PlayerState } from '@richman/engine';
 import { getActiveMapPack, listActiveMaps, type GameConfig, type MapPack, type MapRef } from '@richman/board-data';
 import type { ChatMessage, PublicRoomState } from '@richman/protocol';
 import { resolveLocalGameState } from '../game/mapResolver';
@@ -24,6 +24,10 @@ export interface CreateLocalSessionOptions {
   botDelay?: () => number;
   /** 电脑玩家难度（P1-6）；本地对局可选，不传按 normal。 */
   botDifficulty?: BotDifficulty;
+  /** 电脑玩家性格（#1）：不传按 balanced；与引擎 chooseBotIntent 默认一致，不回归。 */
+  botPersona?: BotPersona;
+  /** 房规「放弃购买即公开拍卖」（#3）：单机也能开，默认关闭。 */
+  auctionOnDecline?: boolean;
   /** 规则自定义（P2-10）：覆盖地图默认的部分 GameConfig 字段（初始资金/最高房级/抵押利率等）。 */
   config?: Partial<GameConfig>;
   restoreState?: GameState;
@@ -164,6 +168,8 @@ function createInitialGameState(
     cashGoal: isDefaultDemo ? 30000 : options.cashGoal ?? null,
     // 单机真人作弊：本地对局的非电脑玩家抽卡前暂停，等待接受/重抽。联机与电脑玩家不经过这里。
     cardChoiceMode: 'local-human',
+    // 拍卖（#3）：只有显式开启才写进 state（缺省 = 既有「放弃即流拍」行为）。
+    ...(options.auctionOnDecline === true ? { auctionOnDecline: true } : {}),
   });
 }
 
@@ -264,6 +270,7 @@ export function createLocalSession(options: CreateLocalSessionOptions = {}): Loc
   let botGeneration = 0;
   // 电脑玩家难度（P1-6）：本地对局从建房选项透传，不传按 normal；与引擎 chooseBotIntent 默认一致不回归。
   const botDifficulty: BotDifficulty = options.botDifficulty ?? 'normal';
+  const botPersona: BotPersona = options.botPersona ?? 'balanced';
 
   // ── 悔棋/回放（P1-5）：本地对局记录每一步前的快照与动作日志，支持撤回上一步、本局回放 ──
   // history 存「每一步执行前的 engineState」；actionLog 存「已成功执行的意图 + 事件 + 结果态」。
@@ -524,7 +531,7 @@ export function createLocalSession(options: CreateLocalSessionOptions = {}): Loc
       if (!isActedByComputer(latestActor) || presenter.isAnimating.value) return;
       // isActedByComputer 返回 boolean，起不到收窄作用；取id 到局部常量再往下用。
       const actorId = latestActor.id;
-      appliedBotIntent = await applyLocalIntent(chooseBotIntent(engineState, actorId, undefined, botDifficulty), true);
+      appliedBotIntent = await applyLocalIntent(chooseBotIntent(engineState, actorId, undefined, botDifficulty, botPersona), true);
     } catch (error) {
       if (!disposed && generation === botGeneration) recordError(error);
     } finally {

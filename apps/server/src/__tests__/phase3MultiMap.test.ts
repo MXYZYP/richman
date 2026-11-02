@@ -486,6 +486,9 @@ describe('Phase 3 public snapshot allowlist', () => {
       'currentPlayerId',
       'debt',
       'deckCounts',
+      // #1 道具：背包是**公开信息**（谁有几张免租卡摆在台面上），因此进白名单；
+      // 这条断言的用途是「不许夹带 seed / decks 之类私有字段」，不是「字段越少越好」。
+      'itemBags',
       'lastDice',
       'mapRef',
       'pendingAuction',
@@ -560,7 +563,7 @@ describe('Phase 3 real Socket.IO map flow', () => {
     const snapshot = (await snapshotPromise).state;
     expect(snapshot.mapRef).toEqual(testMap.ref);
     expect(Object.keys(snapshot).sort()).toEqual([
-      'auctionOnDecline', 'cashGoal', 'currentPlayerId', 'debt', 'deckCounts', 'lastDice', 'mapRef',
+      'auctionOnDecline', 'cashGoal', 'currentPlayerId', 'debt', 'deckCounts', 'itemBags', 'lastDice', 'mapRef',
       'pendingAuction', 'pendingTrade', 'phase',
       'players', 'properties', 'publicRuleState', 'recentLog', 'turn', 'turnPhase', 'winnerId',
     ].sort());

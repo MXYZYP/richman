@@ -3,8 +3,8 @@ export * from './types';
 export { createGame, applyIntent, skipCurrentTurn } from './engine';
 export type { CreateGameInput } from './engine';
 export { getCurrentRent, canBuyProperty, canBuild, getSellableAssets } from './selectors';
-export { chooseBotIntent } from './bot';
-export type { BotDifficulty } from './bot';
+export { chooseBotIntent, resolveBotProfile, BOT_PERSONAS } from './bot';
+export type { BotDifficulty, BotPersona, BotProfile } from './bot';
 // 交易 / 拍卖（#105 / #106）：服务端需要按「当前真实行动者」调度自动化，
 // 而交易等待阶段与拍卖阶段的行动者都不是 currentPlayerId，故把读取器导出。
 export {
@@ -12,6 +12,22 @@ export {
   currentPendingTrade,
   currentPendingAuction,
 } from './bargain';
+// 道具（#1）：客户端与引擎共用同一份目录与判据，避免界面按钮与引擎闸门说岔。
+export {
+  EMPTY_ITEM_BAG,
+  ITEM_DEFINITIONS,
+  ITEM_IDS,
+  REMOTE_DIE_MAX,
+  REMOTE_DIE_MIN,
+  adjustItem,
+  applyRentItems,
+  bagTotal,
+  checkBuyItem,
+  itemCount,
+  readItemBag,
+  splitRemoteDice,
+} from './items';
+export type { BuyItemRejection, ItemDefinition, RentItemResult } from './items';
 export { hydrateGameState, resolveOverriddenGameConfig } from './hydrate';
 export type { HydrateGameStateResult } from './hydrate';
 export {

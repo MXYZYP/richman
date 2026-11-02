@@ -228,17 +228,17 @@ describe('shanxi-tour@1 approved source data', () => {
     ]);
   });
 
-  it('declares 12 chance and 14 destiny cards, with a post-horse warp that targets a real cell', () => {
+  it('declares 15 chance and 17 destiny cards, with a post-horse warp that targets a real cell', () => {
     const cards = readMapJson('cards.json');
     const board = readMapJson('board.json');
 
-    expect(cards.chance).toHaveLength(12);
-    expect(cards.destiny).toHaveLength(14);
+    expect(cards.chance).toHaveLength(15);
+    expect(cards.destiny).toHaveLength(17);
     expect(cards.chance.map((card: any) => card.id)).toEqual(
-      Array.from({ length: 12 }, (_, index) => `sx-c${String(index + 1).padStart(2, '0')}`),
+      Array.from({ length: 15 }, (_, index) => `sx-c${String(index + 1).padStart(2, '0')}`),
     );
     expect(cards.destiny.map((card: any) => card.id)).toEqual(
-      Array.from({ length: 14 }, (_, index) => `sx-d${String(index + 1).padStart(2, '0')}`),
+      Array.from({ length: 17 }, (_, index) => `sx-d${String(index + 1).padStart(2, '0')}`),
     );
     // 命运卡里的传送目标必须真的是雁门关，否则「驿马传讯」会把玩家丢到空地上。
     expect(cards.destiny.find((card: any) => card.id === 'sx-d03').effect).toEqual({
@@ -311,7 +311,7 @@ describe('shanxi-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(shanxiTourMap, [coreModule, piaohaoModule])).not.toThrow();
     expect(computeContentHash(shanxiTourMap)).toBe(shanxiTourMap.ref.contentHash);
     expect(shanxiTourMap.ref.contentHash)
-      .toBe('45e1ca69c36bf319c9c56f6cb0c1527606105a4b64f4811dad64cb1bd25a6659');
+      .toBe('7acbb20bc72a78371c8c4ea6b4c91afa1f5a9d57ba4e0dc80a6cc5589bf1eb66');
     expect(Object.isFrozen(shanxiTourMap)).toBe(true);
     expect(Object.isFrozen(shanxiTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(shanxiTourMap.game.cards.destiny[2]!.effect)).toBe(true);

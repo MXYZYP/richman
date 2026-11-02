@@ -96,6 +96,30 @@
         "type": "receive_bank",
         "amount": 1200
       }
+    },
+    {
+      "id": "yc-c13",
+      "text": "永乐宫壁画修复志愿行动获政府补贴：得 1200 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1200
+      }
+    },
+    {
+      "id": "yc-c14",
+      "text": "在鹳雀楼上远眺黄河忘了时辰，误了车次：后退两步",
+      "effect": {
+        "type": "move_steps",
+        "steps": -2
+      }
+    },
+    {
+      "id": "yc-c15",
+      "text": "盐湖黑泥浴走红网络，游客爆满：每名玩家支付你 300 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 300
+      }
     }
   ],
   "destiny": [
@@ -212,6 +236,31 @@
       "effect": {
         "type": "receive_bank",
         "amount": 1700
+      }
+    },
+    {
+      "id": "yc-d15",
+      "text": "关帝庙前许愿灵验，重整旗鼓：再翻一张机会",
+      "effect": {
+        "type": "draw_card",
+        "deck": "chance"
+      }
+    },
+    {
+      "id": "yc-d16",
+      "text": "解州羊肉泡馍连开三家分店：得 2500 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2500
+      }
+    },
+    {
+      "id": "yc-d17",
+      "text": "河东书院修缮捐资：房屋每栋 300 元，旅馆每栋 900 元",
+      "effect": {
+        "type": "repairs",
+        "perHouse": 300,
+        "perHotel": 900
       }
     }
   ]

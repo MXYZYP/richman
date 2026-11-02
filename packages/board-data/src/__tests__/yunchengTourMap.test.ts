@@ -244,17 +244,17 @@ describe('yuncheng-tour@1 approved source data', () => {
     ]);
   });
 
-  it('declares 12 chance and 14 destiny cards, with a post-horse warp that targets a real cell', () => {
+  it('declares 15 chance and 17 destiny cards, with a post-horse warp that targets a real cell', () => {
     const cards = readMapJson('cards.json');
     const board = readMapJson('board.json');
 
-    expect(cards.chance).toHaveLength(12);
-    expect(cards.destiny).toHaveLength(14);
+    expect(cards.chance).toHaveLength(15);
+    expect(cards.destiny).toHaveLength(17);
     expect(cards.chance.map((card: any) => card.id)).toEqual(
-      Array.from({ length: 12 }, (_, index) => `yc-c${String(index + 1).padStart(2, '0')}`),
+      Array.from({ length: 15 }, (_, index) => `yc-c${String(index + 1).padStart(2, '0')}`),
     );
     expect(cards.destiny.map((card: any) => card.id)).toEqual(
-      Array.from({ length: 14 }, (_, index) => `yc-d${String(index + 1).padStart(2, '0')}`),
+      Array.from({ length: 17 }, (_, index) => `yc-d${String(index + 1).padStart(2, '0')}`),
     );
     // 命运卡里的传送目标必须真的是蒲津渡，否则「驿马传讯」会把玩家丢到空地上。
     expect(cards.destiny.find((card: any) => card.id === 'yc-d03').effect).toEqual({
@@ -368,7 +368,7 @@ describe('yuncheng-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(yunchengTourMap, [coreModule, piaohaoModule])).not.toThrow();
     expect(computeContentHash(yunchengTourMap)).toBe(yunchengTourMap.ref.contentHash);
     expect(yunchengTourMap.ref.contentHash)
-      .toBe('8d8ef3ef4821f64ea5bc15ff0da6d4fb93f94a4176f42c7953bf9d8ba8d0356f');
+      .toBe('7d978a88a714de3e5be36ce81ba870d7093862189d39ffe23c8d5af3e3812a69');
     expect(Object.isFrozen(yunchengTourMap)).toBe(true);
     expect(Object.isFrozen(yunchengTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(yunchengTourMap.game.cards.destiny[2]!.effect)).toBe(true);

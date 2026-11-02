@@ -1239,3 +1239,19 @@ describe('悔棋与回放（P1-5）', () => {
     expect(session.canReplay.value).toBe(false);
   });
 });
+
+describe('单机房规透传（#1 性格 / #3 拍卖）', () => {
+  it('开启拍卖时 auctionOnDecline 写进对局状态；不传时保持缺省（既有行为）', () => {
+    const withAuction = createLocalSession({ mapPack: harbor, seed: 'auction-on', auctionOnDecline: true });
+    expect(withAuction.state.value.auctionOnDecline ?? null).toBe(true);
+
+    const withoutAuction = createLocalSession({ mapPack: harbor, seed: 'auction-off' });
+    // 缺省时**不写这个键**（与旧存档 / 旧房间快照同形），读出来只能是 undefined 或 false。
+    expect(withoutAuction.state.value.auctionOnDecline).toBeFalsy();
+  });
+
+  it('性格是纯参数：不传时本机对局仍按 balanced 决策（与引擎默认一致）', () => {
+    const session = createLocalSession({ mapPack: harbor, seed: 'persona-default' });
+    expect(session.state.value.phase).toBe('playing');
+  });
+});

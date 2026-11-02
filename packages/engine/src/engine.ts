@@ -10,10 +10,19 @@ import type {
 } from '@richman/board-data';
 import type {
   GameState, PlayerState, PlayerColor, PropertyState, DebtResumeState,
-  Intent, ApplyResult, GameEvent,
+  Intent, CoreIntent, ApplyResult, GameEvent,
 } from './types';
 import { hashSeed, shuffle, rollDice, rollSingleDice } from './rng';
 import { walkPath } from './movement';
+import {
+  ITEM_DEFINITIONS,
+  REMOTE_DIE_MAX,
+  REMOTE_DIE_MIN,
+  adjustItem,
+  checkBuyItem,
+  itemCount,
+  splitRemoteDice,
+} from './items';
 import { applyCardEffect, resolveLanding } from './effects';
 import { processQueuedPayments } from './payments';
 import { finishCashGoalIfReached } from './victory';
@@ -343,6 +352,10 @@ export function applyIntent(
       return handlePlaceBid(state, playerId, intent);
     case 'pass_bid':
       return handlePassBid(state, playerId);
+    case 'buy_item':
+      return handleBuyItem(state, playerId, intent);
+    case 'use_remote_die':
+      return handleUseRemoteDie(state, playerId, intent, registry);
     default:
       return { ok: false, code: 'ILLEGAL_INTENT' };
     }
@@ -576,7 +589,112 @@ function rollAndMove(
   return { dice, path, crossedStart, finalCellId, rngState: s };
 }
 
-/** 处理 roll_dice：掷骰 → 沿 next 移动 → 经过/停留起点领工资 → 落点分流
+/** 处理 buy_item（#1）：只在自己回合的 managing 阶段、不欠债时可用。
+ *  合法性判据与客户端共用 `checkBuyItem`，界面亮着按钮就说明点下去一定成功。 */
+function handleBuyItem(
+  state: GameState,
+  playerId: string,
+  intent: Extract<CoreIntent, { type: 'buy_item' }>,
+): ApplyResult {
+  const rejection = checkBuyItem(state, playerId, intent.itemId);
+  if (rejection !== null) {
+    // LIMIT_REACHED 在 ErrorCode 里没有对应项，按「参数不合法」处理（客户端本来就不该给出按钮）。
+    return { ok: false, code: rejection === 'LIMIT_REACHED' ? 'ILLEGAL_INTENT' : rejection };
+  }
+  const definition = ITEM_DEFINITIONS[intent.itemId];
+  const events: GameEvent[] = [
+    { type: 'item_bought', playerId, itemId: intent.itemId, price: definition.price },
+  ];
+  const granted = adjustItem(state, playerId, intent.itemId, 1);
+  const withPayment: GameState = {
+    ...granted,
+    players: granted.players.map((p) => (
+      p.id === playerId ? { ...p, cash: p.cash - definition.price } : p
+    )),
+    recentLog: [...state.recentLog, ...events].slice(-200),
+  };
+  return { ok: true, state: withPayment, events };
+}
+
+/** 处理 use_remote_die（#1）：自己回合掷骰前指定点数和，**不消耗随机数**。
+ *  流程刻意与 handleRollDice 完全同构（移动 → 经过起点工资 → 机场分流 → 落点结算），
+ *  差别只在「点数从哪来」与「先扣一张道具」。 */
+function handleUseRemoteDie(
+  state: GameState,
+  playerId: string,
+  intent: Extract<CoreIntent, { type: 'use_remote_die' }>,
+  registry: RuleModuleRegistry,
+): ApplyResult {
+  if (state.turnPhase !== 'awaiting_roll') return { ok: false, code: 'WRONG_PHASE' };
+  if (itemCount(state, playerId, 'remote_die') <= 0) return { ok: false, code: 'ILLEGAL_INTENT' };
+  if (!Number.isSafeInteger(intent.total)
+    || intent.total < REMOTE_DIE_MIN
+    || intent.total > REMOTE_DIE_MAX) {
+    return { ok: false, code: 'ILLEGAL_INTENT' };
+  }
+
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) return { ok: false, code: 'ILLEGAL_INTENT' };
+
+  const dice = splitRemoteDice(intent.total);
+  const walked = walkPath(state.board, player.position, dice[0] + dice[1]);
+  let cash = player.cash;
+  let events: GameEvent[] = [
+    { type: 'item_used', playerId, itemId: 'remote_die', cellId: null, amount: dice[0] + dice[1] },
+    { type: 'dice_rolled', playerId, dice },
+    { type: 'token_moved', playerId, path: walked.path },
+  ];
+  if (walked.crossedStart) {
+    cash += state.config.passStartSalary;
+    events = [...events, { type: 'salary_collected', playerId, amount: state.config.passStartSalary }];
+  }
+
+  const consumed = adjustItem(state, playerId, 'remote_die', -1);
+  const workingState: GameState = {
+    ...consumed,
+    players: consumed.players.map((p) => (
+      p.id === playerId ? { ...p, position: walked.finalCellId, cash } : p
+    )),
+    lastDice: dice,
+  };
+
+  if (events.some((event) => event.type === 'salary_collected')) {
+    const cashGoalWin = finishCashGoalIfReached(workingState, events);
+    if (cashGoalWin) {
+      return {
+        ok: true,
+        state: { ...cashGoalWin.state, recentLog: [...state.recentLog, ...cashGoalWin.events].slice(-200) },
+        events: cashGoalWin.events,
+      };
+    }
+  }
+
+  const landed = state.board.cells.find((cell) => cell.id === walked.finalCellId);
+  if (landed?.type === 'airport') {
+    return {
+      ok: true,
+      state: {
+        ...workingState,
+        turnPhase: 'awaiting_airport_roll',
+        recentLog: [...state.recentLog, ...events].slice(-200),
+      },
+      events,
+    };
+  }
+
+  const settled = resolveLanding(workingState, playerId, events, 0, registry);
+  return {
+    ok: true,
+    state: {
+      ...settled.state,
+      debt: settled.newDebt,
+      recentLog: [...state.recentLog, ...settled.events].slice(-200),
+    },
+    events: settled.events,
+  };
+}
+
+/** 处理 roll_dice：掷骰 → 沿 next 移动 → 经过停留起点领工资 → 落点分流
  *  E22（01 §5.1）：停留机场 → 停在机场，等待玩家显式再掷一颗机场支线骰 */
 function handleRollDice(
   state: GameState,

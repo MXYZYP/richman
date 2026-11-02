@@ -6,6 +6,7 @@ import GameSetup from './GameSetup.vue';
 import {
   createDefaultGameSetup,
   updateGameSetupBotDifficulty,
+  updateGameSetupBotPersona,
   updateGameSetupCounts,
   type GameSetupDependencies,
   type GameSetupForm,
@@ -50,12 +51,17 @@ describe('GameSetup 的电脑玩家难度（#6：只在选了电脑玩家后才�
     for (const label of ['轻松', '普通', '困难']) {
       expect(html).toContain(label);
     }
-    // 难度区块单独取出来统计：本页还有「玩法档位」那组按钮（同样是 aria-pressed），
+    // 难度区块单独取出来统计：本页还有「玩法档位」「电脑玩家性格」两组按钮（同样是 aria-pressed），
     // 按整页计数会让「难度恰好三档、只有一档选中」这条判据失效。
-    const end = html.indexOf('aria-label="玩法档位"');
+    // 2026-11-02：难度之后新增了「电脑玩家性格」区块（#1），原来的「切到玩法档位为止」会把它一起
+    // 圈进来（7 个 aria-pressed）。这里把右边界收到性格区块（不存在时才退回玩法档位），
+    // 只收窄作用域，断言本身仍是「难度恰好三档、只有一档选中」。
+    const personaStart = html.indexOf('aria-label="电脑玩家性格"');
+    const presetStart = html.indexOf('aria-label="玩法档位"');
+    const end = personaStart !== -1 ? personaStart : (presetStart === -1 ? html.length : presetStart);
     const difficultySection = html.slice(
       html.indexOf('aria-label="电脑玩家难度"'),
-      end === -1 ? html.length : end,
+      end,
     );
     // 外层容器叫 setup-difficulty-options（复数），是按钮类名的前缀，所以必须用 `[">]` 收尾：
     // 按钮后面只会跟 `"`（未选中）或空格（选中时还有个 active），容器后面跟的是 `s`。
@@ -85,5 +91,43 @@ describe('GameSetup 的电脑玩家难度（#6：只在选了电脑玩家后才�
 
     expect(html).toContain('最多 6 人');
     expect(html).toContain('6');
+  });
+});
+
+describe('GameSetup 的电脑玩家性格（#1）与单机拍卖局（#3）', () => {
+  it('性格与难度一样：没有电脑玩家时整段不渲染，字段仍留在表单里', async () => {
+    const setup = updateGameSetupCounts(createDefaultGameSetup(dependencies), { humanCount: 2, botCount: 0 });
+    const html = await renderSetup(setup);
+
+    expect(html).not.toContain('电脑玩家性格');
+    expect(html).not.toContain('setup-persona-option');
+    expect(setup.botPersona).toBe('balanced');
+  });
+
+  it('有电脑玩家时出现四档性格，且只有当前档被标成已选', async () => {
+    const setup = updateGameSetupBotPersona(setupWithBots('normal'), 'tycoon');
+    const html = await renderSetup(setup);
+
+    expect(html).toContain('电脑玩家性格');
+    for (const label of ['均衡', '激进', '保守', '囤地王']) {
+      expect(html).toContain(label);
+    }
+    const start = html.indexOf('aria-label="电脑玩家性格"');
+    const end = html.indexOf('aria-label="玩法档位"');
+    const section = html.slice(start, end === -1 ? html.length : end);
+    expect(section.match(/setup-persona-option[">]/g)).toHaveLength(4);
+    expect(section.match(/aria-pressed="true"/g)).toHaveLength(1);
+    // 性格提示必须跟着当前档走（囤地王那句），否则玩家换了性格也看不出差别。
+    expect(section).toContain('钱优先买地不盖房');
+  });
+
+  it('单机也摆出「拍卖局」，选中时提示写明后果', async () => {
+    const html = await renderSetup(setupWithBots('normal'));
+    expect(html).toContain('拍卖局');
+    expect(setupWithBots('normal').auctionOnDecline).toBe(false);
+
+    // 选中拍卖局（SSR 直接把开关置 true）后，提示条要换成拍卖那句。
+    const auction = await renderSetup({ ...setupWithBots('normal'), auctionOnDecline: true });
+    expect(auction).toContain('放弃购买立刻全场公开叫价');
   });
 });

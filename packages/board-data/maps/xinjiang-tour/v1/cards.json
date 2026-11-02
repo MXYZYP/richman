@@ -96,6 +96,30 @@
         "type": "pay_bank",
         "amount": 900
       }
+    },
+    {
+      "id": "xj-c13",
+      "text": "喀纳斯湖怪视频爆火，版权费到账：得 1800 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 1800
+      }
+    },
+    {
+      "id": "xj-c14",
+      "text": "独库公路因落石封闭，绕行山谷：后退四步",
+      "effect": {
+        "type": "move_steps",
+        "steps": -4
+      }
+    },
+    {
+      "id": "xj-c15",
+      "text": "大巴扎地毯生意旺季：每名玩家支付你 350 元",
+      "effect": {
+        "type": "receive_from_each_player",
+        "amount": 350
+      }
     }
   ],
   "destiny": [
@@ -212,6 +236,30 @@
       "effect": {
         "type": "receive_bank",
         "amount": 1800
+      }
+    },
+    {
+      "id": "xj-d15",
+      "text": "火焰山地表六十度，改走北线：前进三步",
+      "effect": {
+        "type": "move_steps",
+        "steps": 3
+      }
+    },
+    {
+      "id": "xj-d16",
+      "text": "伊犁薰衣草田直播带货：得 2000 元",
+      "effect": {
+        "type": "receive_bank",
+        "amount": 2000
+      }
+    },
+    {
+      "id": "xj-d17",
+      "text": "塔克拉玛干沙漠救援补给：向银行支付 900 元",
+      "effect": {
+        "type": "pay_bank",
+        "amount": 900
       }
     }
   ]

@@ -236,17 +236,17 @@ describe('xinjiang-tour@1 approved source data', () => {
     ]);
   });
 
-  it('declares 12 chance and 14 destiny cards, with a detour warp that targets a real cell', () => {
+  it('declares 15 chance and 17 destiny cards, with a detour warp that targets a real cell', () => {
     const cards = readMapJson('cards.json');
     const board = readMapJson('board.json');
 
-    expect(cards.chance).toHaveLength(12);
-    expect(cards.destiny).toHaveLength(14);
+    expect(cards.chance).toHaveLength(15);
+    expect(cards.destiny).toHaveLength(17);
     expect(cards.chance.map((card: any) => card.id)).toEqual(
-      Array.from({ length: 12 }, (_, index) => `xj-c${String(index + 1).padStart(2, '0')}`),
+      Array.from({ length: 15 }, (_, index) => `xj-c${String(index + 1).padStart(2, '0')}`),
     );
     expect(cards.destiny.map((card: any) => card.id)).toEqual(
-      Array.from({ length: 14 }, (_, index) => `xj-d${String(index + 1).padStart(2, '0')}`),
+      Array.from({ length: 17 }, (_, index) => `xj-d${String(index + 1).padStart(2, '0')}`),
     );
     // 命运卡里的传送目标必须真的是库车，否则「独库公路巡查车」会把玩家丢到空地上。
     expect(cards.destiny.find((card: any) => card.id === 'xj-d03').effect).toEqual({
@@ -301,7 +301,7 @@ describe('xinjiang-tour@1 approved source data', () => {
     expect(() => assertValidMapPack(xinjiangTourMap, [coreModule, oasisCampModule])).not.toThrow();
     expect(computeContentHash(xinjiangTourMap)).toBe(xinjiangTourMap.ref.contentHash);
     expect(xinjiangTourMap.ref.contentHash)
-      .toBe('1805bcccc32b23cb33170c373a40a56e8cf477000d6a95536d1958def59e1b2a');
+      .toBe('06129f6519ce4532333c18cc01969bff315351e4b23c2e595d3134db4d29747e');
     expect(Object.isFrozen(xinjiangTourMap)).toBe(true);
     expect(Object.isFrozen(xinjiangTourMap.game.board.cells)).toBe(true);
     expect(Object.isFrozen(xinjiangTourMap.game.cards.destiny[2]!.effect)).toBe(true);

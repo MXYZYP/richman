@@ -4,6 +4,7 @@ import GameBoard from '../components/GameBoard.vue';
 import PlayerRail from '../components/PlayerRail.vue';
 import ActionPanel from '../components/ActionPanel.vue';
 import BargainPanel from '../components/BargainPanel.vue';
+import ItemPanel from '../components/ItemPanel.vue';
 import AssetPanel from '../components/AssetPanel.vue';
 import CellDetailPanel from '../components/CellDetailPanel.vue';
 import PlayerAssetDialog from '../components/PlayerAssetDialog.vue';
@@ -14,7 +15,7 @@ import ChatPanel from '../components/ChatPanel.vue';
 import TurnCountdown from '../components/TurnCountdown.vue';
 import SettingsDialog from '../components/SettingsDialog.vue';
 import ReplayDialog from '../components/ReplayDialog.vue';
-import { formatRecentLogEvent, canProposeTrade, getAssetRows, getAuctionDisplay, getCellDetail, getCellDetailSubtitle, getOwnTradableCells, getPendingCardChoice, getPendingPurchaseOffer, getPlayerAssetDialogModel, getTradeDisplay, getTradeProposalOptions, type ClientAction } from '../game/clientGame';
+import { formatRecentLogEvent, canProposeTrade, getAssetRows, getAuctionDisplay, getItemPanel, getCellDetail, getCellDetailSubtitle, getOwnTradableCells, getPendingCardChoice, getPendingPurchaseOffer, getPlayerAssetDialogModel, getTradeDisplay, getTradeProposalOptions, type ClientAction } from '../game/clientGame';
 import { formatCash, formatCashAnnouncement, setCashUnitForMap } from '../ui/format';
 import { canInspectFinalBoard, getSettlementExitDecision } from '../game/settlement';
 import type { CashNotice, GameSession, ReplayExportOutcome } from '../session/gameSession';
@@ -571,6 +572,20 @@ const showBargainPanel = computed(() => (
   tradeDisplay.value !== null
   || auctionDisplay.value !== null
   || (tradeProposalOptions.value !== null && tradeProposalOptions.value.length > 0)
+));
+
+/* ---- 道具（#1） ----
+   只在自己回合出现：道具要么是「自己回合买」，要么是「自己回合掷骰前用遥控骰子」，
+   别人的回合摆一排买不了的按钮只会挤占手机屏幕。遥控骰子的点数选择在 awaiting_roll
+   时额外出现（那正是它唯一能用的一瞬间）。 */
+const itemViewerId = computed(() => props.session.localPlayerId.value ?? state.value?.currentPlayerId ?? '');
+const itemPanel = computed(() => (
+  state.value === null ? null : getItemPanel(state.value, itemViewerId.value)
+));
+const showItemPanel = computed(() => (
+  !isSpectator.value
+  && itemPanel.value !== null
+  && (state.value?.currentPlayerId === itemViewerId.value || itemPanel.value.remoteDieOptions.length > 0)
 ));
 
 /* ---- 回合限时（#107） ----
@@ -1189,6 +1204,15 @@ function inspectFinalBoard() {
           :own-cells="ownTradableCells"
           :own-cash="ownCash"
           :is-busy="isBusy || isSubmittingIntent"
+          :is-spectator="isSpectator"
+          @intent="handleBargainIntent"
+        />
+        <!-- 道具（#1）：买入 / 遥控骰子。复用 handleBargainIntent 的提交路径——
+             那正是「本阶段的合法行动者不一定是 currentPlayerId」的同一个入口。 -->
+        <ItemPanel
+          v-if="showItemPanel"
+          :panel="itemPanel"
+          :disabled="isBusy || isSubmittingIntent"
           :is-spectator="isSpectator"
           @intent="handleBargainIntent"
         />

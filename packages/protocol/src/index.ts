@@ -25,6 +25,13 @@ export interface PublicGameSnapshot {
   pendingAuction: PendingAuction | null;
   /** 房规「放弃购买即拍卖」（#106）：客户端据此决定 skip_buy 的按钮文案。 */
   auctionOnDecline: boolean;
+  /**
+   * 道具背包（#1）：playerId → 三种道具的持有数。
+   *
+   * 刻意做成**可选**：老服务端进程（滚动发布期间）不会带这个键，客户端把它当「全员没道具」
+   * 处理即可；做成必填会让新旧版本在发布窗口内互相判成坏快照。
+   */
+  itemBags?: GameState['itemBags'];
   deckCounts: {
     chance: number;
     destiny: number;

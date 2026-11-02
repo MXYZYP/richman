@@ -4,6 +4,7 @@ import type { CellEffect, DeepReadonly, ModuleEffect } from '@richman/board-data
 import type { GameState, GameEvent, DebtState, PlayerState, PendingCardChoice, TurnPhase, QueuedPayment } from './types';
 import { getNextCellId, walkPath } from './movement';
 import { getCurrentRent } from './selectors';
+import { applyRentItems } from './items';
 import { processQueuedPayments } from './payments';
 import { finishCashGoalIfReached } from './victory';
 import {
@@ -140,7 +141,11 @@ function resolveCoreLanding(
         });
         s = intercepted.state;
         evts = [...intercepted.events];
-        const effectiveToll = intercepted.amount;
+        // 道具（#1）：免租卡 / 收租翻倍在模块钩子之后生效（让模块先决定「有没有租金」）。
+        const withItems = applyRentItems(s, playerId, prop.ownerId, intercepted.amount);
+        s = withItems.state;
+        evts = [...evts, ...withItems.events];
+        const effectiveToll = withItems.amount;
         const currentPlayer = getPlayer(s, playerId);
         if (effectiveToll > 0) {
           const paid = Math.min(currentPlayer.cash, effectiveToll);

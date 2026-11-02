@@ -10,6 +10,7 @@ import {
   createDefaultGameSetup,
   gameSetupToCreateOptions,
   updateGameSetupBotDifficulty,
+  updateGameSetupBotPersona,
   updateGameSetupCounts,
   updateGameSetupMapId,
   validateGameSetup,
@@ -312,5 +313,40 @@ describe('game setup model · 电脑玩家难度（#6）', () => {
 
     expect(switched.mapId).toBe(harbor.ref.id);
     expect(switched.botDifficulty).toBe('easy');
+  });
+
+  // #1 / #3：性格与拍卖开关都是新增字段，必须与难度一样「一路透传」，否则界面上选了也没用。
+  it.each(['balanced', 'aggressive', 'conservative', 'tycoon'] as const)(
+    '性格 %s 一路透传到本机对局参数里',
+    (botPersona) => {
+      const setup = updateGameSetupBotPersona(createDefaultGameSetup(dependencies), botPersona);
+
+      expect(validateGameSetup(setup, dependencies)).toEqual({ ok: true });
+      expect(gameSetupToCreateOptions(setup, dependencies).botPersona).toBe(botPersona);
+    },
+  );
+
+  it('默认性格为均衡、默认不开拍卖（老玩家的对局手感不变）', () => {
+    const setup = createDefaultGameSetup(dependencies);
+
+    expect(setup.botPersona).toBe('balanced');
+    expect(setup.auctionOnDecline).toBe(false);
+  });
+
+  it('单机拍卖开关透传到本机对局参数', () => {
+    const setup = { ...createDefaultGameSetup(dependencies), auctionOnDecline: true };
+
+    expect(gameSetupToCreateOptions(setup, dependencies).auctionOnDecline).toBe(true);
+  });
+
+  it('把电脑数减到 0 再调回来，性格不丢', () => {
+    const withBots = updateGameSetupBotPersona(
+      updateGameSetupCounts(createDefaultGameSetup(dependencies), { humanCount: 2, botCount: 2 }),
+      'tycoon',
+    );
+    const noBots = updateGameSetupCounts(withBots, { humanCount: 2, botCount: 0 });
+    const backToBots = updateGameSetupCounts(noBots, { humanCount: 2, botCount: 2 });
+
+    expect(backToBots.botPersona).toBe('tycoon');
   });
 });

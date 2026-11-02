@@ -51,6 +51,8 @@ function bankDelta(e: GameEvent, mapPack: MapPack): number {
       return -e.amount;
     case 'property_bought':
       return +e.price;
+    case 'item_bought': // 道具（#1）：玩家付钱给银行买道具
+      return +e.price;
     case 'tax_paid':
       return +e.amount;
     case 'bank_paid': // 玩家付银行（pay_bank / repairs）

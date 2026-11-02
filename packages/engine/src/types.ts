@@ -103,6 +103,9 @@ export interface GameState {
   pendingTrade?: PendingTrade | null;
   // 拍卖（#106）：可选字段，缺省视为「没有进行中的拍卖」。
   pendingAuction?: PendingAuction | null;
+  // 背包（#1）：可选字段，缺省视为「每个人都没有道具」——旧存档 / 旧房间快照都没有这个键，
+  // 强制必填会把它们一律判成损坏（与 pendingTrade 同一取舍，hydrate 按空对象处理）。
+  itemBags?: Record<string, ItemBag>;
   // 房规「放弃购买即拍卖」（#106）：可选，缺省 false = 沿用既有「无拍卖」行为。
   // 与 cashGoal 一样属于对局级选项，不进 GameConfig（那是地图包的一部分，受 contentHash 约束）。
   auctionOnDecline?: boolean;
@@ -174,6 +177,17 @@ export interface CardChoiceState {
   readonly pending: PendingCardChoice | null;
 }
 
+// === 道具（#1）===
+// 三种道具：遥控骰子 / 免租卡 / 收租翻倍。定义（价格、上限、文案）在 items.ts，
+// 这里只放**状态形状**——GameState 要能序列化它，hydrate 要能逐键校验它。
+export type ItemId = 'remote_die' | 'toll_pass' | 'rent_boost';
+
+export interface ItemBag {
+  remote_die: number;
+  toll_pass: number;
+  rent_boost: number;
+}
+
 // === Intent（玩家意图，03 §4.2；与 01 §4 状态机的操作一一对应）===
 export type CoreIntent =
   | { type: 'roll_dice' }
@@ -203,7 +217,12 @@ export type CoreIntent =
   | { type: 'cancel_trade' }
   // === 拍卖（#106）===
   | { type: 'place_bid'; amount: number }
-  | { type: 'pass_bid' };
+  | { type: 'pass_bid' }
+  // === 道具（#1）===
+  // 买道具只在自己回合的 managing 阶段（不能边欠债边买东西）。
+  | { type: 'buy_item'; itemId: ItemId }
+  // 遥控骰子：在自己回合掷骰前指定点数和（2-12），不消耗随机数。
+  | { type: 'use_remote_die'; total: number };
 export type Intent = CoreIntent | ModuleIntent;
 // 监狱（prison@1）**不使用** core 意图：狱中决策是模块待选动作 `jail-choice`
 // （分支在 payload.choice，见 prisonModule.ts）。这行原先是「未来模块保留 use_jail_card / jail_roll」，
@@ -258,6 +277,10 @@ export type CoreGameEvent =
   | { type: 'auction_bid_placed'; playerId: string; cellId: number; amount: number }
   | { type: 'auction_passed'; playerId: string; cellId: number }
   | { type: 'auction_resolved'; cellId: number; winnerId: string | null; amount: number }
+  // === 道具（#1）===
+  // amount：买入价 / 生效金额（免租卡记本次被免掉的租金，收租翻倍记多收的那一半）。
+  | { type: 'item_bought'; playerId: string; itemId: ItemId; price: number }
+  | { type: 'item_used'; playerId: string; itemId: ItemId; cellId: number | null; amount: number }
   | { type: 'game_over'; winnerId: string; reason: 'last_standing' | 'cash_goal' | 'stalemate' };
 export type GameEvent = CoreGameEvent | ModuleEvent;
 // 未来模块保留事件（本版不产生）：sent_to_jail / jail_roll_failed / jail_exited（监狱）
