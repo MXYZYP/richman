@@ -70,6 +70,9 @@
   --home-scrim:
     radial-gradient(1100px 640px at 50% 6%, rgb(18 14 24 / 34%), transparent 74%),
     linear-gradient(180deg, rgb(10 8 14 / 46%), rgb(10 8 14 / 74%));
+  /* 竖屏减淡版：同理 —— 暗幕压太重也会把竖版插画压没（亮纸在深幕上全靠对比活着），
+     竖屏换这版轻暗幕，保住山与虚线的可见度。 */
+  --home-scrim-soft: linear-gradient(180deg, rgb(10 8 14 / 16%), rgb(10 8 14 / 44%));
 
   /* 连接横幅 */
   --color-warning: #e0a94a;

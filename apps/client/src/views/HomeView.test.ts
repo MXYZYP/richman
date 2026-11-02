@@ -112,6 +112,21 @@ describe('HomeView 成果图标区（《UI 改造方案》§四）', () => {
     expect(card[0]).not.toContain('home-icon-row');
   });
 
+  it('竖屏媒体查询必须同时换竖版图和减淡 scrim（2026-11-02 真实报障）', () => {
+    // 这是接线守卫，不是渲染验证（渲染层已用 Playwright A/B 截图验证过，见工作区日志）。
+    // 当时的故障：竖屏图其实加载正常，但浅色 scrim 顶部 72% 白的柔光正好罩住竖版图唯一
+    // 有内容的顶部（水墨山、骰子），用户看到的是一整片纯米色 —— 等于「背景没加载」。
+    // 修法是竖屏同时换 --home-bg 和 --home-scrim；只换图不换 scrim 会原样复发。
+    const scoped = readFileSync(resolve(here, 'HomeView.vue'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const mq = /@media \(max-aspect-ratio: 1 \/ 1\) \{[\s\S]*?\n\}/.exec(scoped);
+    if (mq === null) throw new Error('首页应当有竖屏媒体查询');
+    expect(mq[0]).toContain("url('/home-bg-portrait.webp')");
+    expect(mq[0]).toContain('--home-scrim: var(--home-scrim-soft)');
+    // scrim 的减淡版必须真的有定义：缺了它 var() 整条失效，背景层会连底色一起丢。
+    const globalCss = readFileSync(resolve(here, '../style.css'), 'utf8');
+    expect(globalCss).toContain('--home-scrim-soft');
+  });
+
   it('不读本机存储：浏览器不给 localStorage 时四个图标照样在', async () => {
     // node 环境里本来就没有 localStorage —— 这里刻意什么都不桩，读到的就是「无存储」。
     const html = await renderHome();
