@@ -69,8 +69,24 @@ echo "[3/5] 构建前端 + 类型检查服务端（串行、限堆、带硬超�
 #   ③ timeout 硬超时 —— 杜绝无限挂起（780s×2 = 26m < Actions 的 30m command_timeout）。
 BUILD_TIMEOUT=780
 export NODE_OPTIONS="--max-old-space-size=1024"
+# swap 体检：小内存机器「没有 swap」是 2026-11-02 事故的另一半根因 —— 内存吃紧时
+# 没有缓冲，不会被 OOM killer 救场，只会整机假死到必须云控制台重启。这里只告警不阻断：
+# 加 swap 属于改系统配置（会写 /etc/fstab），不该由部署脚本擅自做，交给运维决定。
+SWAP_MB="$(awk '/^SwapTotal:/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null)"
+PHYS_MB="$(awk '/^MemTotal:/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null)"
+SWAP_MB="${SWAP_MB:-0}"
+PHYS_MB="${PHYS_MB:-0}"
+if [ "$SWAP_MB" -eq 0 ] && [ "$PHYS_MB" -le 2048 ]; then
+  echo "  [WARN] 物理内存仅 ${PHYS_MB}MB 且 **没有 swap**（SwapTotal=0）。" >&2
+  echo "         构建一旦吃紧，整机可能假死到只能在云控制台重启（2026-11-02 已发生过一次，中断 39 分钟）。" >&2
+  echo "         建议一次性补 2GB swap（root 执行，约 10 秒，重启后仍生效）：" >&2
+  echo "         fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab" >&2
+else
+  echo "  物理内存 ${PHYS_MB}MB / swap ${SWAP_MB}MB"
+fi
+
 AVAIL_MB="$(awk '/MemAvailable/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null || echo unknown)"
-echo "  可用内存 ${AVAIL_MB}MB（本机物理内存约 1.6GB 且无 swap ⇒ 必须串行 + 限堆）"
+echo "  可用内存 ${AVAIL_MB}MB（本机内存小 ⇒ 构建必须串行 + 限堆）"
 if [ "$AVAIL_MB" != "unknown" ] && [ "$AVAIL_MB" -lt 700 ]; then
   echo "  [WARN] 可用内存偏低（<700MB），构建有失败风险；建议先释放内存或给服务器加 swap。" >&2
 fi
