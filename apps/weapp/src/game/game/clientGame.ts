@@ -1,9 +1,16 @@
 import {
   AUCTION_MIN_INCREMENT,
+  EMPTY_ITEM_BAG,
+  ITEM_DEFINITIONS,
+  ITEM_IDS,
+  REMOTE_DIE_MAX,
+  REMOTE_DIE_MIN,
+  checkBuyItem,
   getCurrentRent,
   type GameEvent,
   type GameState,
   type Intent,
+  type ItemId,
   type PlayerState,
   type PropertyState,
 } from '@richman/engine';
@@ -731,6 +738,65 @@ export function getTradeDisplay(
   };
 }
 
+// === 道具（#1）===
+export interface ItemPanelEntry {
+  readonly id: ItemId;
+  readonly label: string;
+  readonly price: number;
+  readonly count: number;
+  readonly limit: number;
+  readonly description: string;
+  readonly passive: boolean;
+  readonly canBuy: boolean;
+}
+
+export interface ItemPanelModel {
+  readonly cash: number;
+  readonly entries: readonly ItemPanelEntry[];
+  /** 遥控骰子此刻可指定的点数和；空数组 = 现在用不了（不是自己回合 / 没卡 / 不在掷骰前）。 */
+  readonly remoteDieOptions: readonly number[];
+}
+
+/**
+ * 道具面板模型（#1）。
+ *
+ * canBuy 刻意直接调引擎的 `checkBuyItem`（而不是在这里再写一遍"现金够不够"）：
+ * 界面亮着的按钮点下去必须一定成功，两处各写一遍判据迟早会说岔。
+ */
+export function getItemPanel(
+  state: GameState | RenderableGameState,
+  viewerId: string,
+): ItemPanelModel | null {
+  const viewer = state.players.find((player) => player.id === viewerId);
+  if (viewer === undefined || viewer.bankrupt) return null;
+  const bag = state.itemBags?.[viewerId] ?? EMPTY_ITEM_BAG;
+  const engineState = state as GameState;
+
+  const entries: ItemPanelEntry[] = ITEM_IDS.map((id) => {
+    const definition = ITEM_DEFINITIONS[id];
+    return {
+      id,
+      label: definition.label,
+      price: definition.price,
+      count: bag[id],
+      limit: definition.limit,
+      description: definition.description,
+      passive: definition.passive,
+      canBuy: checkBuyItem(engineState, viewerId, id) === null,
+    };
+  });
+
+  const canUseRemoteDie = state.phase === 'playing'
+    && state.turnPhase === 'awaiting_roll'
+    && state.currentPlayerId === viewerId
+    && bag.remote_die > 0;
+  const remoteDieOptionsOrEmpty = canUseRemoteDie
+    ? Array.from({ length: REMOTE_DIE_MAX - REMOTE_DIE_MIN + 1 }, (_, index) => REMOTE_DIE_MIN + index)
+    : [];
+
+  return { cash: viewer.cash, entries, remoteDieOptions: remoteDieOptionsOrEmpty };
+}
+
 /** 拍卖议价面板（#106）：把 `state.pendingAuction` 解析成可渲染模型；没有进行中的拍卖时为 null。 */
 export function getAuctionDisplay(
   state: GameState | RenderableGameState,
@@ -1244,6 +1310,16 @@ export function formatRecentLogEvent(state: GameState | RenderableGameState, eve
       const card = state.cards[event.deck].find((candidate) => candidate.id === event.cardId);
       return `${playerName(state, event.playerId)} 抽到${deckLabel(event.deck)}：${card?.text ?? event.cardId}`;
     }
+    case 'item_bought':
+      return `${playerName(state, event.playerId)} 买下${ITEM_DEFINITIONS[event.itemId].label}（${money(event.price)}）`;
+    case 'item_used':
+      if (event.itemId === 'remote_die') {
+        return `${playerName(state, event.playerId)} 用遥控骰子走出 ${event.amount} 点`;
+      }
+      if (event.itemId === 'toll_pass') {
+        return `${playerName(state, event.playerId)} 用免租卡免掉 ${money(event.amount)} 租金`;
+      }
+      return `${playerName(state, event.playerId)} 用收租翻倍多收 ${money(event.amount)}`;
     case 'house_built':
       return event.level >= state.config.maxHouseLevel
         ? `${cellName(state, event.cellId)} 建成旅馆`

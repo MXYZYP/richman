@@ -1,21 +1,24 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
 import { getActiveMapPack, listActiveMaps } from '@richman/board-data';
-import type { BotDifficulty } from '@richman/engine';
+import type { BotDifficulty, BotPersona } from '@richman/engine';
 import MapPicker from './MapPicker.vue';
 import { setCashUnitForMap } from '../ui/format';
 import ViewShell from '../views/ViewShell.vue';
 import {
   BOT_DIFFICULTY_OPTIONS,
+  BOT_PERSONA_OPTIONS,
   createDefaultGameSetup,
   resolveGameSetupMap,
   updateGameSetupBotDifficulty,
+  updateGameSetupBotPersona,
   updateGameSetupMapId,
   updateGameSetupCounts,
   validateGameSetup,
   type GameSetupDependencies,
   type GameSetupForm,
 } from '../game/gameSetup';
+import { sprintCashGoal } from '../game/roomRulePresets';
 import type {
   LocalSaveCard,
   LocalSaveIdentity,
@@ -69,6 +72,11 @@ const botOptions = [0, 1, 2, 3, 4, 5];
 const botDifficultyOptions = BOT_DIFFICULTY_OPTIONS;
 const botDifficultyHint = computed(
   () => botDifficultyOptions.find((option) => option.value === setup.value.botDifficulty)?.hint ?? '',
+);
+// #1：性格与难度分开摆。四档来自 gameSetup.ts 的同一份文案，联机大厅以后要加也是同一处。
+const botPersonaOptions = BOT_PERSONA_OPTIONS;
+const botPersonaHint = computed(
+  () => botPersonaOptions.find((option) => option.value === setup.value.botPersona)?.hint ?? '',
 );
 const minCashGoal = computed(() => setup.value.config.initialCash + 1);
 /** 当前地图自己的最高房级：过路费按 rents[level] 取档，超出地图档位就会收 0 元租金。 */
@@ -127,6 +135,10 @@ function setBotDifficulty(difficulty: BotDifficulty) {
   setup.value = updateGameSetupBotDifficulty(setup.value, difficulty);
 }
 
+function setBotPersona(persona: BotPersona) {
+  setup.value = updateGameSetupBotPersona(setup.value, persona);
+}
+
 function updateNickname(index: number, event: Event) {
   setup.value.players[index].nickname = (event.target as HTMLInputElement).value;
 }
@@ -139,6 +151,65 @@ function updateCashGoal(event: Event) {
 function updateRuleConfig(field: 'initialCash' | 'maxHouseLevel', event: Event) {
   const value = Number((event.target as HTMLInputElement).value);
   setup.value = { ...setup.value, config: { ...setup.value.config, [field]: value } };
+}
+
+/**
+ * 单机侧玩法档位：标准 / 竞速 / 拍卖局。
+ * 拍卖（#3）以前是联机专属，现在单机也能开——localSession 会把 auctionOnDecline 交给引擎，
+ * 于是「放弃购买」会立刻进入全场叫价，和联机房间同一套规则。
+ * 每步限时仍只属于联机（单机没有超时驱动器），所以这里不摆那一项。
+ */
+const activeRulePreset = computed<'standard' | 'sprint' | 'auction' | null>(() => {
+  if (setup.value.auctionOnDecline) {
+    return setup.value.cashGoalEnabled ? null : 'auction';
+  }
+  if (!setup.value.cashGoalEnabled) return 'standard';
+  if (setup.value.cashGoal === sprintCashGoal(setup.value.config.initialCash)) return 'sprint';
+  return null;
+});
+
+function chooseRulePreset(id: 'standard' | 'sprint' | 'auction'): void {
+  const mapDefaults = readMapRuleDefaults();
+  if (id === 'standard') {
+    setup.value = {
+      ...setup.value,
+      cashGoalEnabled: false,
+      auctionOnDecline: false,
+      config: mapDefaults ?? setup.value.config,
+    };
+    return;
+  }
+  const base = mapDefaults ?? setup.value.config;
+  if (id === 'auction') {
+    setup.value = {
+      ...setup.value,
+      cashGoalEnabled: false,
+      auctionOnDecline: true,
+      config: base,
+    };
+    return;
+  }
+  setup.value = {
+    ...setup.value,
+    cashGoalEnabled: true,
+    auctionOnDecline: false,
+    cashGoal: sprintCashGoal(base.initialCash),
+    config: base,
+  };
+}
+
+/** 地图自带的三项默认房规；取不到就返回 null（调用方保持原值，不硬改）。 */
+function readMapRuleDefaults(): { initialCash: number; maxHouseLevel: number; mortgageInterestRate: number } | null {
+  try {
+    const config = setupDependencies.resolveActive(setup.value.mapId).game.config;
+    return {
+      initialCash: config.initialCash,
+      maxHouseLevel: config.maxHouseLevel,
+      mortgageInterestRate: config.mortgageInterestRate,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function updateMortgageRate(event: Event) {
@@ -172,6 +243,8 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
     config: { ...value.config },
     players: value.players.map((player) => ({ ...player })),
     botDifficulty: value.botDifficulty,
+    botPersona: value.botPersona,
+    auctionOnDecline: value.auctionOnDecline,
   };
 }
 </script>
@@ -311,6 +384,57 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
               >{{ option.label }}</button>
             </view>
             <view class="setup-difficulty-hint">{{ botDifficultyHint }}仅影响电脑决策，不影响真人玩家。</view>
+          </view>
+
+          <!-- #1：性格（与难度正交）。同样只在有电脑玩家时才出现。 -->
+          <view v-if="setup.botCount > 0" class="setup-persona" aria-label="电脑玩家性格">
+            <text class="setup-difficulty-label">电脑玩家性格</text>
+            <view class="setup-persona-options" role="radiogroup" aria-label="电脑玩家性格">
+              <button
+                v-for="option in botPersonaOptions"
+                :key="option.value"
+                type="button"
+                class="setup-persona-option"
+                :class="{ active: setup.botPersona === option.value }"
+                :aria-pressed="setup.botPersona === option.value"
+                @click="setBotPersona(option.value)"
+              >{{ option.label }}</button>
+            </view>
+            <view class="setup-difficulty-hint">{{ botPersonaHint }}</view>
+          </view>
+
+          <view class="setup-rule-card" aria-label="玩法档位">
+            <text class="setup-difficulty-label">玩法档位</text>
+            <view class="setup-preset-options">
+              <button
+                type="button"
+                class="setup-preset-option"
+                :class="{ active: activeRulePreset === 'standard' }"
+                :aria-pressed="activeRulePreset === 'standard'"
+                @click="chooseRulePreset('standard')"
+              >标准局</button>
+              <button
+                type="button"
+                class="setup-preset-option"
+                :class="{ active: activeRulePreset === 'sprint' }"
+                :aria-pressed="activeRulePreset === 'sprint'"
+                @click="chooseRulePreset('sprint')"
+              >竞速局</button>
+              <button
+                type="button"
+                class="setup-preset-option"
+                :class="{ active: activeRulePreset === 'auction' }"
+                :aria-pressed="activeRulePreset === 'auction'"
+                @click="chooseRulePreset('auction')"
+              >拍卖局</button>
+            </view>
+            <view class="setup-difficulty-hint">
+              {{ activeRulePreset === 'sprint'
+                ? '先攒到初始资金 3 倍现金即获胜，比标准局收得快。'
+                : activeRulePreset === 'auction'
+                  ? '放弃购买立刻全场公开叫价：抢地更凶，钱不够的人会被自己抬价逼死。'
+                  : '地图原样：打到只剩最后一人为止。' }}
+            </view>
           </view>
 
           <view class="setup-rule-card" aria-label="房规">
@@ -453,6 +577,70 @@ function cloneSetup(value: GameSetupForm): GameSetupForm {
 }
 
 .setup-difficulty-option.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff4ec;
+}
+
+/* ---- 玩法档位（标准 / 竞速）：外观沿用难度按钮，只是两列 ----
+   刻意不用 setup-difficulty-* 类名：那组类名被「难度按钮恰好三档」的测试守卫按子串断言，
+   复用会让「没选电脑时不该出现难度按钮」的判据失效。 */
+/* 三档：标准 / 竞速 / 拍卖局（#3 把拍卖从联机专属放开到单机）。 */
+.setup-preset-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.setup-preset-option {
+  min-height: 44px;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--board-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--text-body-size);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.setup-preset-option.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff4ec;
+}
+
+/* ---- 电脑性格（#1）：外观与难度按钮一致，但用自己的类名，
+   免得「难度按钮恰好三档」的守卫把性格按钮数进去。 ---- */
+.setup-persona {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+}
+
+.setup-persona-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.setup-persona-option {
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--board-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--text-body-size);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.setup-persona-option.active {
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: #fff4ec;

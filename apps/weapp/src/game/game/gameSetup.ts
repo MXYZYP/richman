@@ -4,7 +4,7 @@ import {
   type MapCatalogEntry,
   type MapPack,
 } from '@richman/board-data';
-import type { BotDifficulty } from '@richman/engine';
+import type { BotDifficulty, BotPersona } from '@richman/engine';
 import { formatCash } from '../ui/format';
 import type { CreateLocalSessionOptions } from '../session/localSession';
 import {
@@ -22,6 +22,7 @@ const MIN_HUMANS = 1;
 const DEFAULT_HUMANS = 1;
 const DEFAULT_BOTS = 2;
 const DEFAULT_BOT_DIFFICULTY: BotDifficulty = 'normal';
+const DEFAULT_BOT_PERSONA: BotPersona = 'balanced';
 
 /**
  * 电脑难度档位（#6）：单机建房与联机大厅共用同一份文案，避免两处各写一遍而慢慢说岔。
@@ -37,6 +38,24 @@ export const BOT_DIFFICULTY_OPTIONS: readonly BotDifficultyOption[] = [
   { value: 'easy', label: '轻松', hint: '电脑留钱多（应急储备 4000），不主动赎回抵押地产，适合带新手。' },
   { value: 'normal', label: '普通', hint: '电脑留钱 2000，会赎回抵押地产，默认难度。' },
   { value: 'hard', label: '困难', hint: '电脑只留 800，几乎全部投入买地，最难缠。' },
+];
+
+/**
+ * 电脑性格档位（#1）：与难度正交——难度决定「水平」，性格决定「偏爱」。
+ * 文案同样由单机建房与联机大厅共用；具体乘数在引擎 `resolveBotProfile` 里，
+ * 这里只描述**玩家能观察到的行为**，不写数值（数值改了两边会悄悄说岔）。
+ */
+export interface BotPersonaOption {
+  value: BotPersona;
+  label: string;
+  hint: string;
+}
+
+export const BOT_PERSONA_OPTIONS: readonly BotPersonaOption[] = [
+  { value: 'balanced', label: '均衡', hint: '按难度默认比例留钱，什么地都正常评估。默认性格。' },
+  { value: 'aggressive', label: '激进', hint: '安全垫只留四成，抢地抢拍更凶，容易把自己逼到抵押。' },
+  { value: 'conservative', label: '保守', hint: '安全垫接近两倍，宁可错过也不套牢，交易很难谈成。' },
+  { value: 'tycoon', label: '囤地王', hint: '钱优先买地不盖房，靠连片地收过路费压人。' },
 ];
 
 export interface GameSetupPlayer {
@@ -62,6 +81,10 @@ export interface GameSetupForm {
   config: RuleConfigForm;
   /** 电脑玩家难度（P1-6 / #6）：原先只在首页设，现在移到这里；botCount 为 0 时无意义。 */
   botDifficulty: BotDifficulty;
+  /** 电脑玩家性格（#1）：与难度正交，只影响决策偏好；botCount 为 0 时无意义。 */
+  botPersona: BotPersona;
+  /** 房规「放弃购买即公开拍卖」（#3）：单机与联机现在都能开。 */
+  auctionOnDecline: boolean;
 }
 
 export type GameSetupValidation = { ok: true } | { ok: false; message: string };
@@ -85,7 +108,7 @@ export function createDefaultGameSetup(dependencies: GameSetupDependencies = def
     initialCash: baseConfig?.initialCash ?? 15000,
     maxHouseLevel: baseConfig?.maxHouseLevel ?? 5,
     mortgageInterestRate: baseConfig?.mortgageInterestRate ?? 0.1,
-  }, DEFAULT_BOT_DIFFICULTY);
+  }, DEFAULT_BOT_DIFFICULTY, DEFAULT_BOT_PERSONA, false);
 }
 
 export function updateGameSetupCounts(
@@ -104,6 +127,8 @@ export function updateGameSetupCounts(
     setup.cashGoal,
     setup.config,
     setup.botDifficulty,
+    setup.botPersona,
+    setup.auctionOnDecline,
   );
 }
 
@@ -168,6 +193,8 @@ export function gameSetupToCreateOptions(
     cashGoal: setup.cashGoalEnabled ? setup.cashGoal : null,
     config: setup.config,
     botDifficulty: setup.botDifficulty,
+    botPersona: setup.botPersona,
+    auctionOnDecline: setup.auctionOnDecline,
   };
 }
 
@@ -216,6 +243,14 @@ export function updateGameSetupBotDifficulty(
   return { ...setup, botDifficulty };
 }
 
+/** 设定电脑玩家性格（#1）；与难度分开设，两者组合出这台电脑的打法。 */
+export function updateGameSetupBotPersona(
+  setup: GameSetupForm,
+  botPersona: BotPersona,
+): GameSetupForm {
+  return { ...setup, botPersona };
+}
+
 function buildSetup(
   mapId: string,
   humanCount: number,
@@ -225,6 +260,8 @@ function buildSetup(
   cashGoal: number,
   config: RuleConfigForm,
   botDifficulty: BotDifficulty,
+  botPersona: BotPersona,
+  auctionOnDecline: boolean,
 ): GameSetupForm {
   const existingHumans = existingPlayers.filter((player) => !player.isBot);
   const existingBots = existingPlayers.filter((player) => player.isBot);
@@ -238,7 +275,18 @@ function buildSetup(
     players.push({ id, nickname: existingBots[index]?.nickname ?? BOT_NAMES[index], isBot: true });
   }
 
-  return { mapId, humanCount, botCount, players, cashGoalEnabled, cashGoal, config, botDifficulty };
+  return {
+    mapId,
+    humanCount,
+    botCount,
+    players,
+    cashGoalEnabled,
+    cashGoal,
+    config,
+    botDifficulty,
+    botPersona,
+    auctionOnDecline,
+  };
 }
 
 function normalizeCounts(humanCount: number, botCount: number): { humanCount: number; botCount: number } {

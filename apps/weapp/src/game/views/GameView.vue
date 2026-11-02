@@ -4,6 +4,7 @@ import GameBoard from '../components/GameBoard.vue';
 import PlayerRail from '../components/PlayerRail.vue';
 import ActionPanel from '../components/ActionPanel.vue';
 import BargainPanel from '../components/BargainPanel.vue';
+import ItemPanel from '../components/ItemPanel.vue';
 import AssetPanel from '../components/AssetPanel.vue';
 import CellDetailPanel from '../components/CellDetailPanel.vue';
 import PlayerAssetDialog from '../components/PlayerAssetDialog.vue';
@@ -14,7 +15,7 @@ import ChatPanel from '../components/ChatPanel.vue';
 import TurnCountdown from '../components/TurnCountdown.vue';
 import SettingsDialog from '../components/SettingsDialog.vue';
 import ReplayDialog from '../components/ReplayDialog.vue';
-import { formatRecentLogEvent, canProposeTrade, getAssetRows, getAuctionDisplay, getCellDetail, getCellDetailSubtitle, getOwnTradableCells, getPendingCardChoice, getPendingPurchaseOffer, getPlayerAssetDialogModel, getTradeDisplay, getTradeProposalOptions, type ClientAction } from '../game/clientGame';
+import { formatRecentLogEvent, canProposeTrade, getAssetRows, getAuctionDisplay, getItemPanel, getCellDetail, getCellDetailSubtitle, getOwnTradableCells, getPendingCardChoice, getPendingPurchaseOffer, getPlayerAssetDialogModel, getTradeDisplay, getTradeProposalOptions, type ClientAction } from '../game/clientGame';
 import { formatCash, formatCashAnnouncement, setCashUnitForMap } from '../ui/format';
 import { canInspectFinalBoard, getSettlementExitDecision } from '../game/settlement';
 import type { CashNotice, GameSession, ReplayExportOutcome } from '../session/gameSession';
@@ -28,6 +29,7 @@ import { browserStorage, recordGameResult } from '../session/playerStats';
 import type { Intent } from '@richman/engine';
 import { playSfx } from '../audio/sfx';
 import { isBgmEnabled, startBgm, stopBgm, armBgmAutoStart } from '../audio/bgm';
+import { trackEvent } from '../session/telemetryClient';
 // 对局皮肤改到 src/main.ts 全局引入了——见那里的说明。此处import 曾让
 // @vitejs/plugin-vue 把主题选择器与本组件的 scoped 规则做笛卡尔积，
 // 产出一批永不匹配的规则，连带 .game-shell{display:grid} 也失效、桌面布局塌掉。
@@ -274,12 +276,32 @@ watch(
     else if (phase === 'game_over') {
       stopDurationTimer();
       recordLocalPlayerStats();
+      reportGameEnd();
       const localId = props.session.localPlayerId.value;
       playSfx(state.value?.winnerId === localId ? 'win' : 'lose');
     }
   },
   { immediate: true },
 );
+
+/**
+ * 对局结束上报（运营 O0）：地图、人数、回合数、时长、有没有人赢。
+ *
+ * 为什么放在这里：`phase === 'game_over'` 是「这局真的结束了」的唯一判据，
+ * 与战绩统计、结算音效同源；放别处（比如监听弹窗开关）会在观战、回放、断线重连时误报。
+ * 只报**客观事实**，不报谁赢了多少钱 —— 那是战绩的事，不需要再进埋点。
+ */
+function reportGameEnd(): void {
+  const current = state.value;
+  if (current === null) return;
+  trackEvent('game_end', {
+    map: current.mapRef.id,
+    players: current.players.length,
+    turns: current.turn,
+    seconds: elapsedSeconds.value,
+    outcome: current.winnerId === null ? 'no_winner' : 'winner',
+  });
+}
 
 // 对局结束（game_over）时把本地参赛者的本局结果写入战绩统计。
 // 观战者不在 players 列表中，自然被跳过；任何异常都不影响结算流程。
@@ -550,6 +572,20 @@ const showBargainPanel = computed(() => (
   tradeDisplay.value !== null
   || auctionDisplay.value !== null
   || (tradeProposalOptions.value !== null && tradeProposalOptions.value.length > 0)
+));
+
+/* ---- 道具（#1） ----
+   只在自己回合出现：道具要么是「自己回合买」，要么是「自己回合掷骰前用遥控骰子」，
+   别人的回合摆一排买不了的按钮只会挤占手机屏幕。遥控骰子的点数选择在 awaiting_roll
+   时额外出现（那正是它唯一能用的一瞬间）。 */
+const itemViewerId = computed(() => props.session.localPlayerId.value ?? state.value?.currentPlayerId ?? '');
+const itemPanel = computed(() => (
+  state.value === null ? null : getItemPanel(state.value, itemViewerId.value)
+));
+const showItemPanel = computed(() => (
+  !isSpectator.value
+  && itemPanel.value !== null
+  && (state.value?.currentPlayerId === itemViewerId.value || itemPanel.value.remoteDieOptions.length > 0)
 ));
 
 /* ---- 回合限时（#107） ----
@@ -1160,6 +1196,15 @@ function inspectFinalBoard() {
           :own-cells="ownTradableCells"
           :own-cash="ownCash"
           :is-busy="isBusy || isSubmittingIntent"
+          :is-spectator="isSpectator"
+          @intent="handleBargainIntent"
+        />
+        <!-- 道具（#1）：买入 / 遥控骰子。复用 handleBargainIntent 的提交路径——
+             那正是「本阶段的合法行动者不一定是 currentPlayerId」的同一个入口。 -->
+        <ItemPanel
+          v-if="showItemPanel"
+          :panel="itemPanel"
+          :disabled="isBusy || isSubmittingIntent"
           :is-spectator="isSpectator"
           @intent="handleBargainIntent"
         />

@@ -21,6 +21,8 @@ import { THEMES, getStoredAppearance, getStoredTheme, recommendedThemeForMap, re
 import { PLAYBACK_SPEED_OPTIONS, getPlaybackSpeedRef, setPlaybackSpeed } from '../session/playbackPace';
 import { describeMapRulesById } from '../ui/mapRules';
 import { formatCash, setCashUnitForMap } from '../ui/format';
+import { clearTelemetryClientId, isTelemetryEnabled, setTelemetryEnabled, trackEvent } from '../session/telemetryClient';
+import { installPerformanceMode, writePerformancePreference } from '../ui/performanceMode';
 
 /**
  * 统一设置入口（路线图 #13 扩展）。
@@ -113,6 +115,27 @@ const bgmEnabled = ref(isBgmEnabled());
 function toggleBgm(): void {
   bgmEnabled.value = !bgmEnabled.value;
   setBgmEnabled(bgmEnabled.value);
+}
+
+// 运营 O0：匿名统计开关。读写都走 telemetryClient 单例（内部对 storage 缺失/抛错已做兜底），
+// 这里只维护一个供复选框渲染的本地镜像。
+const telemetryOn = ref(isTelemetryEnabled());
+function toggleTelemetry(): void {
+  telemetryOn.value = !telemetryOn.value;
+  setTelemetryEnabled(telemetryOn.value);
+  // 关掉时清掉本机编号：服务端那份数据无法回溯删除，至少本机不再继续认人。
+  if (!telemetryOn.value) clearTelemetryClientId();
+}
+
+// 体验 E5：性能模式。默认按设备自动判定（核数 / 内存 / 省流量），玩家手动改过就存成明确
+// 偏好，之后不再拿设备信号推翻他。installPerformanceMode 返回是否降级，正好拿来渲染复选框。
+const perfModeOn = ref(installPerformanceMode());
+function togglePerfMode(): void {
+  perfModeOn.value = !perfModeOn.value;
+  const preference = perfModeOn.value ? 'on' : 'off';
+  writePerformancePreference(preference);
+  installPerformanceMode({ preference });
+  trackEvent('perf_mode_toggle', { enabled: perfModeOn.value ? 1 : 0 });
 }
 
 // 音量用 0~100 的整数百分比驱动滑块，写回模块时再折算成 0~1 的线性音量。
@@ -353,6 +376,45 @@ const rulesSummary = computed(() => (
         悔棋与回放只在单机对局可用：单机没有别人，回退不会影响任何对手。
         联机的悔棋在对局面板上发起，且需要在场对手逐一同意才会生效——不能本地单方面回退。
         复盘码也只导得出单机对局：它记录的是开局的种子与整局操作，联机没有这份逐房间日志。
+      </view>
+    </view>
+
+    <!-- 运营 O0 的合规出口：匿名统计默认开，但必须能一键关掉，而且关掉就真的不采集
+         （`telemetry.ts` 里 optedOut 直接短路 track）。写的是与 id 无关的随机串。 -->
+    <view class="settings-group" aria-labelledby="settings-privacy">
+      <view id="settings-privacy" class="settings-group-title">匿名统计</view>
+      <view class="setting-row" for="telemetry-toggle">
+        <text>帮助改进游戏</text>
+        <input
+          id="telemetry-toggle"
+          type="checkbox"
+          :checked="telemetryOn"
+          @change="toggleTelemetry"
+        />
+      </view>
+      <view class="settings-hint">
+        开启后只发送「哪张图、几人局、打了几轮、有没有出错」这类事件，配一个随机编号。
+        <text>不含</text>昵称、位置、聊天内容，服务端也不记录 IP。
+        关掉后立刻停止采集，已存的本机编号会一并清除。
+      </view>
+    </view>
+
+    <!-- 体验 E5 的手动出口：自动判定必然有误判（老旗舰核数少但不卡、模拟器报 1 核），
+         玩家自己能一键翻盘，比任何启发式都可靠。 -->
+    <view class="settings-group" aria-labelledby="settings-perf">
+      <view id="settings-perf" class="settings-group-title">性能模式</view>
+      <view class="setting-row" for="perf-mode-toggle">
+        <text>降低动画与特效</text>
+        <input
+          id="perf-mode-toggle"
+          type="checkbox"
+          :checked="perfModeOn"
+          @change="togglePerfMode"
+        />
+      </view>
+      <view class="settings-hint">
+        关掉棋子移动的补间动画、弹窗背景模糊这类吃性能的合成效果，画面朴素一些但更跟手。
+        默认按设备自动判断；你手动改过之后就以你选的为准。
       </view>
     </view>
 

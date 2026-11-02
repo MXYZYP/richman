@@ -56,7 +56,13 @@ import {
 } from './game/gameSetup';
 import { markFirstRunGuideSeen, shouldAutoOpenGuideHere } from './session/firstRunGuide';
 import { hasAcceptedPrivacy, markPrivacyAccepted } from './session/privacyConsent';
-import { getMapPack, listActiveMaps, type MapRef } from '@richman/board-data';
+// 体验 E3 的恢复卡刻意**静态**引入：它是所有其它组件都挂了之后唯一的出路，
+// 走异步加载的话，一旦失败原因是 chunk 加载失败，这张卡自己也渲染不出来。
+import AppErrorDialog from './components/AppErrorDialog.vue';
+import ConnectionBanner from './components/ConnectionBanner.vue';
+import { useAppErrorState } from './session/errorBoundary';
+import { trackEvent } from './session/telemetryClient';
+import { getMapPack, listActiveMaps, loadProductionMapPacks, type MapRef } from '@richman/board-data';
 import type { RoomRole, RoomSettingsPatch } from '@richman/protocol';
 import {
   createCustomMapResolver,
@@ -428,6 +434,22 @@ function closePrivacy(): void {
   privacyOpen.value = false;
 }
 
+// 体验 E3：致命错误恢复卡的状态。单例 ref 由 errorBoundary 在 main.ts 里写入，
+// 这里只负责渲染与两个出口。
+const fatalError = useAppErrorState();
+
+function dismissFatalError(): void {
+  fatalError.value = null;
+}
+
+/**
+ * 「重新加载」是这张卡真正有用的动作：组件树已经残缺，重开一次是最可靠的恢复。
+ * 刻意用 `location.reload()` 而不是重建组件 —— 后者会把错误状态一起带回来。
+ */
+function reloadApp(): void {
+  globalThis.location?.reload();
+}
+
 // 首页的「导入复盘」（#115）：与引导同级的常驻弹层，只负责导入。
 const replayImportOpen = ref(false);
 
@@ -443,6 +465,38 @@ const connectionLabel = computed(() => {
     default: return '连接中';
   }
 });
+
+/**
+ * 体验 E4：断线要上报（运营 O0），也要给玩家出口。
+ *
+ * 上报的是「断线」与「重连成功」两件事：它们分别是「玩家有没有掉出对局」的原因与结果，
+ * 缺了就只能靠猜——现状是完全没有这类数据。
+ */
+let lastConnectionStatus = onlineSession.connectionStatus.value;
+watch(onlineSession.connectionStatus, (status) => {
+  if (status === lastConnectionStatus) return;
+  const previous = lastConnectionStatus;
+  lastConnectionStatus = status;
+  if (status === 'failed') {
+    trackEvent('connect_fail', { from: previous });
+    return;
+  }
+  if (status === 'connected' && (previous === 'failed' || previous === 'reconnecting')) {
+    trackEvent('connect_recovered', { from: previous });
+  }
+});
+
+/** 「重新连接」：沿用本机存档里那一局接着玩，不是重开。 */
+function retryConnection(): void {
+  void onlineSession.retryResume();
+}
+
+/** 「返回首页」：明确放弃这次连接；本机存档还在，回首页后能接着玩。 */
+function abandonConnection(): void {
+  onlineSession.abandon();
+  syncStorage();
+  returnHome();
+}
 
 // The active game session handed to the shared view: the local hot-seat game while it runs,
 // otherwise the app-lifetime online session once a room exists. Null outside any live game.
@@ -614,6 +668,15 @@ function handleUpdateRoomSettings(patch: RoomSettingsPatch) {
 }
 
 function handleStartRoom() {
+  // 运营 O0：联机开局。房间人数与地图从这里取，与房主看到的房间状态同源。
+  const room = onlineSession.room.value;
+  if (room !== null) {
+    trackEvent('game_start', {
+      mode: 'online',
+      map: room.map.ref.id,
+      players: room.players.length,
+    });
+  }
   void onlineSession.start();
 }
 
@@ -623,11 +686,15 @@ function resetPageScroll() {
 }
 
 /** 首页那一排入口的唯一出口：六个落点，全部只改「壳的状态」，不碰会话。 */
-function handleNavigate(target: 'online' | 'local' | 'stats' | 'achievements' | 'cloud' | 'leaderboard'): void {
+async function handleNavigate(target: 'online' | 'local' | 'stats' | 'achievements' | 'cloud' | 'leaderboard'): Promise<void> {
   if (target === 'local') {
     // 单机模式：进设置页。地图沿用上次那张（`homeMapId`），进页后仍可改。
-    chooseLocal(homeMapId.value);
+    await chooseLocal(homeMapId.value);
     return;
+  }
+  if (target === 'online') {
+    // 建房页要给每一张地图画缩略图，先把地图包补齐（E2：首屏不加载它们）。
+    await ensureMapPacks();
   }
   homePane.value = target;
   resetPageScroll();
@@ -639,12 +706,32 @@ function handleBackToHome(): void {
   resetPageScroll();
 }
 
-function chooseLocal(mapId: string) {
+/**
+ * 体验 E2：地图包按需加载。
+ *
+ * 首屏（首页）只需要地图**目录**（名字 + 一句话介绍），十三张图的棋盘数据（258 KB）
+ * 一条都用不到，所以只在玩家真正要挑地图 / 看棋盘 / 读存档之前才下载。
+ * 默认地图随首屏可用，这里的调用对它是 no-op；其余十二张只下载一次（内部幂等）。
+ *
+ * 失败也**不阻断**：地图加载不出来最多是这张图选不了，不能把玩家挡在门外。
+ */
+let mapPacksPromise: Promise<void> | null = null;
+function ensureMapPacks(): Promise<void> {
+  mapPacksPromise ??= loadProductionMapPacks().catch((error: unknown) => {
+    console.error('[richman] 地图包加载失败，地图列表可能不完整', error);
+  });
+  return mapPacksPromise;
+}
+
+async function chooseLocal(mapId: string): Promise<void> {
   homeMapId.value = mapId;
   void syncLocalSaves();
   localSaveError.value = null;
   storagePrompt.value = false;
   replacementSummary.value = null;
+  // ★ 先等地图包就绪再切页：设置页一渲染就要读「当前选中那张图」的棋盘数据
+  // （规则说明、地图缩略图），而它可能是上次玩过的任意一张 —— 不等就抛错。
+  await ensureMapPacks();
   // 依赖里含本机装的自定义地图（#117）：换图时的最高房级夹取（updateGameSetupMapId）
   // 必须按**新图自己的**档位算，所以这里也要用合并目录，不能回落到生产默认依赖。
   setup.value = updateGameSetupMapId(setup.value, mapId, localSetupDependencies.value);
@@ -667,6 +754,13 @@ function launchLocalGame(
   pendingLocalStart.value = null;
   replacementSummary.value = null;
   storagePrompt.value = false;
+  // 运营 O0：单机开局。放在会话真正创建之后 —— 前面还隔着存档位冲突与存储不可用两条岔路，
+  // 埋在 startLocalGame 里会把「点了开始但没开成」也算成一局。
+  trackEvent('game_start', {
+    mode: 'local',
+    map: pendingStart.setup.mapId,
+    players: pendingStart.options.players?.length ?? 0,
+  });
   localSaveError.value = null;
   stage.value = 'local_game';
   resetPageScroll();
@@ -680,7 +774,9 @@ function launchLocalGame(
  * 电脑也不自动走（prepareReplayPlayback 已设 autoPlayBots:false）：整局由「回放」驱动，
  * 回看期间任何一方都不会自己行动（localSession 的 runBotTurnIfNeeded 对回看会话直接返回）。
  */
-function handleReplayPlay(options: CreateLocalSessionOptions): void {
+async function handleReplayPlay(options: CreateLocalSessionOptions): Promise<void> {
+  // 复盘码可能是另一张地图的局：地图包得先齐全，否则解析出来的棋盘是空的。
+  await ensureMapPacks();
   localStartGuard.cancel();
   localGame.value?.dispose();
   localGame.value = createLocalSession({ ...options, autoPlayBots: false });
@@ -745,6 +841,8 @@ async function attemptDurableLocalStart(pendingStart: NonNullable<typeof pending
 
 async function startLocalGame(nextSetup: GameSetupForm) {
   setup.value = nextSetup;
+  // 开局要用这张图的完整数据（棋盘 / 卡牌 / 规则模块），先确保地图包齐全。
+  await ensureMapPacks();
   // 必须用与设置页**同一份**依赖：否则玩家在单机设置页选了本机装的自定义地图（#117），
   // 这里却拿生产注册表去解析，会在 `gameSetupToCreateOptions` 里抛「所选地图当前不可用」——
   // 正好造出「设置页让你选、点开始又说没有」的自相矛盾。
@@ -816,11 +914,13 @@ function startTemporaryLocalGame(): void {
   if (pendingStart !== null) launchLocalGame(pendingStart);
 }
 
-function resumeLocalGame(observed: LocalSaveIdentity): void {
+async function resumeLocalGame(observed: LocalSaveIdentity): Promise<void> {
   if (storage === undefined || localSaveMutationLock === undefined) {
     localSaveError.value = '本浏览器无法安全更新存档，请改用支持 Web Locks 的浏览器';
     return;
   }
+  // 存档可以是任意一张图开的局（含自定义图），先保证生产地图包齐全。
+  await ensureMapPacks();
   const listed = localSaveResults.value.find((result): result is Extract<LocalSaveReadResult, { kind: 'valid' }> => (
     result.kind === 'valid' && result.slot === observed.slot && result.save.gameId === observed.gameId
   ));
@@ -919,7 +1019,11 @@ function handleStorageEvent(event: StorageEvent): void {
   if (stage.value === 'online') void syncLocalSaves();
 }
 
-onMounted(() => globalThis.addEventListener?.('storage', handleStorageEvent));
+onMounted(() => {
+  globalThis.addEventListener?.('storage', handleStorageEvent);
+  // 运营 O0：每次打开页面记一次。DAU / 留存全靠它 —— 现状是完全没有访问数据。
+  trackEvent('app_open');
+});
 
 onBeforeUnmount(() => {
   globalThis.removeEventListener?.('storage', handleStorageEvent);
@@ -930,6 +1034,13 @@ onBeforeUnmount(() => {
 
 <template>
   <view class="app-root">
+  <!-- 体验 E4：断线 / 重连引导条。放在最前且不带 v-if —— 后面的 RestoreView 仍是
+       v-if / v-else-if 链的链首，不会被打断。它自己是 sticky，只在断线时才占高度。 -->
+  <ConnectionBanner
+    :status="onlineSession.connectionStatus.value"
+    @retry="retryConnection"
+    @exit="abandonConnection"
+  />
   <RestoreView
     v-if="pageKind === 'restoring'"
     :failure="restoreFailure"
@@ -1091,5 +1202,9 @@ onBeforeUnmount(() => {
     @remove="deleteCustomMap"
     @play="playCustomMap"
   />
+
+  <!-- 体验 E3：致命错误恢复卡。只有 Vue 组件树抛错时才出现（window 层异常只上报不打扰），
+       放在最后 —— 它是兜底，绝不能挡住前面任何页面的正常渲染。 -->
+  <AppErrorDialog :error="fatalError" @dismiss="dismissFatalError" @reload="reloadApp" />
   </view>
 </template>

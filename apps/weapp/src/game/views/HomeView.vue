@@ -323,6 +323,10 @@ const emit = defineEmits<{
 @media (max-aspect-ratio: 1 / 1) {
   .home-scene {
     --home-bg: url(/static/home-bg-portrait.webp);
+    /* 竖屏同时换减淡 scrim（--home-scrim-soft 由 style.css / darkMode.css 按 appearance
+       各自定义，组件仍然不写 appearance 分支）。2026-11-02 用户报障「竖屏背景没加载」，
+       A/B 截图定位：图其实加载了，是顶部 72% 白的柔光把竖版图唯一有内容的顶部洗没了。 */
+    --home-scrim: var(--home-scrim-soft);
   }
 }
 
@@ -501,6 +505,16 @@ const emit = defineEmits<{
   display: grid;
   justify-items: center;
   gap: 10px;
+  /* 纸签托盘（2026-11-02 用户反馈：四个白圆片直接浮在米色纸上很突兀）——给整列一个
+     「贴在桌上的便签」容器：半透明纸底 + 细描边 + 圆角 + 轻投影。颜色全部来自主题
+     变量（--color-cell / --color-border），深浅两套自动跟随，不引字面量。
+     先写实底再覆盖半透明：不支持 color-mix 的老 WebView 退回实底纸片，同样成立。 */
+  padding: 9px;
+  background: var(--color-cell);
+  background: color-mix(in srgb, var(--color-cell) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  border-radius: 16px;
+  box-shadow: 0 3px 12px rgb(53 39 20 / 12%);
 }
 
 .home-icon {
@@ -539,10 +553,12 @@ const emit = defineEmits<{
 /* 更窄的屏：卡片按 100% 撑满，横向上必然与左上角那一列图标相交
    ⇒ 给 shell 让出「4 个图标 + 3 个间距 + 上下留白」的高度，图标留在左上角、卡片整体下移。
    阈值 700px 是算出来的不是拍的：卡片最宽 560px + 图标列约 62px × 2 侧 ≈ 684px，取 700 留余量。
-   比这更宽的屏卡片居中、横向根本碰不到这一列，不必白占这段高度。 */
+   比这更宽的屏卡片居中、横向根本碰不到这一列，不必白占这段高度。
+   高度公式随纸签托盘一起更新：4×图标 + 3×gap(10) + 托盘 padding(9×2) + 描边(1×2)
+   = 4s + 50px，再加卡片与托盘之间 16px 的呼吸空隙 = 4s + 66px。 */
 @media (max-width: 700px) {
   .home-shell {
-    padding-top: calc(var(--home-icon-size) * 4 + 30px + 28px);
+    padding-top: calc(var(--home-icon-size) * 4 + 66px);
   }
 }
 </style>
