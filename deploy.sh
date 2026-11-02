@@ -56,23 +56,37 @@ else
   printf '%s\n' "$CURRENT_LOCK_STAMP" > "$LOCKFILE_STAMP"
 fi
 
-echo "[3/5] 构建前端 ∥ 类型检查服务端（两者并行）..."
-# 前端构建（vue-tsc + vite）与服务端 tsc 门禁互不依赖，并行跑完再统一判成败：
-# 两者取 max 而不是 sum，部署墙钟时间直接省掉较短的那一支。
-# client 的 vue-tsc 已开 incremental（tsconfig → .runtime/vue-tsc-client.tsbuildinfo，
-# 跨部署持久），服务器上不再每次全量重查，从 ~10 分钟降到分钟级。
+echo "[3/5] 构建前端 + 类型检查服务端（串行、限堆、带硬超时）..."
+# ★ 2026-11-02 事故背景（保留，别再改回并行）：这台服务器物理内存只有 1.6GB，
+#   且 **没有 swap**（free -m 显示 Swap: 0 0 0）。原实现把 vue-tsc（前端）与
+#   tsc（服务端）**并行**跑，两个类型检查器同时吃内存、又完全没有交换区兜底，
+#   机器进入「TCP 能握手，但 nginx、sshd 一律无响应」的假死状态：
+#   站点中断 39 分钟（12:17→12:56），Actions 卡到 30m 超时，最后只能从阿里云
+#   控制台重启实例才恢复。parallel 省下的两分钟，代价是一次线上中断。
+#   加固三条：
+#   ① 串行 —— 同一时刻只有一个类型检查在跑；
+#   ② NODE_OPTIONS 限堆 —— 内存不够时**快速明确失败**，而不是把整机拖死；
+#   ③ timeout 硬超时 —— 杜绝无限挂起（780s×2 = 26m < Actions 的 30m command_timeout）。
+BUILD_TIMEOUT=780
+export NODE_OPTIONS="--max-old-space-size=1024"
+AVAIL_MB="$(awk '/MemAvailable/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null || echo unknown)"
+echo "  可用内存 ${AVAIL_MB}MB（本机物理内存约 1.6GB 且无 swap ⇒ 必须串行 + 限堆）"
+if [ "$AVAIL_MB" != "unknown" ] && [ "$AVAIL_MB" -lt 700 ]; then
+  echo "  [WARN] 可用内存偏低（<700MB），构建有失败风险；建议先释放内存或给服务器加 swap。" >&2
+fi
+
 CLIENT_FAIL=0
 SERVER_FAIL=0
-pnpm --filter @richman/client build & CLIENT_PID=$!
-pnpm --filter @richman/server build & SERVER_PID=$!
-wait "$CLIENT_PID" || CLIENT_FAIL=1
-wait "$SERVER_PID" || SERVER_FAIL=1
+timeout "$BUILD_TIMEOUT" pnpm --filter @richman/client build || CLIENT_FAIL=$?
 if [ "$CLIENT_FAIL" -ne 0 ]; then
-  echo "[ERROR] 前端构建失败，部署中止。" >&2
+  echo "[ERROR] 前端构建失败（退出码 $CLIENT_FAIL；124=超过 ${BUILD_TIMEOUT}s 硬超时），部署中止。" >&2
   exit 1
 fi
+echo "  前端构建通过。"
+
+timeout "$BUILD_TIMEOUT" pnpm --filter @richman/server build || SERVER_FAIL=$?
 if [ "$SERVER_FAIL" -ne 0 ]; then
-  echo "[ERROR] 服务端类型检查未通过，部署中止（绝不重启旧进程）。" >&2
+  echo "[ERROR] 服务端类型检查未通过（退出码 $SERVER_FAIL；124=超过 ${BUILD_TIMEOUT}s 硬超时），部署中止（绝不重启旧进程）。" >&2
   exit 1
 fi
 echo "  前端构建与服务端类型检查均通过。"

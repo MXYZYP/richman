@@ -12,6 +12,12 @@ name: Deploy to Server
 on:
   push:
     branches: [main]
+    # 2026-11-02 事故后加：这次中断就是「只改微信小程序端（apps/weapp/**）却触发了
+    # 整站重新构建」引出的 —— weapp 的构建由 weapp-smoke 工作流负责，网页端产物与
+    # 服务端进程跟它毫无关系，不该为它重启。文档（*.md）同理。
+    paths-ignore:
+      - 'apps/weapp/**'
+      - '**/*.md'
   workflow_dispatch:
 
 concurrency:
